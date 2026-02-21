@@ -6,7 +6,7 @@ This document describes how to verify the authenticity and integrity of
 ## Prerequisites
 
 - [GitHub CLI](https://cli.github.com/) (`gh`) version 2.49+ for attestation verification
-- `sha256sum` (Linux/macOS) or equivalent
+- `sha256sum` (Linux)
 
 ## 1. Download Artifacts
 
@@ -32,11 +32,11 @@ Each binary has a GitHub-signed build attestation proving it was built by the
 repository's CI workflow from the tagged source commit.
 
 ```bash
-gh attestation verify ./jcs-canon-Linux/jcs-canon \
+gh attestation verify ./jcs-canon-linux/jcs-canon \
   --repo lattice-substrate/json-canon
 ```
 
-Repeat for each platform binary. Successful output confirms:
+Successful output confirms:
 - The binary was built by GitHub Actions
 - The build used the repository's release workflow
 - The source commit matches the tagged release

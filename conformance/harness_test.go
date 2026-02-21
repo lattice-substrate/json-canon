@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"debug/elf"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1275,16 +1276,43 @@ func checkDeterministicStaticBuildCommand(t *testing.T, h *harness) {
 	if info.Size() == 0 {
 		t.Fatalf("expected non-empty built binary")
 	}
+
+	// Linux support policy: release binaries must be fully static (no PT_INTERP).
+	if runtime.GOOS == "linux" {
+		assertELFStatic(t, out)
+	}
+}
+
+func assertELFStatic(t *testing.T, path string) {
+	t.Helper()
+
+	f, err := elf.Open(path)
+	if err != nil {
+		t.Fatalf("open ELF %s: %v", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	for _, p := range f.Progs {
+		if p.Type == elf.PT_INTERP {
+			t.Fatalf("binary %s is dynamically linked (PT_INTERP present), expected fully static", path)
+		}
+	}
 }
 
 func checkNoNondeterminismSources(t *testing.T, h *harness) {
-	// Verify no nondeterministic imports and no map iteration in core/runtime paths.
+	// Verify no nondeterministic imports, no outbound/network subprocess imports,
+	// and no map iteration in core/runtime paths.
 	badImports := map[string]struct{}{
 		"math/rand":   {},
 		"crypto/rand": {},
 		"time":        {},
+		"net":         {},
+		"net/http":    {},
+		"net/url":     {},
+		"net/netip":   {},
+		"os/exec":     {},
 	}
-	srcDirs := []string{"jcsfloat", "jcstoken", "jcs", "cmd/jcs-canon"}
+	srcDirs := []string{"jcserr", "jcsfloat", "jcstoken", "jcs", "cmd/jcs-canon"}
 	for _, dir := range srcDirs {
 		entries, err := os.ReadDir(filepath.Join(h.root, dir))
 		if err != nil {

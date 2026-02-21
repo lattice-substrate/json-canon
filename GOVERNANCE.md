@@ -8,6 +8,8 @@
 - ABI-impacting changes (commands, flags, exit codes, output format) require
   review from two maintainers.
 - Major version release requires explicit signoff from all active maintainers.
+- Any new shell-script-based required gate (CI/release/conformance/traceability)
+  requires explicit maintainer approval with written rationale in the PR.
 
 ### Maintainer Responsibilities
 
@@ -16,6 +18,10 @@
 3. Follow the security triage process defined in `SECURITY.md`.
 4. Maintain traceability: update registries, matrix, and tests for all
    behavioral changes.
+5. Enforce Go-first automation for infrastructure-critical checks; permit shell
+   usage only via explicit, documented exception.
+6. Enforce no-outbound-call runtime policy: no network egress or subprocess
+   execution in core runtime packages.
 
 ### Maintainer Succession
 
@@ -25,6 +31,8 @@
   execute independently (see `VERIFICATION.md`, `CONTRIBUTING.md`).
 
 ## Support Window Policy
+
+Supported operating environment: Linux only.
 
 | Version | Support Level |
 |---------|-------------|

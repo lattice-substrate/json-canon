@@ -1,0 +1,19 @@
+{
+  "rfc8785/key_sorting.json": {
+    "expected_output": "rfc8785/key_sorting.out.json",
+    "expected_sha256": "5a54f40f4ff5dad3710d2cfc132cea743532b7d433d728636aa61e99195278d2",
+    "requires": [
+      "JCS-REQ-0301",
+      "JCS-REQ-0302"
+    ]
+  },
+  "valid/basic.json": {
+    "expected_output": "valid/basic.out.json",
+    "expected_sha256": "952ae164353d3b707056604fb5d56e017b1201471efbaa0bee711c863732ba73",
+    "requires": [
+      "JCS-REQ-0301",
+      "JCS-REQ-0003",
+      "JCS-REQ-0400"
+    ]
+  }
+}

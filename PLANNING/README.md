@@ -4,9 +4,10 @@ This directory contains **implementation plans** that are official while they ex
 
 ## Status Model
 
-- `ACTIVE_IMPLEMENTATION_PLAN.md` is the single active plan of record.
+- `ACTIVE_IMPLEMENTATION_PLAN.md` is the single active plan of record when present.
 - Plans in `archive/` are historical context only.
 - Any plan outside `ACTIVE_IMPLEMENTATION_PLAN.md` is non-authoritative unless explicitly stated.
+- Current state: no active implementation plan file is present; latest plans are archived.
 
 ## Lifecycle Policy
 
@@ -26,3 +27,4 @@ Normative and compatibility sources remain:
 - `FAILURE_TAXONOMY.md`
 - `REQ_ENFORCEMENT_MATRIX.md`
 - `README.md` / release notes
+- `CONTRIBUTING.md` / `GOVERNANCE.md` (process and approval policy)
