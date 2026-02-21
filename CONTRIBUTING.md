@@ -3,6 +3,7 @@
 ## Prerequisites
 
 - Go 1.22+
+- Linux environment (project-supported platform)
 
 ## Development Workflow
 
@@ -18,6 +19,16 @@ go test ./... -count=1 -timeout=20m
 go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
 ```
+
+## Tooling Policy (Infrastructure/ABI)
+
+- Required validation and release-critical automation must be Go-native (`go test`, Go code, or Go tools).
+- Do not introduce shell-script-based required gates for conformance, traceability, ABI validation, or release trust.
+- Runtime packages must not introduce outbound network calls or subprocess execution.
+- Exception path: shell usage requires explicit maintainer approval in the PR and a written rationale covering:
+  - why a Go-native implementation is not practical,
+  - why compatibility with the supported Linux environment is preserved,
+  - and why the shell path does not weaken determinism or auditability.
 
 The conformance suite includes traceability gates that verify:
 - Registry/matrix parity

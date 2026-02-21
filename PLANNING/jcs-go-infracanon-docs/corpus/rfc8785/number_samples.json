@@ -1,0 +1,9 @@
+{
+  "minusZero": -0,
+  "zero": 0,
+  "one": 1,
+  "small": 0.000001,
+  "smaller": 0.000000999999,
+  "boundaryHi": 1e21,
+  "boundaryHiMinus": 999999999999999900000
+}

@@ -32,6 +32,10 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Citation coverage conformance gate now validates structured mappings (ID -> source -> clause), not raw text presence.
 - `BOUNDS.md` corrected to document canonical output expansion behavior for number normalization.
 - Security fallback disclosure path now includes an explicit contact in `NOTICE`.
+- Support policy clarified as Linux-only in contributor/governance documentation.
+- CI and release workflow platform matrices reduced to Linux-only.
+- Stale planning artifacts moved to `PLANNING/archive/` and active planning state reset.
+- Conformance gates now enforce fully static Linux binaries and prohibit outbound network/subprocess imports in core runtime packages.
 
 ### Fixed
 - Map-iterated test tables in `jcsfloat_test.go` and `conformance/harness_test.go` converted to deterministic slices.

@@ -1,0 +1,56 @@
+{
+  "invalid/dup_key_unescape.json": {
+    "expected_error": "JCS_ERR_DUPLICATE_KEY",
+    "requires": [
+      "JCS-REQ-0300"
+    ]
+  },
+  "invalid/ijson_unpaired_surrogate.json": {
+    "expected_error": "JCS_ERR_FORBIDDEN_CODEPOINT",
+    "requires": [
+      "JCS-REQ-0112"
+    ]
+  },
+  "invalid/num_hexfloat.json": {
+    "expected_error": "JCS_ERR_BAD_NUMBER_SYNTAX",
+    "requires": [
+      "JCS-REQ-0200"
+    ]
+  },
+  "invalid/num_infinity.json": {
+    "expected_error": "JCS_ERR_BAD_NUMBER_SYNTAX",
+    "requires": [
+      "JCS-REQ-0201"
+    ]
+  },
+  "invalid/num_leading_zero.json": {
+    "expected_error": "JCS_ERR_BAD_NUMBER_SYNTAX",
+    "requires": [
+      "JCS-REQ-0200"
+    ]
+  },
+  "invalid/num_nan.json": {
+    "expected_error": "JCS_ERR_BAD_NUMBER_SYNTAX",
+    "requires": [
+      "JCS-REQ-0201"
+    ]
+  },
+  "invalid/num_plus.json": {
+    "expected_error": "JCS_ERR_BAD_NUMBER_SYNTAX",
+    "requires": [
+      "JCS-REQ-0200"
+    ]
+  },
+  "invalid/utf8_overlong_c0_80.json": {
+    "expected_error": "JCS_ERR_INVALID_UTF8",
+    "requires": [
+      "JCS-REQ-0102"
+    ]
+  },
+  "invalid/utf8_surrogate_ed_a0_80.json": {
+    "expected_error": "JCS_ERR_FORBIDDEN_CODEPOINT",
+    "requires": [
+      "JCS-REQ-0103"
+    ]
+  }
+}

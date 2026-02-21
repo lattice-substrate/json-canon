@@ -17,7 +17,7 @@ signature verification.
 - **Strict input validation** - RFC 8259 grammar, RFC 7493 I-JSON constraints
   (duplicate keys, surrogates, noncharacters), RFC 3629 UTF-8
 - **UTF-16 code-unit key sorting** - correct supplementary-plane ordering
-- **Deterministic** - CGO_ENABLED=0 static binary, no nondeterminism sources
+- **Deterministic and static** - CGO_ENABLED=0 static binary, no nondeterminism sources, no outbound network/subprocess runtime calls
 - **Resource bounded** - configurable depth, size, and count limits
 
 ## CLI
