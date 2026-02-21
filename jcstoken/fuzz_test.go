@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	"jcs-canon/jcs"
-	"jcs-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/jcs"
+	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
+// FuzzParseCanonicalRoundTrip: parse → serialize → parse → serialize idempotence.
 func FuzzParseCanonicalRoundTrip(f *testing.F) {
 	seeds := [][]byte{
 		[]byte(`null`),

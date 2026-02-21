@@ -13,15 +13,15 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"jcs-canon/jcsfloat"
-	"jcs-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
+	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed
 // JSON value.
 //
-// The output is deterministic: for any given value tree, the output bytes are
-// always identical. This is the core invariant that enables byte-identical replay.
+// CANON-ENC-001: Output is UTF-8.
+// CANON-WS-001: No insignificant whitespace.
 func Serialize(v *jcstoken.Value) ([]byte, error) {
 	if v == nil {
 		return nil, fmt.Errorf("jcs: nil value")
@@ -43,9 +43,11 @@ func Serialize(v *jcstoken.Value) ([]byte, error) {
 func serializeValue(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	switch v.Kind {
 	case jcstoken.KindNull:
+		// CANON-LIT-001: lowercase literals
 		return append(buf, "null"...), nil
 	case jcstoken.KindBool:
-		return append(buf, v.Str...), nil // validated as "true" or "false"
+		// CANON-LIT-001: lowercase literals
+		return append(buf, v.Str...), nil
 	case jcstoken.KindNumber:
 		return serializeNumber(buf, v.Num)
 	case jcstoken.KindString:
@@ -59,7 +61,6 @@ func serializeValue(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	}
 }
 
-// serializeNumber uses jcsfloat.FormatDouble for ECMA-262 compliant output.
 func serializeNumber(buf []byte, f float64) ([]byte, error) {
 	s, err := jcsfloat.FormatDouble(f)
 	if err != nil {
@@ -69,12 +70,18 @@ func serializeNumber(buf []byte, f float64) ([]byte, error) {
 }
 
 // serializeString applies JCS string escaping rules (RFC 8785 §3.2.2.2):
-//   - " → \"
-//   - \ → \\
-//   - U+0008 → \b, U+0009 → \t, U+000A → \n, U+000C → \f, U+000D → \r
-//   - Other control chars U+0000-U+001F → \u00xx (lowercase hex)
-//   - Everything else: raw UTF-8, no escaping
-//   - No Unicode normalization
+//
+// CANON-STR-001: U+0008 → \b
+// CANON-STR-002: U+0009 → \t
+// CANON-STR-003: U+000A → \n
+// CANON-STR-004: U+000C → \f
+// CANON-STR-005: U+000D → \r
+// CANON-STR-006: Other controls U+0000..U+001F → \u00xx lowercase
+// CANON-STR-007: U+0022 → \"
+// CANON-STR-008: U+005C → \\
+// CANON-STR-009: U+002F (solidus) NOT escaped
+// CANON-STR-010: Characters above U+001F (except " and \) → raw UTF-8
+// CANON-STR-011: No Unicode normalization
 func serializeString(buf []byte, s string) []byte {
 	buf = append(buf, '"')
 	for i := 0; i < len(s); {
@@ -95,22 +102,22 @@ func serializeString(buf []byte, s string) []byte {
 
 func appendEscapedByte(buf []byte, b byte) ([]byte, bool) {
 	switch b {
-	case '"':
+	case '"': // CANON-STR-007
 		return append(buf, '\\', '"'), true
-	case '\\':
+	case '\\': // CANON-STR-008
 		return append(buf, '\\', '\\'), true
-	case '\b':
+	case '\b': // CANON-STR-001
 		return append(buf, '\\', 'b'), true
-	case '\t':
+	case '\t': // CANON-STR-002
 		return append(buf, '\\', 't'), true
-	case '\n':
+	case '\n': // CANON-STR-003
 		return append(buf, '\\', 'n'), true
-	case '\f':
+	case '\f': // CANON-STR-004
 		return append(buf, '\\', 'f'), true
-	case '\r':
+	case '\r': // CANON-STR-005
 		return append(buf, '\\', 'r'), true
 	default:
-		if b < 0x20 {
+		if b < 0x20 { // CANON-STR-006
 			return append(buf, '\\', 'u', '0', '0', hexDigit(b>>4), hexDigit(b&0x0F)), true
 		}
 		return buf, false
@@ -122,7 +129,6 @@ func byteSpanForCopy(s string, i int) int {
 	if b < 0x80 {
 		return 1
 	}
-
 	size := utf8SeqLen(b)
 	if i+size > len(s) {
 		return len(s) - i
@@ -137,7 +143,6 @@ func hexDigit(b byte) byte {
 	return 'a' + (b - 10)
 }
 
-// utf8SeqLen returns the byte length of a UTF-8 sequence from its leading byte.
 func utf8SeqLen(b byte) int {
 	switch {
 	case b < 0x80:
@@ -152,6 +157,7 @@ func utf8SeqLen(b byte) int {
 }
 
 func serializeArray(buf []byte, v *jcstoken.Value) ([]byte, error) {
+	// CANON-SORT-003: array order preserved
 	buf = append(buf, '[')
 	for i := range v.Elems {
 		if i > 0 {
@@ -167,9 +173,10 @@ func serializeArray(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	return buf, nil
 }
 
+// serializeObject sorts members by key using UTF-16 code-unit ordering.
+// CANON-SORT-001: UTF-16 code-unit comparison (NOT UTF-8 byte order).
+// CANON-SORT-002: Recursive sorting (nested objects sorted in serializeValue).
 func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
-	// Sort members by key using UTF-16 code-unit ordering (RFC 8785 §3.2.3).
-	// UTF-16 encodings are precomputed once per key to avoid repeated allocations.
 	sorted := make([]sortableMember, len(v.Members))
 	for i := range v.Members {
 		sorted[i] = sortableMember{
@@ -201,19 +208,6 @@ func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
 type sortableMember struct {
 	member jcstoken.Member
 	key16  []uint16
-}
-
-// compareUTF16 compares two Go strings by their UTF-16 code-unit arrays,
-// as required by RFC 8785 §3.2.3.
-//
-// For BMP-only strings, this produces the same order as a simple byte
-// comparison. It diverges for supplementary-plane characters (U+10000+),
-// where UTF-16 surrogate pair code units sort differently than the
-// corresponding UTF-8 byte sequences.
-func compareUTF16(a, b string) int {
-	ua := utf16.Encode([]rune(a))
-	ub := utf16.Encode([]rune(b))
-	return compareUTF16Units(ua, ub)
 }
 
 func compareUTF16Units(ua, ub []uint16) int {

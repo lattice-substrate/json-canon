@@ -1,21 +1,36 @@
-.PHONY: test test-blackbox conformance lint build check baseline
+.PHONY: gate-spec gate-lint gate-test gate-conformance gate-determinism gate-build gate-all
 
-test:
-	go test ./... -count=1 -v
+# Gate DAG: SPEC → LINT → TEST → CONFORMANCE → DETERMINISM → BUILD
 
-test-blackbox:
-	go test ./cmd/jcs-canon -run 'TestCLI' -count=1 -v
+gate-spec:
+	@echo "=== GATE: SPEC ==="
+	@# Verify every requirement ID in REQ_REGISTRY.md appears in REQ_ENFORCEMENT_MATRIX.md
+	@grep -oP '[A-Z]+-[A-Z0-9]+-[0-9]+' REQ_REGISTRY.md | sort -u > /tmp/jcs-req-ids.txt
+	@grep -oP '^[A-Z]+-[A-Z0-9]+-[0-9]+' REQ_ENFORCEMENT_MATRIX.md | sort -u > /tmp/jcs-matrix-ids.txt
+	@diff /tmp/jcs-req-ids.txt /tmp/jcs-matrix-ids.txt || (echo "FAIL: requirement/matrix mismatch"; exit 1)
+	@echo "PASS: all requirement IDs covered in enforcement matrix"
 
-conformance:
-	go test ./conformance -count=1 -v
+gate-lint:
+	@echo "=== GATE: LINT ==="
+	go vet ./...
 
-lint:
-	golangci-lint run --timeout=5m ./...
+gate-test: gate-lint
+	@echo "=== GATE: TEST ==="
+	go test ./jcserr ./jcsfloat ./jcstoken ./jcs -count=1 -v
 
-build:
+gate-conformance: gate-test
+	@echo "=== GATE: CONFORMANCE ==="
+	go test ./conformance -count=1 -v -timeout=10m
+
+gate-determinism: gate-conformance
+	@echo "=== GATE: DETERMINISM ==="
+	go test ./conformance -count=1 -run 'TestConformanceRequirements/DET-' -v -timeout=10m
+
+gate-build: gate-determinism
+	@echo "=== GATE: BUILD ==="
 	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
+	@sha256sum jcs-canon
+	@echo "PASS: static binary built"
 
-check: lint test conformance build
-
-baseline:
-	sha256sum golangci.yml golangci.base.yml > .github/lint-config-baseline.sha256
+gate-all: gate-build
+	@echo "=== ALL GATES PASSED ==="

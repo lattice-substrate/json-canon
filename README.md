@@ -1,53 +1,63 @@
-# jcs-canon
+# json-canon
 
-Deterministic RFC 8785 JSON Canonicalization Scheme (JCS) implementation in pure Go.
+RFC 8785 JSON Canonicalization Scheme — pure Go, zero dependencies.
 
-## Scope
+## Overview
 
-- `jcstoken`: strict JSON parser (`RFC 8259` grammar + `RFC 7493` constraints + UTF-8 strictness).
-- `jcs`: canonical serializer (`RFC 8785`).
-- `jcsfloat`: ECMAScript-compatible `Number::toString` formatter for `float64`.
-- `cmd/jcs-canon`: stable CLI ABI (`canonicalize`, `verify`) with fixed exit codes.
+`json-canon` implements the JSON Canonicalization Scheme (JCS) as specified in
+[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785). It produces deterministic,
+byte-identical canonical JSON output suitable for cryptographic hashing and
+signature verification.
 
-## CLI ABI v1
+## Features
 
-```bash
+- **Pure Go, zero dependencies** — standard library only
+- **ECMA-262 Number::toString** — hand-written Burger-Dybvig algorithm validated
+  against 286,362 V8 oracle vectors
+- **Strict input validation** — RFC 8259 grammar, RFC 7493 I-JSON constraints
+  (duplicate keys, surrogates, noncharacters), RFC 3629 UTF-8
+- **UTF-16 code-unit key sorting** — correct supplementary-plane ordering
+- **Deterministic** — CGO_ENABLED=0 static binary, no nondeterminism sources
+- **Resource bounded** — configurable depth, size, and count limits
+
+## CLI
+
+```
 jcs-canon canonicalize [--quiet] [file|-]
 jcs-canon verify [--quiet] [file|-]
 ```
 
-Exit codes:
+Exit codes: `0` success, `2` input/validation error, `10` internal error.
 
-- `0` success
-- `2` invalid input / profile violation / non-canonical input
-- `10` internal runtime failure
-
-Unknown options are rejected.
-
-## Security Bounds (defaults)
-
-- max input size: `64 MiB`
-- max nesting depth: `1000`
-- max JSON values: `1,000,000`
-- max object members per object: `250,000`
-- max array elements per array: `250,000`
-- max decoded string length: `8 MiB`
-- max number token length: `4096`
-
-## Deterministic Build (Linux static-friendly)
+## Build
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
 ```
 
-## Verification
+## Test
 
 ```bash
-go test ./... -count=1
-go test ./conformance -count=1
+go test ./... -count=1 -v
 ```
 
-## Normative Spec
+## Conformance
 
-- Specification index: `spec/00-index.md`
-- Requirement catalog (traceable test IDs): `spec/requirements.md`
+```bash
+go test ./conformance -count=1 -v -timeout=10m
+```
+
+## Normative References
+
+| Spec | Scope |
+|------|-------|
+| [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) | JSON Canonicalization Scheme |
+| [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259) | JSON grammar and data model |
+| [RFC 7493](https://www.rfc-editor.org/rfc/rfc7493) | I-JSON: duplicate keys, surrogates, noncharacters |
+| [RFC 3629](https://www.rfc-editor.org/rfc/rfc3629) | UTF-8 encoding validity |
+| [ECMA-262 §6.1.6.1.20](https://tc39.es/ecma262/#sec-numeric-types-number-tostring) | Number::toString |
+| IEEE 754-2008 | Binary64 double-precision semantics |
+
+## License
+
+See LICENSE file.

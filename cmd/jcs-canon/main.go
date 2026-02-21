@@ -1,21 +1,24 @@
 // Command jcs-canon canonicalizes and verifies JSON using RFC 8785 JCS.
+//
+// Stable ABI:
+//
+//	jcs-canon canonicalize [--quiet] [file|-]
+//	jcs-canon verify [--quiet] [file|-]
+//
+// Exit codes: 0 (success), 2 (input/profile/non-canonical/usage), 10 (internal/IO).
 package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
-	"jcs-canon/jcs"
-	"jcs-canon/jcstoken"
-)
-
-const (
-	exitSuccess  = 0
-	exitInvalid  = 2
-	exitInternal = 10
+	"github.com/lattice-substrate/json-canon/jcs"
+	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
 func main() {
@@ -24,10 +27,9 @@ func main() {
 
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		if err := writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]"); err != nil {
-			return exitInternal
-		}
-		return exitInvalid
+		// CLI-EXIT-001
+		_ = writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]")
+		return jcserr.CLIUsage.ExitCode()
 	}
 
 	switch args[0] {
@@ -36,13 +38,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	case "verify":
 		return cmdVerify(args[1:], stdin, stderr)
 	default:
-		if err := writef(stderr, "unknown command: %s\n", args[0]); err != nil {
-			return exitInternal
-		}
-		if err := writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]"); err != nil {
-			return exitInternal
-		}
-		return exitInvalid
+		// CLI-EXIT-002
+		_ = writef(stderr, "unknown command: %s\n", args[0])
+		_ = writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]")
+		return jcserr.CLIUsage.ExitCode()
 	}
 }
 
@@ -72,6 +71,7 @@ func parseFlags(args []string) (flags, []string, error) {
 			positional = append(positional, arg)
 		default:
 			if strings.HasPrefix(arg, "-") {
+				// CLI-FLAG-001
 				return flags{}, nil, fmt.Errorf("unknown option: %s", arg)
 			}
 			positional = append(positional, arg)
@@ -83,53 +83,55 @@ func parseFlags(args []string) (flags, []string, error) {
 func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fl, positional, err := parseFlags(args)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
 	}
 
+	// CLI-FLAG-003
 	if fl.help {
-		if err := writeCanonicalizeHelp(stderr); err != nil {
-			return exitInternal
-		}
-		return exitSuccess
+		_ = writeCanonicalizeHelp(stderr)
+		return 0
 	}
 
+	// CLI-IO-002
 	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
 		return exitCode
 	}
 
 	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: reading input: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	parsed, err := jcstoken.Parse(input)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInternal, "error: serialization failed: %v\n", err)
+		return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(),
+			"error: serialization failed: %v\n", err)
 	}
 
+	// CLI-IO-004: output to stdout only
 	if _, err := stdout.Write(canonical); err != nil {
-		return writeErrorAndReturn(stderr, exitInternal, "error: writing output: %v\n", err)
+		return writeErrorAndReturn(stderr, jcserr.InternalIO.ExitCode(),
+			"error: writing output: %v\n", err)
 	}
 
-	return exitSuccess
+	return 0
 }
 
 func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 	fl, positional, err := parseFlags(args)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
 	}
 
+	// CLI-FLAG-003
 	if fl.help {
-		if err := writeVerifyHelp(stderr); err != nil {
-			return exitInternal
-		}
-		return exitSuccess
+		_ = writeVerifyHelp(stderr)
+		return 0
 	}
 
 	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
@@ -138,32 +140,45 @@ func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 
 	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: reading input: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	parsed, err := jcstoken.Parse(input)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return writeErrorAndReturn(stderr, exitInternal, "error: serialization failed: %v\n", err)
+		return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(),
+			"error: serialization failed: %v\n", err)
 	}
 
+	// VERIFY-ORDER-001, VERIFY-WS-001
 	if !bytes.Equal(input, canonical) {
-		return writeErrorAndReturn(stderr, exitInvalid, "error: input is not canonical\n")
+		return writeErrorAndReturn(stderr, jcserr.NotCanonical.ExitCode(),
+			"error: input is not canonical\n")
 	}
 
+	// CLI-IO-005, CLI-FLAG-002
 	if !fl.quiet {
-		if err := writeLine(stderr, "ok"); err != nil {
-			return exitInternal
-		}
+		_ = writeLine(stderr, "ok")
 	}
-	return exitSuccess
+	return 0
+}
+
+// writeClassifiedError extracts jcserr.Error if possible and uses its exit code.
+func writeClassifiedError(stderr io.Writer, err error) int {
+	var je *jcserr.Error
+	if errors.As(err, &je) {
+		_ = writef(stderr, "error: %v\n", err)
+		return je.Class.ExitCode()
+	}
+	return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
 }
 
 func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, error) {
+	// CLI-IO-001
 	if len(positional) == 0 || positional[0] == "-" {
 		return readBounded(stdin, maxInputSize)
 	}
@@ -172,9 +187,7 @@ func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("read file %q: %w", positional[0], err)
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+	defer func() { _ = f.Close() }()
 
 	data, err := readBounded(f, maxInputSize)
 	if err != nil {
@@ -199,16 +212,12 @@ func ensureSingleInput(positional []string, stderr io.Writer) (int, bool) {
 	if len(positional) <= 1 {
 		return 0, false
 	}
-	if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
-		return exitInternal, true
-	}
-	return exitInvalid, true
+	_ = writeLine(stderr, "error: multiple input files specified")
+	return jcserr.CLIUsage.ExitCode(), true
 }
 
 func writeErrorAndReturn(stderr io.Writer, code int, format string, args ...any) int {
-	if err := writef(stderr, format, args...); err != nil {
-		return exitInternal
-	}
+	_ = writef(stderr, format, args...)
 	return code
 }
 

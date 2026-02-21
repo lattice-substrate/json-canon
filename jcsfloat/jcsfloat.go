@@ -1,13 +1,10 @@
 // Package jcsfloat implements the ECMAScript Number::toString algorithm for
 // IEEE 754 double-precision floating-point values, as required by RFC 8785.
 //
-// The algorithm is specified in ECMA-262 as Number::toString (historically
-// §7.1.12.1 in ES2015/6th Edition; §6.1.6.1.20 in the 2026 living standard).
-// The section number varies by edition; the algorithm content is normative.
-//
-// This is a pure-Go, zero-dependency (standard library only) implementation
-// suitable for use in JCS (RFC 8785) canonicalization. The output of FormatDouble
-// is byte-identical to ECMAScript's String(number) for all finite doubles.
+// The algorithm is specified in ECMA-262 §6.1.6.1.20 (Number::toString).
+// This is a pure-Go, zero-dependency (standard library only) implementation.
+// The output of FormatDouble is byte-identical to ECMAScript's String(number)
+// for all finite doubles.
 //
 // The implementation uses math/big.Int for exact multiprecision arithmetic in
 // digit generation, following the Burger-Dybvig algorithm with correct ECMA-262
@@ -15,37 +12,34 @@
 package jcsfloat
 
 import (
-	"errors"
 	"math"
 	"math/big"
+
+	"github.com/lattice-substrate/json-canon/jcserr"
 )
 
-var (
-	// ErrNotFinite indicates number formatting was requested for NaN or Infinity,
-	// which are not representable in RFC 8785 JSON.
-	ErrNotFinite = errors.New("jcsfloat: value is not finite (NaN or Infinity)")
-
-	bigTen = big.NewInt(10)
-)
+var bigTen = big.NewInt(10)
 
 // FormatDouble formats an IEEE 754 double-precision value exactly as specified
-// by the ECMAScript Number::toString algorithm (ECMA-262, radix 10). The output
-// is the canonical string representation required by RFC 8785 JCS.
+// by the ECMAScript Number::toString algorithm (ECMA-262, radix 10).
 //
-// Special cases:
-//   - Negative zero (-0) returns "0".
-//   - NaN and ±Infinity return an error (ErrNotFinite).
-//
-// For all finite doubles, the output is byte-identical to JavaScript's String(x).
-func FormatDouble(f float64) (string, error) {
+// ECMA-FMT-001: NaN returns error.
+// ECMA-FMT-002: -0 returns "0".
+// ECMA-FMT-003: ±Infinity returns error.
+// ECMA-FMT-008: Shortest round-trip representation.
+// ECMA-FMT-009: Even-digit tie-breaking.
+func FormatDouble(f float64) (string, *jcserr.Error) {
+	// ECMA-FMT-001: NaN → error
 	if math.IsNaN(f) {
-		return "", ErrNotFinite
+		return "", jcserr.New(jcserr.InvalidGrammar, -1, "NaN is not representable in JSON")
 	}
+	// ECMA-FMT-002: -0 and +0 → "0"
 	if f == 0 {
 		return "0", nil
 	}
+	// ECMA-FMT-003: ±Infinity → error
 	if math.IsInf(f, 0) {
-		return "", ErrNotFinite
+		return "", jcserr.New(jcserr.InvalidGrammar, -1, "Infinity is not representable in JSON")
 	}
 
 	negative := false
@@ -58,10 +52,10 @@ func FormatDouble(f float64) (string, error) {
 	return formatECMA(negative, digits, n), nil
 }
 
-// formatECMA applies the ECMA-262 §7.1.12.1 formatting rules (steps 6-9).
+// formatECMA applies the ECMA-262 §6.1.6.1.20 formatting rules (steps 7-10).
 //
-// digits: significand digit string
-// n: decimal exponent (number of integer digits in fixed-point)
+// digits: significand digit string (k digits)
+// n: decimal exponent (number of integer digits in fixed-point view)
 func formatECMA(negative bool, digits string, n int) string {
 	k := len(digits)
 
@@ -72,12 +66,16 @@ func formatECMA(negative bool, digits string, n int) string {
 
 	switch {
 	case isIntegerFixed(k, n):
+		// ECMA-FMT-004: 1 ≤ n ≤ 21, k ≤ n → integer with trailing zeros
 		buf = appendIntegerFixed(buf, digits, k, n)
 	case isFractionFixed(n):
+		// ECMA-FMT-005: 0 < n ≤ 21, n < k → fixed decimal
 		buf = appendFractionFixed(buf, digits, n)
 	case isSmallFraction(n):
+		// ECMA-FMT-006: -6 < n ≤ 0 → 0.000...digits
 		buf = appendSmallFraction(buf, digits, n)
 	default:
+		// ECMA-FMT-007: exponential notation
 		buf = appendExponential(buf, digits, k, n)
 	}
 
@@ -156,7 +154,7 @@ func appendInt(buf []byte, v int) []byte {
 // algorithm using exact big.Int arithmetic, producing the shortest decimal
 // significand and its decimal exponent for a positive finite nonzero double.
 //
-// Returns (digits, n) where value = 0.<digits> * 10^n.
+// Returns (digits, n) where value = 0.<digits> × 10^n.
 func generateDigits(f float64) (string, int) {
 	parts := decodeFloatParts(f)
 	state := initScaledState(parts)
@@ -374,6 +372,8 @@ func cmpRoundDown(lhs, rhs *big.Int, isEven bool) bool {
 	return lhs.Cmp(rhs) < 0
 }
 
+// finalDigit resolves the last digit when at least one termination condition
+// fires. ECMA-FMT-009: even-digit tie-breaking in midpointDigit.
 func finalDigit(d int, tc1, tc2 bool, r, s *big.Int) byte {
 	switch {
 	case tc1 && !tc2:
@@ -394,6 +394,7 @@ func midpointDigit(d int, r, s *big.Int) byte {
 	if cmp > 0 {
 		return byte('0' + d + 1)
 	}
+	// ECMA-FMT-009: even-digit tie-breaking (banker's rounding)
 	if d%2 == 0 {
 		return byte('0' + d)
 	}
@@ -401,6 +402,7 @@ func midpointDigit(d int, r, s *big.Int) byte {
 }
 
 func normalizeDigitBuffer(digitBuf []byte, dIdx int, dIdxPtr *int, n int) int {
+	// Propagate carries from digit overflow (e.g., 9+1=10)
 	for i := dIdx - 1; i > 0; i-- {
 		if digitBuf[i] > '9' {
 			digitBuf[i] = '0'
@@ -408,6 +410,7 @@ func normalizeDigitBuffer(digitBuf []byte, dIdx int, dIdxPtr *int, n int) int {
 		}
 	}
 
+	// Handle carry out of the first digit
 	if dIdx > 0 && digitBuf[0] > '9' {
 		copy(digitBuf[1:dIdx+1], digitBuf[0:dIdx])
 		digitBuf[0] = '1'
@@ -416,6 +419,7 @@ func normalizeDigitBuffer(digitBuf []byte, dIdx int, dIdxPtr *int, n int) int {
 		n++
 	}
 
+	// Strip trailing zeros
 	for dIdx > 1 && digitBuf[dIdx-1] == '0' {
 		dIdx--
 	}
@@ -437,8 +441,6 @@ func lshByInt(z *big.Int, n int) {
 
 // estimateK returns an estimate of ceil(log10(f)) for f > 0.
 func estimateK(f float64) int {
-	// log10(f) = log2(f) / log2(10)
-	// Use the bit representation for a quick estimate.
 	bits := math.Float64bits(f)
 	expBits := exponentBits(bits)
 	biasedExp := int(expBits)
@@ -448,7 +450,7 @@ func estimateK(f float64) int {
 		// Subnormal
 		log2f = math.Log2(f)
 	} else {
-		// Normal: f = 1.mantissa * 2^(biasedExp - 1023)
+		// Normal: f = 1.mantissa × 2^(biasedExp - 1023)
 		log2f = float64(biasedExp-1023) + math.Log2(1.0+float64(bits&((1<<52)-1))/float64(uint64(1)<<52))
 	}
 
@@ -460,16 +462,13 @@ func estimateK(f float64) int {
 var pow10Cache [700]*big.Int
 
 func init() {
-	// Pre-compute powers of 10 for the range we need.
-	// IEEE 754 doubles have exponents from roughly -1074 to +308,
-	// so we need 10^0 through 10^~700 at most.
 	pow10Cache[0] = big.NewInt(1)
 	for i := 1; i < len(pow10Cache); i++ {
 		pow10Cache[i] = new(big.Int).Mul(pow10Cache[i-1], bigTen)
 	}
 }
 
-// pow10Big returns 10^n as a *big.Int. Uses a pre-computed cache for n < 700.
+// pow10Big returns 10^n as a *big.Int. Uses pre-computed cache for n < 700.
 // The returned value MUST NOT be mutated by the caller.
 func pow10Big(n int) *big.Int {
 	if n >= 0 && n < len(pow10Cache) {

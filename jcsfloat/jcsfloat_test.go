@@ -11,68 +11,30 @@ import (
 	"strings"
 	"testing"
 
-	"jcs-canon/jcsfloat"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
 )
 
-func TestFormatDoubleGoldenVectors(t *testing.T) {
-	f, err := os.Open("testdata/golden_vectors.csv")
-	if err != nil {
-		t.Fatalf("open golden vectors: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := f.Close(); closeErr != nil {
-			t.Fatalf("close golden vectors: %v", closeErr)
-		}
-	})
+// === ECMA-FMT-001: NaN rejected ===
 
-	s := bufio.NewScanner(f)
-	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	lineNo := 0
-	for s.Scan() {
-		lineNo++
-		line := strings.TrimSpace(s.Text())
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, ",", 2)
-		if len(parts) != 2 {
-			t.Fatalf("line %d malformed: %q", lineNo, line)
-		}
-
-		bits, err := strconv.ParseUint(parts[0], 16, 64)
-		if err != nil {
-			t.Fatalf("line %d bad bits %q: %v", lineNo, parts[0], err)
-		}
-		expect := parts[1]
-		input := math.Float64frombits(bits)
-		got, err := jcsfloat.FormatDouble(input)
-		if err != nil {
-			t.Fatalf("line %d unexpected error for %016x: %v", lineNo, bits, err)
-		}
-		if got != expect {
-			t.Fatalf("line %d bits=%016x: got %q want %q", lineNo, bits, got, expect)
-		}
-	}
-	if err := s.Err(); err != nil {
-		t.Fatalf("scan golden vectors: %v", err)
-	}
-	if lineNo != 54445 {
-		t.Fatalf("golden vector line count mismatch: got %d want 54445", lineNo)
+func TestFormatDouble_ECMA_FMT_001(t *testing.T) {
+	_, err := jcsfloat.FormatDouble(math.NaN())
+	if err == nil {
+		t.Fatal("expected error for NaN")
 	}
 }
 
-func TestFormatDoubleRejectsNonFinite(t *testing.T) {
-	cases := []float64{math.NaN(), math.Inf(+1), math.Inf(-1)}
-	for _, c := range cases {
-		_, err := jcsfloat.FormatDouble(c)
-		if err == nil {
-			t.Fatalf("expected error for %v", c)
-		}
-	}
-}
+// === ECMA-FMT-002: -0 → "0" ===
 
-func TestFormatDoubleNegativeZero(t *testing.T) {
+func TestFormatDouble_ECMA_FMT_002(t *testing.T) {
 	got, err := jcsfloat.FormatDouble(math.Copysign(0, -1))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "0" {
+		t.Fatalf("got %q want %q", got, "0")
+	}
+	// Also verify +0
+	got, err = jcsfloat.FormatDouble(0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -81,26 +43,111 @@ func TestFormatDoubleNegativeZero(t *testing.T) {
 	}
 }
 
-func TestFormatDoubleRoundTripProperty(t *testing.T) {
+// === ECMA-FMT-003: ±Infinity rejected ===
+
+func TestFormatDouble_ECMA_FMT_003(t *testing.T) {
+	for _, v := range []float64{math.Inf(+1), math.Inf(-1)} {
+		_, err := jcsfloat.FormatDouble(v)
+		if err == nil {
+			t.Fatalf("expected error for %v", v)
+		}
+	}
+}
+
+// === ECMA-FMT-004: integer fixed (k ≤ n ≤ 21) ===
+
+func TestFormatDouble_ECMA_FMT_004(t *testing.T) {
+	cases := map[float64]string{
+		1e20:  "100000000000000000000",
+		1:     "1",
+		10:    "10",
+		100:   "100",
+		1e15:  "1000000000000000",
+	}
+	for input, want := range cases {
+		got, err := jcsfloat.FormatDouble(input)
+		if err != nil {
+			t.Fatalf("FormatDouble(%v): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// === ECMA-FMT-005: fraction fixed (0 < n ≤ 21, n < k) ===
+
+func TestFormatDouble_ECMA_FMT_005(t *testing.T) {
+	cases := map[float64]string{
+		0.5:                   "0.5",
+		1.5:                   "1.5",
+		1.2345678901234567:    "1.2345678901234567",
+	}
+	for input, want := range cases {
+		got, err := jcsfloat.FormatDouble(input)
+		if err != nil {
+			t.Fatalf("FormatDouble(%v): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// === ECMA-FMT-006: small fraction (-6 < n ≤ 0) ===
+
+func TestFormatDouble_ECMA_FMT_006(t *testing.T) {
+	got, err := jcsfloat.FormatDouble(0.000001)
+	if err != nil {
+		t.Fatalf("FormatDouble(0.000001): %v", err)
+	}
+	if got != "0.000001" {
+		t.Fatalf("got %q want %q", got, "0.000001")
+	}
+}
+
+// === ECMA-FMT-007: exponential notation ===
+
+func TestFormatDouble_ECMA_FMT_007(t *testing.T) {
+	cases := map[float64]string{
+		1e21:           "1e+21",
+		1e-7:           "1e-7",
+		math.MaxFloat64: "1.7976931348623157e+308",
+	}
+	for input, want := range cases {
+		got, err := jcsfloat.FormatDouble(input)
+		if err != nil {
+			t.Fatalf("FormatDouble(%v): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// === ECMA-FMT-008: shortest round-trip representation ===
+
+func TestFormatDouble_ECMA_FMT_008(t *testing.T) {
 	cases := []float64{5e-324, 1e-7, 1e-6, 0.1, 0.2, 1.1, 1, 2, 1e20, 1e21, math.MaxFloat64}
 	for _, c := range cases {
 		f1, err := jcsfloat.FormatDouble(c)
 		if err != nil {
 			t.Fatalf("format(%.17g): %v", c, err)
 		}
-		v, err := strconv.ParseFloat(f1, 64)
-		if err != nil {
-			t.Fatalf("parse %q: %v", f1, err)
+		v, parseErr := strconv.ParseFloat(f1, 64)
+		if parseErr != nil {
+			t.Fatalf("parse %q: %v", f1, parseErr)
 		}
-		f2, err := jcsfloat.FormatDouble(v)
-		if err != nil {
-			t.Fatalf("re-format(%.17g): %v", v, err)
-		}
-		if f1 != f2 {
-			t.Fatalf("idempotency failed for %.17g: first=%q second=%q", c, f1, f2)
+		if v != c {
+			t.Fatalf("round-trip failed for %.17g: formatted %q, parsed back as %.17g", c, f1, v)
 		}
 	}
+}
 
+// === ECMA-FMT-009: even-digit tie-breaking (banker's rounding) ===
+
+func TestFormatDouble_ECMA_FMT_009(t *testing.T) {
+	// Idempotency is a consequence of correct tie-breaking
 	for i := uint64(1); i < 5000; i += 97 {
 		v := math.Float64frombits(i * 0x9e3779b97f4a7c15)
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -110,9 +157,9 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 		if err != nil {
 			t.Fatalf("format bits=%016x: %v", math.Float64bits(v), err)
 		}
-		parsed, err := strconv.ParseFloat(f1, 64)
-		if err != nil {
-			t.Fatalf("parse bits=%016x text=%q: %v", math.Float64bits(v), f1, err)
+		parsed, parseErr := strconv.ParseFloat(f1, 64)
+		if parseErr != nil {
+			t.Fatalf("parse bits=%016x text=%q: %v", math.Float64bits(v), f1, parseErr)
 		}
 		f2, err := jcsfloat.FormatDouble(parsed)
 		if err != nil {
@@ -122,31 +169,95 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 			t.Fatalf("round-trip mismatch bits=%016x: %s != %s", math.Float64bits(v), f1, f2)
 		}
 	}
+}
 
-	if testing.Verbose() {
-		t.Log("jcsfloat round-trip property checks passed")
+// === ECMA-VEC-001: base golden oracle ===
+
+func TestGoldenOracle(t *testing.T) {
+	verifyOracle(t, "testdata/golden_vectors.csv", 54445,
+		"593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636")
+}
+
+// === ECMA-VEC-002: stress golden oracle ===
+
+func TestStressOracle(t *testing.T) {
+	verifyOracle(t, "testdata/golden_stress_vectors.csv", 231917,
+		"287d21ac87e5665550f1baf86038302a0afc67a74a020dffb872f1a93b26d410")
+}
+
+// === ECMA-VEC-003: boundary constants ===
+
+func TestBoundaryConstants(t *testing.T) {
+	cases := map[uint64]string{
+		0x0000000000000000: "0",        // +0
+		0x8000000000000000: "0",        // -0
+		0x0000000000000001: "5e-324",   // MIN_VALUE
+		0x7fefffffffffffff: "1.7976931348623157e+308", // MAX_VALUE
+		0x3eb0c6f7a0b5ed8d: "0.000001",               // 1e-6 boundary
+		0x3eb0c6f7a0b5ed8c: "9.999999999999997e-7",   // just below
+		0x3eb0c6f7a0b5ed8e: "0.0000010000000000000002", // just above
+		0x444b1ae4d6e2ef50: "1e+21",                   // 1e21 boundary
+		0x444b1ae4d6e2ef4f: "999999999999999900000",   // just below
+		0x444b1ae4d6e2ef51: "1.0000000000000001e+21",  // just above
+	}
+	for bits, want := range cases {
+		got, err := jcsfloat.FormatDouble(math.Float64frombits(bits))
+		if err != nil {
+			t.Fatalf("format bits=%016x: %v", bits, err)
+		}
+		if got != want {
+			t.Fatalf("bits=%016x got=%q want=%q", bits, got, want)
+		}
 	}
 }
 
-func TestGoldenVectorsChecksum(t *testing.T) {
-	f, err := os.Open("testdata/golden_vectors.csv")
+// --- Helpers ---
+
+func verifyOracle(t *testing.T, path string, expectedRows int, expectedSHA256 string) {
+	t.Helper()
+
+	f, err := os.Open(path)
 	if err != nil {
-		t.Fatalf("open golden vectors: %v", err)
+		t.Fatalf("open oracle: %v", err)
 	}
-	t.Cleanup(func() {
-		if closeErr := f.Close(); closeErr != nil {
-			t.Fatalf("close golden vectors: %v", closeErr)
-		}
-	})
+	t.Cleanup(func() { _ = f.Close() })
 
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		t.Fatalf("hash golden vectors: %v", err)
-	}
+	tee := io.TeeReader(f, h)
+	sc := bufio.NewScanner(tee)
+	sc.Buffer(make([]byte, 0, 128*1024), 2*1024*1024)
 
-	const want = "593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636"
-	got := fmt.Sprintf("%x", h.Sum(nil))
-	if got != want {
-		t.Fatalf("golden vector checksum mismatch: got %s want %s", got, want)
+	rows := 0
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		rows++
+		parts := strings.SplitN(line, ",", 2)
+		if len(parts) != 2 {
+			t.Fatalf("malformed oracle line %d: %q", rows, line)
+		}
+		bits, err := strconv.ParseUint(parts[0], 16, 64)
+		if err != nil {
+			t.Fatalf("line %d parse bits: %v", rows, err)
+		}
+		got, fmtErr := jcsfloat.FormatDouble(math.Float64frombits(bits))
+		if fmtErr != nil {
+			t.Fatalf("line %d unexpected format error: %v", rows, fmtErr)
+		}
+		if got != parts[1] {
+			t.Fatalf("line %d bits=%016x got=%q want=%q", rows, bits, got, parts[1])
+		}
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("scan oracle: %v", err)
+	}
+	if rows != expectedRows {
+		t.Fatalf("oracle row count mismatch: got %d want %d", rows, expectedRows)
+	}
+	gotSHA := fmt.Sprintf("%x", h.Sum(nil))
+	if gotSHA != expectedSHA256 {
+		t.Fatalf("oracle checksum mismatch: got %s want %s", gotSHA, expectedSHA256)
 	}
 }
