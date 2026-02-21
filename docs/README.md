@@ -18,8 +18,8 @@ Design target: Go-only, self-contained tooling with static binary builds (`CGO_E
    Operator runbook to generate reproducible evidence of correctness for release approvals.
 6. `docs/infrastructure-alignment.md`
    Maps `lattice-canon` behavior to lattice-substrate infrastructure invariants and gate usage.
-6. `docs/infrastructure-alignment.md`
-   Maps `lattice-canon` behavior to lattice-substrate infrastructure invariants and gate usage.
+7. `docs/spec/00-index.md`
+   OCI-style normative specification chapters for lattice-canon behavior and conformance.
 
 ## Fast path
 

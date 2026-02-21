@@ -1,0 +1,98 @@
+[
+  {
+    "name": "verify canonical object",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{\"a\":1}\n",
+    "exit_code": 0
+  },
+  {
+    "name": "verify canonical primitive",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "42\n",
+    "exit_code": 0
+  },
+  {
+    "name": "reject unsorted object",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{\"b\":1,\"a\":2}\n",
+    "exit_code": 2,
+    "stderr_contains": ["non-canonical"]
+  },
+  {
+    "name": "reject duplicate key",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{\"a\":1,\"a\":2}\n",
+    "exit_code": 2,
+    "stderr_contains": ["duplicate object key"]
+  },
+  {
+    "name": "reject lone surrogate",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "\"\\uD800\"\n",
+    "exit_code": 2,
+    "stderr_contains": ["lone high surrogate"]
+  },
+  {
+    "name": "reject noncharacter",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "\"\\uFDD0\"\n",
+    "exit_code": 2,
+    "stderr_contains": ["noncharacter"]
+  },
+  {
+    "name": "reject negative zero",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "-0\n",
+    "exit_code": 2,
+    "stderr_contains": ["negative zero"]
+  },
+  {
+    "name": "reject underflow to zero",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "1e-400\n",
+    "exit_code": 2,
+    "stderr_contains": ["underflows to zero"]
+  },
+  {
+    "name": "reject missing trailing lf",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{}",
+    "exit_code": 2,
+    "stderr_contains": ["missing trailing LF"]
+  },
+  {
+    "name": "reject multiple trailing lf",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{}\n\n",
+    "exit_code": 2,
+    "stderr_contains": ["multiple trailing LFs"]
+  },
+  {
+    "name": "reject body lf byte",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{\"a\":1\n}\n",
+    "exit_code": 2,
+    "stderr_contains": ["LF byte in JCS body"]
+  },
+  {
+    "name": "reject cr byte",
+    "args": ["verify", "--quiet", "-"],
+    "stdin": "{}\r\n",
+    "exit_code": 2,
+    "stderr_contains": ["CR byte"]
+  },
+  {
+    "name": "reject bom",
+    "args": ["verify", "--quiet", "-"],
+    "stdin_hex": "efbbbf7b7d0a",
+    "exit_code": 2,
+    "stderr_contains": ["UTF-8 BOM"]
+  },
+  {
+    "name": "reject invalid utf8",
+    "args": ["verify", "--quiet", "-"],
+    "stdin_hex": "22fffe220a",
+    "exit_code": 2,
+    "stderr_contains": ["invalid UTF-8"]
+  }
+]
