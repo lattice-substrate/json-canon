@@ -12,19 +12,21 @@ This runbook produces release evidence for `jcs-canon`.
 
 ```bash
 go test ./jcsfloat -run 'TestFormatDoubleGoldenVectors|TestGoldenVectorsChecksum' -count=1
+go test ./conformance -run 'TestConformanceRequirements/REQ-ECMA-001|TestConformanceRequirements/REQ-ECMA-002' -count=1
 ```
 
 Acceptance:
 
 - both tests pass,
-- vectors are exactly 54,445 rows,
-- checksum matches pinned value.
+- vectors are exactly 54,445 (base) and 231,917 (stress) rows,
+- checksums match pinned values.
 
 ## 3. Full build and test
 
 ```bash
 go build ./...
 go test ./... -count=1
+go test ./conformance -count=1
 go test ./... -race -count=1
 ```
 
@@ -56,6 +58,7 @@ Store:
 
 - `go version`,
 - targeted oracle-test output,
+- conformance harness output,
 - full test output,
 - binary checksum and metadata,
 - smoke-check transcript with exit codes.

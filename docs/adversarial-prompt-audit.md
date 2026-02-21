@@ -167,7 +167,7 @@ Pass criteria:
 1. Add CI job that diffs `golangci.yml` and `golangci.base.yml` against protected baseline unless a policy label is present.
 2. Add required CI stage for black-box vector tests only (`go test ./cmd/jcs-canon -run 'TestCLI' -count=1`).
 3. Persist release evidence artifacts (test, lint, static build, checksums) as immutable CI artifacts.
-4. Promote `docs/spec/*` from draft to versioned normative release doc.
+4. Promote `spec/*` from draft to versioned normative release doc.
 
 ## 9. Audit Conclusion
 

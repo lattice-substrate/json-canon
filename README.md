@@ -44,4 +44,10 @@ CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o j
 
 ```bash
 go test ./... -count=1
+go test ./conformance -count=1
 ```
+
+## Normative Spec
+
+- Specification index: `spec/00-index.md`
+- Requirement catalog (traceable test IDs): `spec/requirements.md`

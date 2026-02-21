@@ -66,6 +66,25 @@ jobs:
             /tmp/test-full.out
             /tmp/test-blackbox.out
 
+  conformance:
+    name: Offline Conformance
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+
+      - name: Requirement-traceable conformance suite
+        run: go test ./conformance -count=1 -v 2>&1 | tee /tmp/test-conformance.out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: conformance-output
+          path: /tmp/test-conformance.out
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -118,7 +137,7 @@ jobs:
   evidence:
     name: Evidence Bundle
     runs-on: ubuntu-24.04
-    needs: [lint-config-lock, test, lint, build]
+    needs: [lint-config-lock, test, conformance, lint, build]
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -135,6 +154,7 @@ jobs:
         env:
           RESULT_LINT_CONFIG_LOCK: ${{ needs.lint-config-lock.result }}
           RESULT_TEST: ${{ needs.test.result }}
+          RESULT_CONFORMANCE: ${{ needs.conformance.result }}
           RESULT_LINT: ${{ needs.lint.result }}
           RESULT_BUILD: ${{ needs.build.result }}
         run: |
@@ -147,6 +167,7 @@ jobs:
           job-results:
             lint-config-lock: ${RESULT_LINT_CONFIG_LOCK}
             test: ${RESULT_TEST}
+            conformance: ${RESULT_CONFORMANCE}
             lint: ${RESULT_LINT}
             build: ${RESULT_BUILD}
           EOF

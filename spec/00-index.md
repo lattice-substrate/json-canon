@@ -16,6 +16,7 @@ This specification defines the `jcs-canon` canonicalization and verification con
 - [08. Errors And Exit Codes](08-errors-and-exit-codes.md)
 - [09. Security And Determinism](09-security-and-determinism.md)
 - [10. Conformance](10-conformance.md)
+- [Requirement Catalog](requirements.md)
 
 ## Non-Normative Companion Docs
 
