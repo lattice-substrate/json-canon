@@ -1,0 +1,4 @@
+timestamp_utc=20260221T053826Z
+repo=/home/lenny/json-canon
+go version go1.25.6 linux/amd64
+v23.3.0
