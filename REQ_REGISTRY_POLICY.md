@@ -1,0 +1,71 @@
+# Policy Requirement Registry
+
+Formal catalog of project policy requirements for `json-canon` (profile, ABI, process, determinism).
+
+## Legend
+
+| Column | Meaning |
+|--------|---------|
+| ID | Stable requirement identifier: `DOMAIN-NNN` |
+| Spec | Policy source or governing basis |
+| Section | Section or clause within the source |
+| Level | MUST, SHALL, or SHOULD |
+| Requirement | Policy text (paraphrased) |
+
+---
+## ECMA-VEC — Oracle Validation
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| ECMA-VEC-001 | V8 Oracle | — | MUST | All 54,445 base golden oracle vectors MUST produce byte-identical output. SHA-256: `593bdec...`. |
+| ECMA-VEC-002 | V8 Oracle | — | MUST | All 231,917 stress golden oracle vectors MUST produce byte-identical output. SHA-256: `287d21a...`. |
+| ECMA-VEC-003 | ECMA-262 | §6.1.6.1.20 | MUST | Boundary constants (0, -0, MIN_VALUE, MAX_VALUE, 1e-6 boundary, 1e21 boundary) MUST match expected strings. |
+
+## PROF-NUM — Number Profile Restrictions
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| PROF-NEGZ-001 | Profile | — | MUST | Lexical negative zero token (`-0`, `-0.0`, `-0e0`, etc.) MUST be rejected at parse time. |
+| PROF-OFLOW-001 | IEEE 754 | §7.4 | MUST | Number tokens that overflow IEEE 754 binary64 (±Infinity result) MUST be rejected. |
+| PROF-UFLOW-001 | IEEE 754 | §7.5 | MUST | Non-zero number tokens that underflow to IEEE 754 zero MUST be rejected. |
+
+## BOUND — Resource Bounds
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| BOUND-DEPTH-001 | Profile | — | MUST | Nesting depth MUST be bounded (default: 1000). |
+| BOUND-INPUT-001 | Profile | — | MUST | Input size MUST be bounded (default: 64 MiB). |
+| BOUND-VALUES-001 | Profile | — | MUST | Total value count MUST be bounded (default: 1,000,000). |
+| BOUND-MEMBERS-001 | Profile | — | MUST | Object member count MUST be bounded (default: 250,000). |
+| BOUND-ELEMS-001 | Profile | — | MUST | Array element count MUST be bounded (default: 250,000). |
+| BOUND-STRBYTES-001 | Profile | — | MUST | Decoded string byte length MUST be bounded (default: 8 MiB). |
+| BOUND-NUMCHARS-001 | Profile | — | MUST | Number token character length MUST be bounded (default: 4096). |
+
+## CLI — Command-Line Interface ABI
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| CLI-CMD-001 | ABI | — | MUST | `canonicalize` command MUST parse stdin/file, emit canonical bytes to stdout, exit 0 on success. |
+| CLI-CMD-002 | ABI | — | MUST | `verify` command MUST parse, canonicalize, byte-compare, exit 0 if identical. |
+| CLI-EXIT-001 | ABI | — | MUST | No command specified MUST exit 2 with usage message on stderr. |
+| CLI-EXIT-002 | ABI | — | MUST | Unknown command MUST exit 2 with error on stderr. |
+| CLI-EXIT-003 | ABI | — | MUST | Input/parse/profile violations MUST exit 2. |
+| CLI-EXIT-004 | ABI | — | MUST | Internal I/O errors (e.g. write failure) MUST exit 10. |
+| CLI-FLAG-001 | ABI | — | MUST | Unknown flags MUST be rejected with exit 2. |
+| CLI-FLAG-002 | ABI | — | MUST | `--quiet` flag MUST suppress success messages on verify. |
+| CLI-FLAG-003 | ABI | — | MUST | `--help`/`-h` MUST display usage and exit 0 at top-level and command-level. |
+| CLI-FLAG-004 | ABI | — | MUST | `--version` MUST print a machine-parseable version string (`jcs-canon vX.Y.Z` form) and exit 0. |
+| CLI-IO-001 | ABI | — | MUST | `-` argument or no file MUST read from stdin. |
+| CLI-IO-002 | ABI | — | MUST | Multiple input files MUST be rejected with exit 2. |
+| CLI-IO-003 | ABI | — | MUST | File and stdin MUST produce identical output for identical content. |
+| CLI-IO-004 | ABI | — | MUST | `canonicalize` output goes to stdout only; stderr MUST be empty on success. |
+| CLI-IO-005 | ABI | — | MUST | `verify` success MUST emit "ok\n" on stderr (unless --quiet). |
+
+## DET — Determinism
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| DET-REPLAY-001 | Profile | — | MUST | 200 consecutive runs MUST produce byte-identical output. |
+| DET-IDEMPOTENT-001 | Profile | — | MUST | parse→serialize→parse→serialize MUST be idempotent (output₁ == output₂). |
+| DET-STATIC-001 | Profile | — | MUST | Binary MUST build with CGO_ENABLED=0, -trimpath, -buildvcs=false, -buildid=. |
+| DET-NOSOURCE-001 | Profile | — | MUST | Implementation MUST NOT use maps for iteration order, time, random, or other nondeterminism sources. |

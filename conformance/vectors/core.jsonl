@@ -1,2 +1,4 @@
 {"id":"VEC-0001","mode":"canonicalize","input":"{\"a\":1}","want_stdout":"{\"a\":1}","want_exit":0}
 {"id":"VEC-0002","mode":"verify","input":"{ \"a\" : 1 }","want_stderr_contains":"not canonical","want_exit":2}
+{"id":"VEC-OFFSET-0001","mode":"canonicalize","input":"\"\\uD800\"","want_stderr_contains":"at byte 1","want_exit":2}
+{"id":"VEC-OFFSET-0002","mode":"canonicalize","input":"\"\\uD800\\u0041\"","want_stderr_contains":"at byte 7","want_exit":2}

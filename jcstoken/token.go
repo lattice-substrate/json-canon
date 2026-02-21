@@ -426,16 +426,16 @@ func (p *parser) parseString() (*Value, error) {
 		b := p.data[p.pos]
 		if b == '"' {
 			p.pos++
-			s := string(buf)
-			if err := p.validateString(s); err != nil {
-				return nil, err
-			}
-			return &Value{Kind: KindString, Str: s}, nil
+			return &Value{Kind: KindString, Str: string(buf)}, nil
 		}
 		if b == '\\' {
+			escapeStart := p.pos
 			p.pos++
-			r, err := p.parseEscape()
+			r, err := p.parseEscape(escapeStart)
 			if err != nil {
+				return nil, err
+			}
+			if err := validateStringRune(r, escapeStart); err != nil {
 				return nil, err
 			}
 			var tmp [4]byte
@@ -453,10 +453,14 @@ func (p *parser) parseString() (*Value, error) {
 				"unescaped control character 0x%02X in string", b)
 		}
 		// Copy UTF-8 character
+		sourceOffset := p.pos
 		r, size := utf8.DecodeRune(p.data[p.pos:])
 		if r == utf8.RuneError && size <= 1 {
 			return nil, p.newErrorf(jcserr.InvalidUTF8,
 				"invalid UTF-8 byte 0x%02X in string", b)
+		}
+		if err := validateStringRune(r, sourceOffset); err != nil {
+			return nil, err
 		}
 		if len(buf)+size > p.maxStringBytes {
 			return nil, p.newErrorf(jcserr.BoundExceeded,
@@ -468,27 +472,27 @@ func (p *parser) parseString() (*Value, error) {
 }
 
 // parseEscape handles the character after '\'.
-func (p *parser) parseEscape() (rune, *jcserr.Error) {
+func (p *parser) parseEscape(sourceOffset int) (rune, *jcserr.Error) {
 	if p.pos >= len(p.data) {
-		return 0, p.newError(jcserr.InvalidGrammar, "unterminated escape sequence")
+		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, "unterminated escape sequence")
 	}
 	b := p.data[p.pos]
 	p.pos++
 
 	if b == 'u' {
-		return p.parseUnicodeEscape()
+		return p.parseUnicodeEscape(sourceOffset)
 	}
 	// PARSE-GRAM-010: Valid escape characters
 	r, ok := escapedRune(b)
 	if !ok {
-		return 0, p.newErrorf(jcserr.InvalidGrammar, "invalid escape character %q", string(b))
+		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, fmt.Sprintf("invalid escape character %q", string(b)))
 	}
 	return r, nil
 }
 
 // parseUnicodeEscape parses \uXXXX (and \uXXXX\uXXXX for surrogate pairs).
-func (p *parser) parseUnicodeEscape() (rune, *jcserr.Error) {
-	r1, err := p.readHex4()
+func (p *parser) parseUnicodeEscape(sourceOffset int) (rune, *jcserr.Error) {
+	r1, err := p.readHex4(sourceOffset)
 	if err != nil {
 		return 0, err
 	}
@@ -498,29 +502,33 @@ func (p *parser) parseUnicodeEscape() (rune, *jcserr.Error) {
 	}
 	// IJSON-SUR-002: lone low surrogate
 	if r1 >= 0xDC00 {
-		return 0, p.newErrorf(jcserr.LoneSurrogate, "lone low surrogate U+%04X", r1)
+		return 0, jcserr.New(jcserr.LoneSurrogate, sourceOffset, fmt.Sprintf("lone low surrogate U+%04X", r1))
 	}
 
 	// IJSON-SUR-001: high surrogate must be followed by \uXXXX low surrogate
 	if p.pos+1 >= len(p.data) || p.data[p.pos] != '\\' || p.data[p.pos+1] != 'u' {
-		return 0, p.newErrorf(jcserr.LoneSurrogate, "lone high surrogate U+%04X (no following \\u)", r1)
+		return 0, jcserr.New(jcserr.LoneSurrogate, sourceOffset, fmt.Sprintf("lone high surrogate U+%04X (no following \\u)", r1))
 	}
+	secondEscapeOffset := p.pos
 	p.pos += 2
 
-	r2, err := p.readHex4()
+	r2, err := p.readHex4(secondEscapeOffset)
 	if err != nil {
 		return 0, err
 	}
 	if r2 < 0xDC00 || r2 > 0xDFFF {
-		return 0, p.newErrorf(jcserr.LoneSurrogate,
-			"high surrogate U+%04X followed by non-low-surrogate U+%04X", r1, r2)
+		return 0, jcserr.New(
+			jcserr.LoneSurrogate,
+			secondEscapeOffset,
+			fmt.Sprintf("high surrogate U+%04X followed by non-low-surrogate U+%04X", r1, r2),
+		)
 	}
 
 	// IJSON-SUR-003: valid pair decoded to supplementary-plane scalar
 	decoded := utf16.DecodeRune(r1, r2)
 	if decoded == unicode.ReplacementChar {
-		return 0, p.newErrorf(jcserr.LoneSurrogate,
-			"invalid surrogate pair U+%04X U+%04X", r1, r2)
+		return 0, jcserr.New(jcserr.LoneSurrogate, sourceOffset,
+			fmt.Sprintf("invalid surrogate pair U+%04X U+%04X", r1, r2))
 	}
 	return decoded, nil
 }
@@ -549,32 +557,28 @@ func escapedRune(b byte) (rune, bool) {
 }
 
 // readHex4 reads exactly 4 hex digits and returns the rune value.
-func (p *parser) readHex4() (rune, *jcserr.Error) {
+func (p *parser) readHex4(sourceOffset int) (rune, *jcserr.Error) {
 	if p.pos+4 > len(p.data) {
-		return 0, p.newError(jcserr.InvalidGrammar, "incomplete \\u escape")
+		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, "incomplete \\u escape")
 	}
 	hex := string(p.data[p.pos : p.pos+4])
 	p.pos += 4
 	val, err := strconv.ParseUint(hex, 16, 16)
 	if err != nil {
-		return 0, p.newErrorf(jcserr.InvalidGrammar, "invalid hex in \\u escape: %q", hex)
+		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, fmt.Sprintf("invalid hex in \\u escape: %q", hex))
 	}
 	return rune(val), nil
 }
 
-// validateString checks that a decoded string contains no Unicode noncharacters
-// and no surrogate code points.
-// IJSON-NONC-001: noncharacters rejected.
-func (p *parser) validateString(s string) *jcserr.Error {
-	for i, r := range s {
-		if isNoncharacter(r) {
-			return jcserr.New(jcserr.Noncharacter, p.pos-len(s)+i,
-				fmt.Sprintf("string contains Unicode noncharacter U+%04X", r))
-		}
-		if r >= 0xD800 && r <= 0xDFFF {
-			return jcserr.New(jcserr.LoneSurrogate, p.pos-len(s)+i,
-				fmt.Sprintf("string contains surrogate code point U+%04X", r))
-		}
+// validateStringRune enforces scalar policy with source-byte offsets.
+func validateStringRune(r rune, sourceOffset int) *jcserr.Error {
+	if isNoncharacter(r) {
+		return jcserr.New(jcserr.Noncharacter, sourceOffset,
+			fmt.Sprintf("string contains Unicode noncharacter U+%04X", r))
+	}
+	if r >= 0xD800 && r <= 0xDFFF {
+		return jcserr.New(jcserr.LoneSurrogate, sourceOffset,
+			fmt.Sprintf("string contains surrogate code point U+%04X", r))
 	}
 	return nil
 }

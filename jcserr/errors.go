@@ -46,10 +46,16 @@ type Error struct {
 
 // Error implements the error interface.
 func (e *Error) Error() string {
+	base := ""
 	if e.Offset >= 0 {
-		return fmt.Sprintf("jcserr: %s at byte %d: %s", e.Class, e.Offset, e.Message)
+		base = fmt.Sprintf("jcserr: %s at byte %d: %s", e.Class, e.Offset, e.Message)
+	} else {
+		base = fmt.Sprintf("jcserr: %s: %s", e.Class, e.Message)
 	}
-	return fmt.Sprintf("jcserr: %s: %s", e.Class, e.Message)
+	if e.Cause != nil {
+		return fmt.Sprintf("%s: %v", base, e.Cause)
+	}
+	return base
 }
 
 // Unwrap returns the underlying cause, if any.

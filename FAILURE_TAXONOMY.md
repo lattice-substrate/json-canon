@@ -29,6 +29,11 @@ Each class maps to a fixed exit code and is referenced by conformance vectors.
 | 2 | Input rejection (parse, profile, non-canonical, CLI usage) |
 | 10 | Internal error (I/O failure, unexpected state) |
 
+## Offset Semantics
+
+`jcserr.Error.Offset` uses **source-byte positions** in the original input stream.
+For escaped string diagnostics, offsets point to the originating escape sequence start (or second escape start for malformed surrogate pairs).
+
 ## Mapping to Requirements
 
 | Failure Class | Triggered By Requirements |

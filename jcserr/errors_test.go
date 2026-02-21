@@ -53,6 +53,9 @@ func TestErrorUnwrap(t *testing.T) {
 	if !errors.Is(e, cause) {
 		t.Fatal("Unwrap did not return cause")
 	}
+	if got := e.Error(); got != "jcserr: INTERNAL_IO: write failed: underlying" {
+		t.Fatalf("unexpected wrapped error string: %s", got)
+	}
 }
 
 func TestErrorAs(t *testing.T) {

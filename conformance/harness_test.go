@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -40,6 +41,17 @@ type cliResult struct {
 	stderr   string
 }
 
+type vectorCase struct {
+	ID                 string   `json:"id"`
+	Mode               string   `json:"mode,omitempty"`
+	Args               []string `json:"args,omitempty"`
+	Input              string   `json:"input"`
+	WantStdout         *string  `json:"want_stdout,omitempty"`
+	WantStderr         *string  `json:"want_stderr,omitempty"`
+	WantStderrContains *string  `json:"want_stderr_contains,omitempty"`
+	WantExit           int      `json:"want_exit"`
+}
+
 var (
 	buildOnce sync.Once
 	binPath   string
@@ -49,7 +61,11 @@ var (
 // TestConformanceRequirements runs all requirement checks.
 func TestConformanceRequirements(t *testing.T) {
 	h := testHarness(t)
-	requirements := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY.md"))
+	requirements := loadRequirementIDs(
+		t,
+		filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"),
+		filepath.Join(h.root, "REQ_REGISTRY_POLICY.md"),
+	)
 	checks := requirementChecks()
 	validateRequirementCoverage(t, requirements, checks)
 
@@ -58,6 +74,79 @@ func TestConformanceRequirements(t *testing.T) {
 		t.Run(id, func(t *testing.T) {
 			checks[id](t, h)
 		})
+	}
+}
+
+// TestConformanceVectors executes JSONL vectors under conformance/vectors.
+func TestConformanceVectors(t *testing.T) {
+	h := testHarness(t)
+	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob vectors: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("no vector files found for pattern %q", pattern)
+	}
+
+	executed := 0
+	for _, f := range files {
+		file := f
+		t.Run(filepath.Base(file), func(t *testing.T) {
+			fd, err := os.Open(file)
+			if err != nil {
+				t.Fatalf("open vector file: %v", err)
+			}
+			defer func() { _ = fd.Close() }()
+
+			sc := bufio.NewScanner(fd)
+			sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+			lineNo := 0
+			for sc.Scan() {
+				lineNo++
+				line := strings.TrimSpace(sc.Text())
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+
+				var v vectorCase
+				if err := json.Unmarshal([]byte(line), &v); err != nil {
+					t.Fatalf("%s:%d decode vector: %v", file, lineNo, err)
+				}
+				if v.ID == "" {
+					t.Fatalf("%s:%d vector missing id", file, lineNo)
+				}
+
+				args := v.Args
+				if len(args) == 0 {
+					if v.Mode == "" {
+						t.Fatalf("%s:%d id=%s requires mode or args", file, lineNo, v.ID)
+					}
+					args = []string{v.Mode, "-"}
+				}
+
+				res := runCLI(t, h, args, []byte(v.Input))
+				if res.exitCode != v.WantExit {
+					t.Fatalf("%s:%d id=%s exit mismatch got=%d want=%d stdout=%q stderr=%q", file, lineNo, v.ID, res.exitCode, v.WantExit, res.stdout, res.stderr)
+				}
+				if v.WantStdout != nil && res.stdout != *v.WantStdout {
+					t.Fatalf("%s:%d id=%s stdout mismatch got=%q want=%q", file, lineNo, v.ID, res.stdout, *v.WantStdout)
+				}
+				if v.WantStderr != nil && res.stderr != *v.WantStderr {
+					t.Fatalf("%s:%d id=%s stderr mismatch got=%q want=%q", file, lineNo, v.ID, res.stderr, *v.WantStderr)
+				}
+				if v.WantStderrContains != nil && !strings.Contains(res.stderr, *v.WantStderrContains) {
+					t.Fatalf("%s:%d id=%s stderr missing substring %q in %q", file, lineNo, v.ID, *v.WantStderrContains, res.stderr)
+				}
+				executed++
+			}
+			if err := sc.Err(); err != nil {
+				t.Fatalf("%s scan error: %v", file, err)
+			}
+		})
+	}
+	if executed == 0 {
+		t.Fatal("no vectors executed")
 	}
 }
 
@@ -173,7 +262,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 func validateRequirementCoverage(t *testing.T, reqs []string, checks map[string]func(*testing.T, *harness)) {
 	t.Helper()
 	if len(reqs) == 0 {
-		t.Fatal("no requirements found in REQ_REGISTRY.md")
+		t.Fatal("no requirements found in split registries")
 	}
 
 	seen := make(map[string]struct{}, len(reqs))
@@ -185,23 +274,30 @@ func validateRequirementCoverage(t *testing.T, reqs []string, checks map[string]
 	}
 	for id := range checks {
 		if _, ok := seen[id]; !ok {
-			t.Fatalf("check %s exists but is not listed in REQ_REGISTRY.md", id)
+			t.Fatalf("check %s exists but is not listed in split registries", id)
 		}
 	}
 }
 
-func loadRequirementIDs(t *testing.T, path string) []string {
+func loadRequirementIDs(t *testing.T, paths ...string) []string {
 	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read requirements file: %v", err)
-	}
-
 	re := regexp.MustCompile(`(?m)^\|\s*([A-Z]+-[A-Z0-9]+-[0-9]+)\s*\|`)
-	matches := re.FindAllStringSubmatch(string(data), -1)
-	ids := make([]string, 0, len(matches))
-	for _, m := range matches {
-		ids = append(ids, m[1])
+	seen := make(map[string]struct{})
+	ids := make([]string, 0, 128)
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read requirements file %q: %v", path, err)
+		}
+		matches := re.FindAllStringSubmatch(string(data), -1)
+		for _, m := range matches {
+			if _, ok := seen[m[1]]; ok {
+				t.Fatalf("duplicate requirement id across registries: %s", m[1])
+			}
+			seen[m[1]] = struct{}{}
+			ids = append(ids, m[1])
+		}
 	}
 	return ids
 }

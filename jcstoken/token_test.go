@@ -227,6 +227,9 @@ func TestParse_IJSON_SUR_001(t *testing.T) {
 	if je.Class != jcserr.LoneSurrogate {
 		t.Fatalf("expected LONE_SURROGATE, got %s", je.Class)
 	}
+	if je.Offset != 1 {
+		t.Fatalf("expected source-byte offset 1, got %d", je.Offset)
+	}
 }
 
 // === IJSON-SUR-002: Lone low surrogate rejected ===
@@ -235,6 +238,9 @@ func TestParse_IJSON_SUR_002(t *testing.T) {
 	je := mustParseErr(t, `"\uDC00"`)
 	if je.Class != jcserr.LoneSurrogate {
 		t.Fatalf("expected LONE_SURROGATE, got %s", je.Class)
+	}
+	if je.Offset != 1 {
+		t.Fatalf("expected source-byte offset 1, got %d", je.Offset)
 	}
 }
 
@@ -254,6 +260,9 @@ func TestParse_IJSON_NONC_001(t *testing.T) {
 	if je.Class != jcserr.Noncharacter {
 		t.Fatalf("expected NONCHARACTER, got %s", je.Class)
 	}
+	if je.Offset != 1 {
+		t.Fatalf("expected source-byte offset 1, got %d", je.Offset)
+	}
 	// Also test U+FFFE (plane 0)
 	je = mustParseErr(t, `"\uFFFE"`)
 	if je.Class != jcserr.Noncharacter {
@@ -263,6 +272,27 @@ func TestParse_IJSON_NONC_001(t *testing.T) {
 	je = mustParseErr(t, `"\uD83F\uDFFE"`)
 	if je.Class != jcserr.Noncharacter {
 		t.Fatalf("expected NONCHARACTER for U+1FFFE, got %s", je.Class)
+	}
+	if je.Offset != 1 {
+		t.Fatalf("expected source-byte offset 1, got %d", je.Offset)
+	}
+}
+
+func TestParse_IJSON_SUR_OffsetsSecondEscape(t *testing.T) {
+	je := mustParseErr(t, `"\uD800\u0041"`)
+	if je.Class != jcserr.LoneSurrogate {
+		t.Fatalf("expected LONE_SURROGATE, got %s", je.Class)
+	}
+	if je.Offset != 7 {
+		t.Fatalf("expected source-byte offset 7 for second escape, got %d", je.Offset)
+	}
+
+	je = mustParseErr(t, `"\uD800\u12"`)
+	if je.Class != jcserr.InvalidGrammar {
+		t.Fatalf("expected INVALID_GRAMMAR, got %s", je.Class)
+	}
+	if je.Offset != 7 {
+		t.Fatalf("expected source-byte offset 7 for malformed second escape, got %d", je.Offset)
 	}
 }
 

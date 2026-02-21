@@ -59,6 +59,10 @@ go test ./... -count=1 -v
 go test ./conformance -count=1 -v -timeout=10m
 ```
 
+Requirement registries are split for audit clarity:
+- `REQ_REGISTRY_NORMATIVE.md` (RFC/ECMA obligations)
+- `REQ_REGISTRY_POLICY.md` (profile/ABI/process policy)
+
 ## Normative References
 
 | Spec | Scope |

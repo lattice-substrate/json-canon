@@ -73,13 +73,14 @@ Every requirement traces to one of these. Do not invent requirements that aren't
 
 ## Requirement System
 
-Three files form the requirement traceability chain:
+Four files form the requirement traceability chain:
 
-1. **`REQ_REGISTRY.md`** — 86 formal requirements, each citing a specific RFC section
-2. **`FAILURE_TAXONOMY.md`** — 13 failure classes with exit code mappings
-3. **`REQ_ENFORCEMENT_MATRIX.md`** — CSV mapping every requirement to implementation symbols and test functions
+1. **`REQ_REGISTRY_NORMATIVE.md`** — 54 normative RFC/ECMA requirements
+2. **`REQ_REGISTRY_POLICY.md`** — 32 profile/ABI/process policy requirements
+3. **`FAILURE_TAXONOMY.md`** — 13 failure classes with exit code mappings
+4. **`REQ_ENFORCEMENT_MATRIX.md`** — CSV mapping every requirement to implementation symbols and test functions (with `domain` tags)
 
-The conformance harness (`conformance/harness_test.go`) parses `REQ_REGISTRY.md` to extract requirement IDs and validates bidirectional coverage: every requirement has a check, every check maps to a requirement.
+The conformance harness (`conformance/harness_test.go`) parses both split registries and validates bidirectional coverage: every requirement has a check, every check maps to a requirement.
 
 ## Test Naming Convention
 
