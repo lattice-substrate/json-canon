@@ -1,0 +1,59 @@
+# Governance
+
+## Maintainer Policy
+
+### Review Requirements
+
+- All changes require at least one maintainer review.
+- ABI-impacting changes (commands, flags, exit codes, output format) require
+  review from two maintainers.
+- Major version release requires explicit signoff from all active maintainers.
+
+### Maintainer Responsibilities
+
+1. Triage incoming issues within 10 business days.
+2. Review pull requests within 15 business days.
+3. Follow the security triage process defined in `SECURITY.md`.
+4. Maintain traceability: update registries, matrix, and tests for all
+   behavioral changes.
+
+### Maintainer Succession
+
+- If a maintainer is inactive for 6 months, remaining maintainers may appoint
+  a replacement via documented consensus.
+- The release process is documented sufficiently for a new maintainer to
+  execute independently (see `VERIFICATION.md`, `CONTRIBUTING.md`).
+
+## Support Window Policy
+
+| Version | Support Level |
+|---------|-------------|
+| Current major (v1.x.y) | Full: bug fixes, security patches, compatibility maintenance |
+| Previous major (v0.x.y) | Security-only: critical and high severity fixes for 12 months after current major release |
+| Older versions | Unsupported |
+
+## Deprecation Policy
+
+### CLI Behavior
+
+1. Deprecations are announced in the `CHANGELOG.md` at least one minor version
+   before removal.
+2. Deprecated features emit a warning to stderr when used.
+3. Removal occurs only in a new major version.
+4. The ABI manifest (`abi_manifest.json`) is updated to reflect deprecation status.
+
+### Diagnostics
+
+1. Failure class names are stable and never deprecated (they are ABI).
+2. Diagnostic message wording may change in any release (non-ABI).
+3. Exit code mappings are stable and never deprecated (they are ABI).
+
+## Decision Records
+
+Decisions with compatibility impact are recorded in the `CHANGELOG.md` under the
+relevant release section. The rationale for significant architectural decisions
+is captured in:
+
+- `FAILURE_TAXONOMY.md` (error classification rationale)
+- `BOUNDS.md` (resource limit rationale)
+- `standards/CITATION_INDEX.md` (standards interpretation decisions)

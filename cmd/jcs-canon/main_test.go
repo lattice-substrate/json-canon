@@ -89,6 +89,24 @@ func TestRunTopLevelVersionExitZero(t *testing.T) {
 	}
 }
 
+func TestRunSubcommandHelpExitZeroStdout(t *testing.T) {
+	for _, cmd := range []string{"canonicalize", "verify"} {
+		t.Run(cmd, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run([]string{cmd, "--help"}, strings.NewReader(""), &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("expected exit 0, got %d", code)
+			}
+			if !strings.Contains(stdout.String(), "usage: jcs-canon "+cmd) {
+				t.Fatalf("expected help on stdout, got stdout=%q", stdout.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("expected empty stderr, got %q", stderr.String())
+			}
+		})
+	}
+}
+
 func TestRunUnknownCommandExitCode(t *testing.T) {
 	var stderr bytes.Buffer
 	code := run([]string{"bogus"}, strings.NewReader(""), &bytes.Buffer{}, &stderr)

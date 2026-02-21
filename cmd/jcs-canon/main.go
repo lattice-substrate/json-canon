@@ -49,7 +49,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	case "canonicalize":
 		return cmdCanonicalize(args[1:], stdin, stdout, stderr)
 	case "verify":
-		return cmdVerify(args[1:], stdin, stderr)
+		return cmdVerify(args[1:], stdin, stdout, stderr)
 	default:
 		// CLI-EXIT-002
 		_ = writef(stderr, "unknown command: %s\n", args[0])
@@ -99,9 +99,9 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
 	}
 
-	// CLI-FLAG-003
+	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		_ = writeCanonicalizeHelp(stderr)
+		_ = writeCanonicalizeHelp(stdout)
 		return 0
 	}
 
@@ -134,15 +134,15 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 	return 0
 }
 
-func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
+func cmdVerify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fl, positional, err := parseFlags(args)
 	if err != nil {
 		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
 	}
 
-	// CLI-FLAG-003
+	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		_ = writeVerifyHelp(stderr)
+		_ = writeVerifyHelp(stdout)
 		return 0
 	}
 
@@ -240,14 +240,14 @@ func writeErrorAndReturn(stderr io.Writer, code int, format string, args ...any)
 	return code
 }
 
-func writeCanonicalizeHelp(stderr io.Writer) error {
-	if err := writeLine(stderr, "usage: jcs-canon canonicalize [--quiet] [file|-]"); err != nil {
+func writeCanonicalizeHelp(w io.Writer) error {
+	if err := writeLine(w, "usage: jcs-canon canonicalize [--quiet] [file|-]"); err != nil {
 		return err
 	}
-	if err := writeLine(stderr, "  Read JSON from file (or stdin), emit canonical bytes to stdout."); err != nil {
+	if err := writeLine(w, "  Read JSON from file (or stdin), emit canonical bytes to stdout."); err != nil {
 		return err
 	}
-	return writeLine(stderr, "  --quiet   Accepted for command symmetry; canonicalize is silent on success")
+	return writeLine(w, "  --quiet   Accepted for command symmetry; canonicalize is silent on success")
 }
 
 func writeGlobalHelp(w io.Writer) error {
@@ -270,14 +270,14 @@ func writeVersion(w io.Writer) error {
 	return writeLine(w, "jcs-canon "+version)
 }
 
-func writeVerifyHelp(stderr io.Writer) error {
-	if err := writeLine(stderr, "usage: jcs-canon verify [--quiet] [file|-]"); err != nil {
+func writeVerifyHelp(w io.Writer) error {
+	if err := writeLine(w, "usage: jcs-canon verify [--quiet] [file|-]"); err != nil {
 		return err
 	}
-	if err := writeLine(stderr, "  Parse, canonicalize, and compare bytes to verify canonical form."); err != nil {
+	if err := writeLine(w, "  Parse, canonicalize, and compare bytes to verify canonical form."); err != nil {
 		return err
 	}
-	return writeLine(stderr, "  --quiet  Suppress success messages")
+	return writeLine(w, "  --quiet  Suppress success messages")
 }
 
 func writeLine(w io.Writer, msg string) error {

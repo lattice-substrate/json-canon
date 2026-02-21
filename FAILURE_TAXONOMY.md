@@ -29,6 +29,22 @@ Each class maps to a fixed exit code and is referenced by conformance vectors.
 | 2 | Input rejection (parse, profile, non-canonical, CLI usage) |
 | 10 | Internal error (I/O failure, unexpected state) |
 
+## File Open Classification Rationale
+
+File-open failures (missing file, permission denied, directory instead of file) are
+classified as `CLI_USAGE` (exit 2), not `INTERNAL_IO` (exit 10).
+
+Rationale: a file path is a user-supplied argument. When the path cannot be opened,
+the root cause is invalid user input (wrong path, missing file, wrong type), not an
+I/O system failure. This parallels how shells treat "command not found" as a usage
+error rather than a system error.
+
+`INTERNAL_IO` is reserved for failures that occur after a valid I/O channel is
+established (e.g., write failures to stdout, pipe breakage mid-stream).
+
+`BOUND_EXCEEDED` is preserved for file-read oversize regardless of input source
+(stdin or file), because the root cause is resource exhaustion, not user argument error.
+
 ## Offset Semantics
 
 `jcserr.Error.Offset` uses **source-byte positions** in the original input stream.

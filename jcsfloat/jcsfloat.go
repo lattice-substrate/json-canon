@@ -320,6 +320,17 @@ func cmpHigh(lhs, rhs *big.Int, isEven bool) bool {
 }
 
 func extractDigits(state *digitState, isEven bool, n int) (string, int) {
+	// Safety invariant: digitBuf is 30 bytes.
+	//
+	// IEEE 754 binary64 has at most 17 significant decimal digits (shortest
+	// round-trip representation). The Burger-Dybvig algorithm produces at most
+	// 17 digits before termination. normalizeDigitBuffer may expand by 1 byte
+	// on carry-out (worst case: 18). ECMA-262 formatting never adds digits
+	// beyond the significand. 30 bytes provides >60% headroom above the
+	// theoretical maximum of 18.
+	//
+	// This bound is validated by ECMA-VEC-001/002 (286,362 oracle vectors)
+	// and FuzzFormatDoubleRoundTrip.
 	var digitBuf [30]byte
 	dIdx := 0
 	quot := new(big.Int)

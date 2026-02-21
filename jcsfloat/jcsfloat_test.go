@@ -57,20 +57,23 @@ func TestFormatDouble_ECMA_FMT_003(t *testing.T) {
 // === ECMA-FMT-004: integer fixed (k ≤ n ≤ 21) ===
 
 func TestFormatDouble_ECMA_FMT_004(t *testing.T) {
-	cases := map[float64]string{
-		1e20:  "100000000000000000000",
-		1:     "1",
-		10:    "10",
-		100:   "100",
-		1e15:  "1000000000000000",
+	cases := []struct {
+		input float64
+		want  string
+	}{
+		{1, "1"},
+		{10, "10"},
+		{100, "100"},
+		{1e15, "1000000000000000"},
+		{1e20, "100000000000000000000"},
 	}
-	for input, want := range cases {
-		got, err := jcsfloat.FormatDouble(input)
+	for _, tc := range cases {
+		got, err := jcsfloat.FormatDouble(tc.input)
 		if err != nil {
-			t.Fatalf("FormatDouble(%v): %v", input, err)
+			t.Fatalf("FormatDouble(%v): %v", tc.input, err)
 		}
-		if got != want {
-			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		if got != tc.want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
@@ -78,18 +81,21 @@ func TestFormatDouble_ECMA_FMT_004(t *testing.T) {
 // === ECMA-FMT-005: fraction fixed (0 < n ≤ 21, n < k) ===
 
 func TestFormatDouble_ECMA_FMT_005(t *testing.T) {
-	cases := map[float64]string{
-		0.5:                   "0.5",
-		1.5:                   "1.5",
-		1.2345678901234567:    "1.2345678901234567",
+	cases := []struct {
+		input float64
+		want  string
+	}{
+		{0.5, "0.5"},
+		{1.5, "1.5"},
+		{1.2345678901234567, "1.2345678901234567"},
 	}
-	for input, want := range cases {
-		got, err := jcsfloat.FormatDouble(input)
+	for _, tc := range cases {
+		got, err := jcsfloat.FormatDouble(tc.input)
 		if err != nil {
-			t.Fatalf("FormatDouble(%v): %v", input, err)
+			t.Fatalf("FormatDouble(%v): %v", tc.input, err)
 		}
-		if got != want {
-			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		if got != tc.want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
@@ -109,18 +115,21 @@ func TestFormatDouble_ECMA_FMT_006(t *testing.T) {
 // === ECMA-FMT-007: exponential notation ===
 
 func TestFormatDouble_ECMA_FMT_007(t *testing.T) {
-	cases := map[float64]string{
-		1e21:           "1e+21",
-		1e-7:           "1e-7",
-		math.MaxFloat64: "1.7976931348623157e+308",
+	cases := []struct {
+		input float64
+		want  string
+	}{
+		{1e21, "1e+21"},
+		{1e-7, "1e-7"},
+		{math.MaxFloat64, "1.7976931348623157e+308"},
 	}
-	for input, want := range cases {
-		got, err := jcsfloat.FormatDouble(input)
+	for _, tc := range cases {
+		got, err := jcsfloat.FormatDouble(tc.input)
 		if err != nil {
-			t.Fatalf("FormatDouble(%v): %v", input, err)
+			t.Fatalf("FormatDouble(%v): %v", tc.input, err)
 		}
-		if got != want {
-			t.Fatalf("FormatDouble(%v) = %q, want %q", input, got, want)
+		if got != tc.want {
+			t.Fatalf("FormatDouble(%v) = %q, want %q", tc.input, got, tc.want)
 		}
 	}
 }
@@ -224,25 +233,28 @@ func TestStressOracle(t *testing.T) {
 // === ECMA-VEC-003: boundary constants ===
 
 func TestBoundaryConstants(t *testing.T) {
-	cases := map[uint64]string{
-		0x0000000000000000: "0",        // +0
-		0x8000000000000000: "0",        // -0
-		0x0000000000000001: "5e-324",   // MIN_VALUE
-		0x7fefffffffffffff: "1.7976931348623157e+308", // MAX_VALUE
-		0x3eb0c6f7a0b5ed8d: "0.000001",               // 1e-6 boundary
-		0x3eb0c6f7a0b5ed8c: "9.999999999999997e-7",   // just below
-		0x3eb0c6f7a0b5ed8e: "0.0000010000000000000002", // just above
-		0x444b1ae4d6e2ef50: "1e+21",                   // 1e21 boundary
-		0x444b1ae4d6e2ef4f: "999999999999999900000",   // just below
-		0x444b1ae4d6e2ef51: "1.0000000000000001e+21",  // just above
+	cases := []struct {
+		bits uint64
+		want string
+	}{
+		{0x0000000000000000, "0"},                       // +0
+		{0x8000000000000000, "0"},                       // -0
+		{0x0000000000000001, "5e-324"},                  // MIN_VALUE
+		{0x7fefffffffffffff, "1.7976931348623157e+308"}, // MAX_VALUE
+		{0x3eb0c6f7a0b5ed8d, "0.000001"},               // 1e-6 boundary
+		{0x3eb0c6f7a0b5ed8c, "9.999999999999997e-7"},   // just below
+		{0x3eb0c6f7a0b5ed8e, "0.0000010000000000000002"}, // just above
+		{0x444b1ae4d6e2ef50, "1e+21"},                   // 1e21 boundary
+		{0x444b1ae4d6e2ef4f, "999999999999999900000"},   // just below
+		{0x444b1ae4d6e2ef51, "1.0000000000000001e+21"},  // just above
 	}
-	for bits, want := range cases {
-		got, err := jcsfloat.FormatDouble(math.Float64frombits(bits))
+	for _, tc := range cases {
+		got, err := jcsfloat.FormatDouble(math.Float64frombits(tc.bits))
 		if err != nil {
-			t.Fatalf("format bits=%016x: %v", bits, err)
+			t.Fatalf("format bits=%016x: %v", tc.bits, err)
 		}
-		if got != want {
-			t.Fatalf("bits=%016x got=%q want=%q", bits, got, want)
+		if got != tc.want {
+			t.Fatalf("bits=%016x got=%q want=%q", tc.bits, got, tc.want)
 		}
 	}
 }
