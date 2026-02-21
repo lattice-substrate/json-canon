@@ -67,6 +67,13 @@ Requirement registries are split for audit clarity:
 
 Official engineering docs are indexed in `docs/README.md`.
 Key references:
+- `ARCHITECTURE.md`
+- `ABI.md`
+- `NORMATIVE_REFERENCES.md`
+- `SPECIFICATION.md`
+- `CONFORMANCE.md`
+- `THREAT_MODEL.md`
+- `RELEASE_PROCESS.md`
 - `docs/TRACEABILITY_MODEL.md`
 - `docs/VECTOR_FORMAT.md`
 - `docs/ALGORITHMIC_INVARIANTS.md`

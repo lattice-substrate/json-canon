@@ -1723,6 +1723,148 @@ func TestCitationIndexCoversNormativeRequirements(t *testing.T) {
 	t.Logf("verified %d normative requirement IDs in citation index with structured mappings", len(normIDs))
 }
 
+// TestRequiredDocumentationPresent verifies required official docs exist.
+func TestRequiredDocumentationPresent(t *testing.T) {
+	h := testHarness(t)
+	required := []string{
+		"README.md",
+		"AGENTS.md",
+		"CLAUDE.md",
+		"ARCHITECTURE.md",
+		"ABI.md",
+		"NORMATIVE_REFERENCES.md",
+		"SPECIFICATION.md",
+		"CONFORMANCE.md",
+		"THREAT_MODEL.md",
+		"RELEASE_PROCESS.md",
+		"REQ_REGISTRY_NORMATIVE.md",
+		"REQ_REGISTRY_POLICY.md",
+		"REQ_ENFORCEMENT_MATRIX.md",
+		"FAILURE_TAXONOMY.md",
+		"abi_manifest.json",
+		"standards/CITATION_INDEX.md",
+		"docs/README.md",
+	}
+
+	for _, rel := range required {
+		path := filepath.Join(h.root, rel)
+		st, err := os.Stat(path)
+		if err != nil {
+			t.Errorf("required documentation file missing: %s (%v)", rel, err)
+			continue
+		}
+		if st.IsDir() {
+			t.Errorf("required documentation path is a directory, expected file: %s", rel)
+			continue
+		}
+		if st.Size() == 0 {
+			t.Errorf("required documentation file is empty: %s", rel)
+		}
+	}
+}
+
+// TestRequirementRegistryIndexCounts verifies REQ_REGISTRY.md count values
+// stay synchronized with split requirement registries.
+func TestRequirementRegistryIndexCounts(t *testing.T) {
+	h := testHarness(t)
+	normIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"))
+	policyIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_POLICY.md"))
+
+	indexPath := filepath.Join(h.root, "REQ_REGISTRY.md")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read REQ_REGISTRY.md: %v", err)
+	}
+	text := string(data)
+
+	normCount := extractIntByPattern(t, text, `(?m)^-\s*Normative requirements:\s*([0-9]+)\s*$`, "normative count")
+	policyCount := extractIntByPattern(t, text, `(?m)^-\s*Policy requirements:\s*([0-9]+)\s*$`, "policy count")
+	totalCount := extractIntByPattern(t, text, `(?m)^-\s*Total requirements:\s*([0-9]+)\s*$`, "total count")
+
+	if want := len(normIDs); normCount != want {
+		t.Errorf("REQ_REGISTRY.md normative count=%d, want %d", normCount, want)
+	}
+	if want := len(policyIDs); policyCount != want {
+		t.Errorf("REQ_REGISTRY.md policy count=%d, want %d", policyCount, want)
+	}
+	if want := len(normIDs) + len(policyIDs); totalCount != want {
+		t.Errorf("REQ_REGISTRY.md total count=%d, want %d", totalCount, want)
+	}
+}
+
+// TestABIDocsAlignedWithManifest verifies that human-readable ABI docs track
+// the machine-readable manifest for commands, flags, and exit codes.
+func TestABIDocsAlignedWithManifest(t *testing.T) {
+	h := testHarness(t)
+	manifest := loadABIManifest(t, filepath.Join(h.root, "abi_manifest.json"))
+
+	abiDoc := mustReadText(t, filepath.Join(h.root, "ABI.md"))
+	specDoc := mustReadText(t, filepath.Join(h.root, "SPECIFICATION.md"))
+
+	commands := make([]string, 0, len(manifest.Commands))
+	for name := range manifest.Commands {
+		commands = append(commands, name)
+	}
+	sort.Strings(commands)
+	for _, cmdName := range commands {
+		assertContains(t, abiDoc, "`"+cmdName+"`", "ABI.md command")
+		assertContains(t, specDoc, "`jcs-canon "+cmdName, "SPECIFICATION.md command synopsis")
+	}
+
+	globalFlags := make([]string, 0, len(manifest.GlobalFlags))
+	for f := range manifest.GlobalFlags {
+		globalFlags = append(globalFlags, f)
+	}
+	sort.Strings(globalFlags)
+	for _, flag := range globalFlags {
+		assertContains(t, abiDoc, "`"+flag+"`", "ABI.md global flag")
+		assertContains(t, specDoc, flag, "SPECIFICATION.md global flag")
+	}
+
+	cmdFlags := make(map[string]struct{})
+	for _, cmd := range manifest.Commands {
+		for f := range cmd.Flags {
+			cmdFlags[f] = struct{}{}
+		}
+	}
+	flags := make([]string, 0, len(cmdFlags))
+	for f := range cmdFlags {
+		flags = append(flags, f)
+	}
+	sort.Strings(flags)
+	for _, flag := range flags {
+		assertContains(t, abiDoc, "`"+flag+"`", "ABI.md command flag")
+		assertContains(t, specDoc, flag, "SPECIFICATION.md command flag")
+	}
+
+	exitCodes := make([]string, 0, len(manifest.ExitCodes))
+	for code := range manifest.ExitCodes {
+		exitCodes = append(exitCodes, code)
+	}
+	sort.Strings(exitCodes)
+	for _, code := range exitCodes {
+		assertContains(t, abiDoc, "`"+code+"`", "ABI.md exit code")
+		assertContains(t, specDoc, "`"+code+"`", "SPECIFICATION.md exit code")
+	}
+}
+
+// TestFailureTaxonomyDocAlignedWithManifest verifies every failure class in
+// abi_manifest.json is documented in FAILURE_TAXONOMY.md.
+func TestFailureTaxonomyDocAlignedWithManifest(t *testing.T) {
+	h := testHarness(t)
+	manifest := loadABIManifest(t, filepath.Join(h.root, "abi_manifest.json"))
+	failureDoc := mustReadText(t, filepath.Join(h.root, "FAILURE_TAXONOMY.md"))
+
+	for _, c := range manifest.FailureClasses {
+		pattern := fmt.Sprintf(`(?m)^\|\s*%s\s*\|`, regexp.QuoteMeta(c.Name))
+		if ok, err := regexp.MatchString(pattern, failureDoc); err != nil {
+			t.Fatalf("compile taxonomy pattern for %s: %v", c.Name, err)
+		} else if !ok {
+			t.Errorf("FAILURE_TAXONOMY.md missing failure class table row for %s", c.Name)
+		}
+	}
+}
+
 // --- Matrix parsing helpers ---
 
 type matrixRow struct {
@@ -1740,6 +1882,22 @@ type matrixRow struct {
 type citationEntry struct {
 	source string
 	clause string
+}
+
+type abiManifest struct {
+	Commands       map[string]abiCommand      `json:"commands"`
+	GlobalFlags    map[string]json.RawMessage `json:"global_flags"`
+	ExitCodes      map[string]json.RawMessage `json:"exit_codes"`
+	FailureClasses []abiFailureClass          `json:"failure_classes"`
+}
+
+type abiCommand struct {
+	Flags map[string]json.RawMessage `json:"flags"`
+}
+
+type abiFailureClass struct {
+	Name     string `json:"name"`
+	ExitCode int    `json:"exit_code"`
 }
 
 func loadMatrixIDs(t *testing.T, path string) map[string]struct{} {
@@ -1914,6 +2072,61 @@ func splitMarkdownTableLine(line string) []string {
 		raw[i] = strings.TrimSpace(raw[i])
 	}
 	return raw
+}
+
+func mustReadText(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
+func assertContains(t *testing.T, haystack, needle, context string) {
+	t.Helper()
+	if !strings.Contains(haystack, needle) {
+		t.Errorf("%s missing required token %q", context, needle)
+	}
+}
+
+func extractIntByPattern(t *testing.T, text, pattern, label string) int {
+	t.Helper()
+	re := regexp.MustCompile(pattern)
+	m := re.FindStringSubmatch(text)
+	if len(m) != 2 {
+		t.Fatalf("failed to locate %s using pattern %q", label, pattern)
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("parse %s %q: %v", label, m[1], err)
+	}
+	return n
+}
+
+func loadABIManifest(t *testing.T, path string) abiManifest {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read abi manifest: %v", err)
+	}
+	var m abiManifest
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("parse abi manifest: %v", err)
+	}
+	if len(m.Commands) == 0 {
+		t.Fatal("abi manifest has no commands")
+	}
+	if len(m.GlobalFlags) == 0 {
+		t.Fatal("abi manifest has no global_flags")
+	}
+	if len(m.ExitCodes) == 0 {
+		t.Fatal("abi manifest has no exit_codes")
+	}
+	if len(m.FailureClasses) == 0 {
+		t.Fatal("abi manifest has no failure_classes")
+	}
+	return m
 }
 
 // --- Float oracle helpers ---

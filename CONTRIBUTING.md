@@ -51,6 +51,9 @@ See `GOVERNANCE.md` for review requirements on ABI-impacting changes.
 ## Traceability Expectations
 
 Behavioral changes should update:
+- `ARCHITECTURE.md` / `SPECIFICATION.md` / `CONFORMANCE.md` when system contract or release criteria change
+- `ABI.md` (with `abi_manifest.json`) when CLI/stable ABI behavior changes
+- `NORMATIVE_REFERENCES.md` when normative interpretation policy changes
 - `REQ_REGISTRY_NORMATIVE.md` and/or `REQ_REGISTRY_POLICY.md` (see `REQ_REGISTRY.md` for index)
 - `REQ_ENFORCEMENT_MATRIX.md`
 - `standards/CITATION_INDEX.md` (for normative requirement changes)

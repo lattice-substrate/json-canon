@@ -14,6 +14,13 @@ document in this directory or by normative registries in the repository root.
 
 ## Engineering Specs
 
+- `ARCHITECTURE.md` - package boundaries, runtime model, and invariants
+- `ABI.md` - stable CLI ABI contract (human-readable)
+- `NORMATIVE_REFERENCES.md` - external/internal normative source and interpretation rules
+- `SPECIFICATION.md` - normative product behavior contract
+- `CONFORMANCE.md` - conformance gates and evidence requirements
+- `THREAT_MODEL.md` - security threat model and control mapping
+- `RELEASE_PROCESS.md` - maintainer release workflow and trust checks
 - `docs/TRACEABILITY_MODEL.md` - requirement-to-code-to-test evidence model
 - `docs/VECTOR_FORMAT.md` - JSONL vector schema and evolution policy
 - `docs/ALGORITHMIC_INVARIANTS.md` - strict parsing/canonicalization invariants

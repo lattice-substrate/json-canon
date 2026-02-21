@@ -168,8 +168,8 @@ A change is done only when all are true:
 ## Quick File Map
 
 - Product contract: `README.md`, `abi_manifest.json`, `FAILURE_TAXONOMY.md`
+- Architecture/spec contract: `ARCHITECTURE.md`, `ABI.md`, `NORMATIVE_REFERENCES.md`, `SPECIFICATION.md`, `CONFORMANCE.md`, `THREAT_MODEL.md`, `RELEASE_PROCESS.md`
 - Requirement system: `REQ_REGISTRY_NORMATIVE.md`, `REQ_REGISTRY_POLICY.md`, `REQ_ENFORCEMENT_MATRIX.md`, `standards/CITATION_INDEX.md`
 - Process/governance: `CONTRIBUTING.md`, `GOVERNANCE.md`, `SECURITY.md`, `CHANGELOG.md`
 - Engineering docs: `docs/README.md`, `docs/TRACEABILITY_MODEL.md`, `docs/VECTOR_FORMAT.md`, `docs/ALGORITHMIC_INVARIANTS.md`, `docs/adr/`
 - Release verification: `VERIFICATION.md`
-
