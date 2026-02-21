@@ -4,6 +4,8 @@
 //
 //	jcs-canon canonicalize [--quiet] [file|-]
 //	jcs-canon verify [--quiet] [file|-]
+//	jcs-canon --help
+//	jcs-canon --version
 //
 // Exit codes: 0 (success), 2 (input/profile/non-canonical/usage), 10 (internal/IO).
 package main
@@ -26,9 +28,20 @@ func main() {
 }
 
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	if len(args) == 1 {
+		switch args[0] {
+		case "--help", "-h":
+			_ = writeGlobalHelp(stdout)
+			return 0
+		case "--version":
+			_ = writeVersion(stdout)
+			return 0
+		}
+	}
+
 	if len(args) == 0 {
 		// CLI-EXIT-001
-		_ = writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]")
+		_ = writeGlobalHelp(stderr)
 		return jcserr.CLIUsage.ExitCode()
 	}
 
@@ -40,7 +53,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	default:
 		// CLI-EXIT-002
 		_ = writef(stderr, "unknown command: %s\n", args[0])
-		_ = writeLine(stderr, "usage: jcs-canon <canonicalize|verify> [options] [file|-]")
+		_ = writeGlobalHelp(stderr)
 		return jcserr.CLIUsage.ExitCode()
 	}
 }
@@ -189,6 +202,10 @@ func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, 
 
 	data, err := readBounded(f, maxInputSize)
 	if err != nil {
+		var je *jcserr.Error
+		if errors.As(err, &je) && je.Class == jcserr.BoundExceeded {
+			return nil, err
+		}
 		return nil, jcserr.Wrap(jcserr.CLIUsage, -1, fmt.Sprintf("read file %q", positional[0]), err)
 	}
 	return data, nil
@@ -233,6 +250,26 @@ func writeCanonicalizeHelp(stderr io.Writer) error {
 	return writeLine(stderr, "  --quiet   Accepted for command symmetry; canonicalize is silent on success")
 }
 
+func writeGlobalHelp(w io.Writer) error {
+	if err := writeLine(w, "usage: jcs-canon <canonicalize|verify> [options] [file|-]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "       jcs-canon --help"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "       jcs-canon --version"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "commands: canonicalize, verify"); err != nil {
+		return err
+	}
+	return writeLine(w, "flags: --help, -h, --version")
+}
+
+func writeVersion(w io.Writer) error {
+	return writeLine(w, "jcs-canon "+version)
+}
+
 func writeVerifyHelp(stderr io.Writer) error {
 	if err := writeLine(stderr, "usage: jcs-canon verify [--quiet] [file|-]"); err != nil {
 		return err
@@ -253,3 +290,5 @@ func writef(w io.Writer, format string, args ...any) error {
 	}
 	return nil
 }
+
+var version = "v0.0.0-dev"

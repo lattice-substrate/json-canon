@@ -167,7 +167,8 @@ Every row cites a specific section of a normative specification.
 | CLI-EXIT-004 | ABI | — | MUST | Internal I/O errors (e.g. write failure) MUST exit 10. |
 | CLI-FLAG-001 | ABI | — | MUST | Unknown flags MUST be rejected with exit 2. |
 | CLI-FLAG-002 | ABI | — | MUST | `--quiet` flag MUST suppress success messages on verify. |
-| CLI-FLAG-003 | ABI | — | MUST | `--help` flag MUST display usage and exit 0. |
+| CLI-FLAG-003 | ABI | — | MUST | `--help`/`-h` MUST display usage and exit 0 at top-level and command-level. |
+| CLI-FLAG-004 | ABI | — | MUST | `--version` MUST print a machine-parseable version string (`jcs-canon vX.Y.Z` form) and exit 0. |
 | CLI-IO-001 | ABI | — | MUST | `-` argument or no file MUST read from stdin. |
 | CLI-IO-002 | ABI | — | MUST | Multiple input files MUST be rejected with exit 2. |
 | CLI-IO-003 | ABI | — | MUST | File and stdin MUST produce identical output for identical content. |

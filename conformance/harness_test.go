@@ -153,6 +153,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"CLI-FLAG-001": checkUnknownOptionRejected,
 		"CLI-FLAG-002": checkVerifyQuietSuppressesOk,
 		"CLI-FLAG-003": checkHelpExitsZero,
+		"CLI-FLAG-004": checkVersionExitsZero,
 		"CLI-IO-001":   checkStdinReading,
 		"CLI-IO-002":   checkMultipleInputRejected,
 		"CLI-IO-003":   checkFileAndStdinParity,
@@ -959,6 +960,22 @@ func checkInputViolationExitCode(t *testing.T, h *harness) {
 	if res.exitCode != 2 {
 		t.Fatalf("expected exit 2, got %d: %+v", res.exitCode, res)
 	}
+
+	dir := t.TempDir()
+	oversizedPath := filepath.Join(dir, "oversized.json")
+	if err := os.WriteFile(oversizedPath, bytes.Repeat([]byte{'x'}, jcstoken.DefaultMaxInputSize+1), 0o600); err != nil {
+		t.Fatalf("write oversized fixture: %v", err)
+	}
+
+	fromFile := runCLI(t, h, []string{"canonicalize", oversizedPath}, nil)
+	if fromFile.exitCode != 2 || !strings.Contains(fromFile.stderr, string(jcserr.BoundExceeded)) {
+		t.Fatalf("expected BOUND_EXCEEDED exit 2 for oversized file, got %+v", fromFile)
+	}
+
+	fromStdin := runCLI(t, h, []string{"canonicalize", "-"}, bytes.Repeat([]byte{'x'}, jcstoken.DefaultMaxInputSize+1))
+	if fromStdin.exitCode != 2 || !strings.Contains(fromStdin.stderr, string(jcserr.BoundExceeded)) {
+		t.Fatalf("expected BOUND_EXCEEDED exit 2 for oversized stdin, got %+v", fromStdin)
+	}
 }
 
 func checkInternalWriteFailureExitCode(t *testing.T, h *harness) {
@@ -989,13 +1006,27 @@ func checkVerifyQuietSuppressesOk(t *testing.T, h *harness) {
 }
 
 func checkHelpExitsZero(t *testing.T, h *harness) {
-	res := runCLI(t, h, []string{"canonicalize", "--help"}, nil)
+	res := runCLI(t, h, []string{"--help"}, nil)
+	if res.exitCode != 0 {
+		t.Fatalf("expected exit 0 for top-level --help, got %d", res.exitCode)
+	}
+	res = runCLI(t, h, []string{"canonicalize", "--help"}, nil)
 	if res.exitCode != 0 {
 		t.Fatalf("expected exit 0 for --help, got %d", res.exitCode)
 	}
 	res = runCLI(t, h, []string{"verify", "--help"}, nil)
 	if res.exitCode != 0 {
 		t.Fatalf("expected exit 0 for --help, got %d", res.exitCode)
+	}
+}
+
+func checkVersionExitsZero(t *testing.T, h *harness) {
+	res := runCLI(t, h, []string{"--version"}, nil)
+	if res.exitCode != 0 {
+		t.Fatalf("expected exit 0 for --version, got %d", res.exitCode)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(res.stdout), "jcs-canon v") {
+		t.Fatalf("unexpected version output: %+v", res)
 	}
 }
 

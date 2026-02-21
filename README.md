@@ -1,6 +1,6 @@
 # json-canon
 
-RFC 8785 JSON Canonicalization Scheme — pure Go, zero dependencies.
+RFC 8785 JSON Canonicalization Scheme - pure Go, zero dependencies.
 
 ## Overview
 
@@ -11,28 +11,40 @@ signature verification.
 
 ## Features
 
-- **Pure Go, zero dependencies** — standard library only
-- **ECMA-262 Number::toString** — hand-written Burger-Dybvig algorithm validated
+- **Pure Go, zero dependencies** - standard library only
+- **ECMA-262 Number::toString** - hand-written Burger-Dybvig algorithm validated
   against 286,362 V8 oracle vectors
-- **Strict input validation** — RFC 8259 grammar, RFC 7493 I-JSON constraints
+- **Strict input validation** - RFC 8259 grammar, RFC 7493 I-JSON constraints
   (duplicate keys, surrogates, noncharacters), RFC 3629 UTF-8
-- **UTF-16 code-unit key sorting** — correct supplementary-plane ordering
-- **Deterministic** — CGO_ENABLED=0 static binary, no nondeterminism sources
-- **Resource bounded** — configurable depth, size, and count limits
+- **UTF-16 code-unit key sorting** - correct supplementary-plane ordering
+- **Deterministic** - CGO_ENABLED=0 static binary, no nondeterminism sources
+- **Resource bounded** - configurable depth, size, and count limits
 
 ## CLI
 
-```
+```text
 jcs-canon canonicalize [--quiet] [file|-]
 jcs-canon verify [--quiet] [file|-]
+jcs-canon --help
+jcs-canon --version
 ```
 
 Exit codes: `0` success, `2` input/validation error, `10` internal error.
 
+## Stability Policy
+
+This project enforces strict SemVer for the published CLI ABI.
+
+Stable ABI scope:
+- command set and flag semantics
+- exit code taxonomy and failure classes
+- canonical stdout bytes for accepted inputs
+- stderr success/error channel contract (`verify` uses stderr for `ok\n`)
+
 ## Build
 
 ```bash
-CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=v0.0.0-dev" -o jcs-canon ./cmd/jcs-canon
 ```
 
 ## Test
@@ -60,4 +72,4 @@ go test ./conformance -count=1 -v -timeout=10m
 
 ## License
 
-See LICENSE file.
+See `LICENSE`.

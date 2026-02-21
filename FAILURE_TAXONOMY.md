@@ -15,9 +15,9 @@ Each class maps to a fixed exit code and is referenced by conformance vectors.
 | NUMBER_OVERFLOW | 2 | Number overflows IEEE 754 binary64 range |
 | NUMBER_NEGZERO | 2 | Lexical negative zero token (`-0`, `-0.0`, etc.) |
 | NUMBER_UNDERFLOW | 2 | Non-zero number underflows to IEEE 754 zero |
-| BOUND_EXCEEDED | 2 | Resource bound exceeded (depth, size, count, etc.) |
+| BOUND_EXCEEDED | 2 | Resource/input policy bound exceeded (depth, size, count, etc.) regardless of stdin/file source |
 | NOT_CANONICAL | 2 | Valid JSON but not byte-identical to canonical form |
-| CLI_USAGE | 2 | Invalid CLI usage (unknown command, unknown flag, multiple inputs) |
+| CLI_USAGE | 2 | Invalid CLI usage (unknown command/flag, multiple inputs, unreadable file path) |
 | INTERNAL_IO | 10 | Output write failure or I/O error |
 | INTERNAL_ERROR | 10 | Unexpected internal error |
 

@@ -107,3 +107,29 @@ func TestBlackboxVerifyRejectsNonCanonicalVector(t *testing.T) {
 		t.Fatalf("unexpected stderr: %q", string(stderr))
 	}
 }
+
+func TestBlackboxTopLevelHelpExitZero(t *testing.T) {
+	code, stdout, stderr := runBlackbox(t, []string{"--help"}, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, string(stderr))
+	}
+	if !bytes.Contains(stdout, []byte("usage: jcs-canon")) {
+		t.Fatalf("unexpected help output: %q", string(stdout))
+	}
+	if len(stderr) != 0 {
+		t.Fatalf("expected empty stderr, got %q", string(stderr))
+	}
+}
+
+func TestBlackboxTopLevelVersionExitZero(t *testing.T) {
+	code, stdout, stderr := runBlackbox(t, []string{"--version"}, nil)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, string(stderr))
+	}
+	if !bytes.HasPrefix(bytes.TrimSpace(stdout), []byte("jcs-canon v")) {
+		t.Fatalf("unexpected version output: %q", string(stdout))
+	}
+	if len(stderr) != 0 {
+		t.Fatalf("expected empty stderr, got %q", string(stderr))
+	}
+}

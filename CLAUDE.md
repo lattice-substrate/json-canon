@@ -26,7 +26,7 @@ go test ./conformance -count=1 -run 'TestConformanceRequirements/CANON-SORT-001'
 go vet ./...
 
 # Build static binary
-CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=v0.0.0-dev" -o jcs-canon ./cmd/jcs-canon
 
 # Run everything
 go test ./... -count=1 -timeout=10m
@@ -75,7 +75,7 @@ Every requirement traces to one of these. Do not invent requirements that aren't
 
 Three files form the requirement traceability chain:
 
-1. **`REQ_REGISTRY.md`** — 85 formal requirements, each citing a specific RFC section
+1. **`REQ_REGISTRY.md`** — 86 formal requirements, each citing a specific RFC section
 2. **`FAILURE_TAXONOMY.md`** — 13 failure classes with exit code mappings
 3. **`REQ_ENFORCEMENT_MATRIX.md`** — CSV mapping every requirement to implementation symbols and test functions
 
@@ -104,9 +104,13 @@ These golden vector files are V8-generated oracles pinned by SHA-256. They canno
 ```
 jcs-canon canonicalize [--quiet] [file|-]   # parse → canonicalize → stdout
 jcs-canon verify [--quiet] [file|-]         # parse → canonicalize → byte-compare
+jcs-canon --help                            # top-level stable help (exit 0)
+jcs-canon --version                         # top-level stable version (exit 0)
 ```
 
 Exit codes: `0` success, `2` input/validation/non-canonical/usage, `10` internal/IO error.
+
+Compatibility policy: strict SemVer for CLI ABI.
 
 ## Common Pitfalls
 
