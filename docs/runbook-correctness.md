@@ -6,7 +6,6 @@ This runbook produces objective evidence that the implementation is behaving cor
 
 - Linux environment.
 - Go 1.22+.
-- Node.js available for vector regeneration.
 - Run from repository root.
 
 Optional for restricted environments:
@@ -17,19 +16,16 @@ export GOMODCACHE=/tmp/go-mod-cache
 mkdir -p "$GOCACHE" "$GOMODCACHE"
 ```
 
-## 2. Regenerate and validate golden vectors
+## 2. Validate pinned golden vectors (Go-only)
 
 ```bash
-node jcsfloat/testdata/generate_golden.js > jcsfloat/testdata/golden_vectors.csv
-wc -l jcsfloat/testdata/golden_vectors.csv
-sha256sum jcsfloat/testdata/golden_vectors.csv
+go test ./jcsfloat -run 'TestFormatDoubleGoldenVectors|TestGoldenVectorsChecksum' -count=1
 ```
 
 Acceptance criteria:
 
-- generator reports `Generated 54445 golden vectors` on stderr.
-- line count is exactly `54445`.
-- checksum is recorded in release evidence.
+- both tests pass.
+- vectors are exactly 54,445 rows and checksum matches pinned value.
 
 ## 3. Full build and test
 
@@ -75,27 +71,16 @@ Expected:
 Store the following artifacts per release:
 
 - `go version` output.
-- vector generation stderr line.
-- vector file line count and SHA-256.
+- vector validation test output.
 - full `go test ./... -count=1` output.
-- release binary SHA-256 and `file` output.
+- release binary checksum and metadata.
 - smoke check transcript with exit codes.
 
-## 7. One-command evidence collection
-
-Use the helper script:
-
-```bash
-bash docs/scripts/prove_correctness.sh
-```
-
-It writes timestamped evidence files under `.evidence/`.
-
-## 8. Release stop conditions
+## 7. Release stop conditions
 
 Do not release if any of the following occurs:
 
-- golden vectors not exactly `54,445`.
+- golden vector validation tests fail.
 - any package test fails.
 - smoke checks do not match expected outcomes.
 - binary build fails or is not static.

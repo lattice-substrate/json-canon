@@ -2,7 +2,9 @@ package jcsfloat
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -117,5 +119,24 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 
 	if testing.Verbose() {
 		fmt.Println("jcsfloat round-trip property checks passed")
+	}
+}
+
+func TestGoldenVectorsChecksum(t *testing.T) {
+	f, err := os.Open("testdata/golden_vectors.csv")
+	if err != nil {
+		t.Fatalf("open golden vectors: %v", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		t.Fatalf("hash golden vectors: %v", err)
+	}
+
+	const want = "b7cf58a7d9de15cd27adb95ee596f4a3092ec3ace2fc52a6e065a28dbe81f438"
+	got := fmt.Sprintf("%x", h.Sum(nil))
+	if got != want {
+		t.Fatalf("golden vector checksum mismatch: got %s want %s", got, want)
 	}
 }

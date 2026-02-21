@@ -79,7 +79,7 @@ func Verify(data []byte) error {
 	// Step 2: Strict JSON parsing (§3.3)
 	v, err := jcstoken.Parse(body)
 	if err != nil {
-		return err
+		return fmt.Errorf("gjcs1: parse body: %w", err)
 	}
 
 	// Step 3: Re-serialize and byte-compare
@@ -98,56 +98,30 @@ func Verify(data []byte) error {
 // checkEnvelope enforces all file-level constraints from §3.2.
 // Returns the JCS body (data without the trailing LF) or an EnvelopeError.
 func checkEnvelope(data []byte) ([]byte, error) {
-	if len(data) == 0 {
-		return nil, &EnvelopeError{Msg: "file is empty"}
+	if err := requireNonEmptyFile(data); err != nil {
+		return nil, err
+	}
+	if err := requireSingleTrailingLF(data); err != nil {
+		return nil, err
 	}
 
-	// Must end with exactly one LF
-	if data[len(data)-1] != 0x0A {
-		return nil, &EnvelopeError{Msg: "missing trailing LF"}
-	}
-
-	// Check for multiple trailing LFs
-	if len(data) >= 2 && data[len(data)-2] == 0x0A {
-		return nil, &EnvelopeError{Msg: "multiple trailing LFs"}
-	}
-
-	// JCS body is everything before the trailing LF
 	body := data[:len(data)-1]
 
-	// Non-empty body
-	if len(body) == 0 {
-		return nil, &EnvelopeError{Msg: "empty JCS body (file contains only LF)"}
+	if err := requireNonEmptyBody(body); err != nil {
+		return nil, err
 	}
-
-	// No BOM
-	if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
-		return nil, &EnvelopeError{Msg: "UTF-8 BOM detected"}
+	if err := requireNoBOM(body); err != nil {
+		return nil, err
 	}
-
-	// No CR bytes anywhere in the file (including the body)
-	for i, b := range data {
-		if b == 0x0D {
-			return nil, &EnvelopeError{Msg: fmt.Sprintf("CR byte (0x0D) at offset %d", i)}
-		}
+	if err := requireNoCR(data); err != nil {
+		return nil, err
 	}
-
-	// No LF bytes in the body (the only LF allowed is the trailing one)
-	for i, b := range body {
-		if b == 0x0A {
-			return nil, &EnvelopeError{Msg: fmt.Sprintf("LF byte in JCS body at offset %d", i)}
-		}
+	if err := requireNoLFInBody(body); err != nil {
+		return nil, err
 	}
-
-	// Valid UTF-8
-	if !utf8.Valid(body) {
-		// Find the offending byte for a better error message
-		offset := findInvalidUTF8(body)
-		return nil, &EnvelopeError{Msg: fmt.Sprintf("invalid UTF-8 at offset %d", offset)}
+	if err := requireValidUTF8(body); err != nil {
+		return nil, err
 	}
-
-	// Check for surrogate code points encoded as UTF-8
-	// (Go's utf8.Valid rejects these, but we check explicitly for clarity)
 	if err := checkNoSurrogateUTF8(body); err != nil {
 		return nil, err
 	}
@@ -196,9 +170,13 @@ func Canonicalize(input []byte) ([]byte, error) {
 func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, error) {
 	v, err := jcstoken.ParseWithOptions(input, opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gjcs1: parse input: %w", err)
 	}
-	return jcs.Serialize(v)
+	canonical, err := jcs.Serialize(v)
+	if err != nil {
+		return nil, fmt.Errorf("gjcs1: serialize input: %w", err)
+	}
+	return canonical, nil
 }
 
 // WriteAtomic writes GJCS1 bytes to the given path atomically using
@@ -220,8 +198,12 @@ func WriteAtomic(path string, data []byte) error {
 	success := false
 	defer func() {
 		if !success {
-			tmp.Close()
-			os.Remove(tmpPath)
+			if closeErr := tmp.Close(); closeErr != nil {
+				// Best-effort cleanup.
+			}
+			if removeErr := os.Remove(tmpPath); removeErr != nil {
+				// Best-effort cleanup.
+			}
 		}
 	}()
 
@@ -259,15 +241,22 @@ func syncDir(dir string) {
 	if err != nil {
 		return
 	}
-	d.Sync()
-	d.Close()
+	if syncErr := d.Sync(); syncErr != nil {
+		if closeErr := d.Close(); closeErr != nil {
+			return
+		}
+		return
+	}
+	if closeErr := d.Close(); closeErr != nil {
+		return
+	}
 }
 
 // WriteGoverned canonicalizes JSON input and writes it as a GJCS1 file atomically.
 func WriteGoverned(path string, input []byte) error {
 	canonical, err := Canonicalize(input)
 	if err != nil {
-		return err
+		return fmt.Errorf("gjcs1: canonicalize governed input: %w", err)
 	}
 	gjcs1 := Envelope(canonical)
 	return WriteAtomic(path, gjcs1)
@@ -292,4 +281,61 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+func requireNonEmptyFile(data []byte) error {
+	if len(data) == 0 {
+		return &EnvelopeError{Msg: "file is empty"}
+	}
+	return nil
+}
+
+func requireSingleTrailingLF(data []byte) error {
+	if data[len(data)-1] != 0x0A {
+		return &EnvelopeError{Msg: "missing trailing LF"}
+	}
+	if len(data) >= 2 && data[len(data)-2] == 0x0A {
+		return &EnvelopeError{Msg: "multiple trailing LFs"}
+	}
+	return nil
+}
+
+func requireNonEmptyBody(body []byte) error {
+	if len(body) == 0 {
+		return &EnvelopeError{Msg: "empty JCS body (file contains only LF)"}
+	}
+	return nil
+}
+
+func requireNoBOM(body []byte) error {
+	if len(body) >= 3 && body[0] == 0xEF && body[1] == 0xBB && body[2] == 0xBF {
+		return &EnvelopeError{Msg: "UTF-8 BOM detected"}
+	}
+	return nil
+}
+
+func requireNoCR(data []byte) error {
+	for i, b := range data {
+		if b == 0x0D {
+			return &EnvelopeError{Msg: fmt.Sprintf("CR byte (0x0D) at offset %d", i)}
+		}
+	}
+	return nil
+}
+
+func requireNoLFInBody(body []byte) error {
+	for i, b := range body {
+		if b == 0x0A {
+			return &EnvelopeError{Msg: fmt.Sprintf("LF byte in JCS body at offset %d", i)}
+		}
+	}
+	return nil
+}
+
+func requireValidUTF8(body []byte) error {
+	if utf8.Valid(body) {
+		return nil
+	}
+	offset := findInvalidUTF8(body)
+	return &EnvelopeError{Msg: fmt.Sprintf("invalid UTF-8 at offset %d", offset)}
 }

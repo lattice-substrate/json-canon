@@ -12,19 +12,17 @@ The project currently validates behavior across five packages:
 
 ## Golden vector policy
 
-`jcsfloat/testdata/golden_vectors.csv` is generated from Node.js `String(number)` output and is the reference oracle for ECMAScript number formatting behavior.
+`jcsfloat/testdata/golden_vectors.csv` is vendored in-repo as a pinned reference oracle for ECMAScript number formatting behavior.
 
 Current expected invariants:
 
 - Exactly `54,445` lines.
 - CSV rows of `<16 hex chars>,<expected string>`.
 - No header row.
+- SHA-256 checksum:
+  - `b7cf58a7d9de15cd27adb95ee596f4a3092ec3ace2fc52a6e065a28dbe81f438`
 
-Regeneration command:
-
-```bash
-node jcsfloat/testdata/generate_golden.js > jcsfloat/testdata/golden_vectors.csv
-```
+These invariants are enforced in Go tests (`TestFormatDoubleGoldenVectors` and `TestGoldenVectorsChecksum`).
 
 ## Required release validation commands
 
@@ -34,7 +32,7 @@ go test ./... -count=1
 CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
 ```
 
-In restricted environments (sandboxed CI), set writable caches:
+In restricted environments (sandboxed CI), set writable caches (still Go-only):
 
 ```bash
 GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go test ./... -count=1

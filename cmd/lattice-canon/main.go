@@ -34,7 +34,9 @@ func main() {
 
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: lattice-canon <canonicalize|verify> [options] [file]")
+		if err := writeLine(stderr, "usage: lattice-canon <canonicalize|verify> [options] [file]"); err != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 
@@ -44,8 +46,12 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	case "verify":
 		return cmdVerify(args[1:], stdin, stderr)
 	default:
-		fmt.Fprintf(stderr, "unknown command: %s\n", args[0])
-		fmt.Fprintln(stderr, "usage: lattice-canon <canonicalize|verify> [options] [file]")
+		if err := writef(stderr, "unknown command: %s\n", args[0]); err != nil {
+			return gjcs1.ExitInternal
+		}
+		if err := writeLine(stderr, "usage: lattice-canon <canonicalize|verify> [options] [file]"); err != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 }
@@ -75,9 +81,17 @@ func parseFlags(args []string) (flags, []string) {
 
 func readInput(positional []string, stdin io.Reader) ([]byte, error) {
 	if len(positional) == 0 || positional[0] == "-" {
-		return io.ReadAll(stdin)
+		data, err := io.ReadAll(stdin)
+		if err != nil {
+			return nil, fmt.Errorf("read stdin: %w", err)
+		}
+		return data, nil
 	}
-	return os.ReadFile(positional[0])
+	data, err := os.ReadFile(positional[0])
+	if err != nil {
+		return nil, fmt.Errorf("read file %q: %w", positional[0], err)
+	}
+	return data, nil
 }
 
 func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -85,28 +99,33 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	for _, arg := range positional {
 		if arg == "-h" || arg == "--help" {
-			fmt.Fprintln(stderr, "usage: lattice-canon canonicalize [--gjcs1] [--quiet] [file|-]")
-			fmt.Fprintln(stderr, "  Read JSON from file (or stdin), emit canonical bytes to stdout.")
-			fmt.Fprintln(stderr, "  --gjcs1   Emit GJCS1 envelope (append trailing LF)")
-			fmt.Fprintln(stderr, "  --quiet   Suppress success messages")
+			if err := writeCanonicalizeHelp(stderr); err != nil {
+				return gjcs1.ExitInternal
+			}
 			return gjcs1.ExitSuccess
 		}
 	}
 
 	if len(positional) > 1 {
-		fmt.Fprintln(stderr, "error: multiple input files specified")
+		if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 
 	input, err := readInput(positional, stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: reading input: %v\n", err)
+		if writeErr := writef(stderr, "error: reading input: %v\n", err); writeErr != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInternal
 	}
 
 	canonical, err := gjcs1.Canonicalize(input)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 
@@ -119,7 +138,9 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	_, err = stdout.Write(output)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: writing output: %v\n", err)
+		if writeErr := writef(stderr, "error: writing output: %v\n", err); writeErr != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInternal
 	}
 
@@ -132,31 +153,73 @@ func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 
 	for _, arg := range positional {
 		if arg == "-h" || arg == "--help" {
-			fmt.Fprintln(stderr, "usage: lattice-canon verify [--quiet] [file|-]")
-			fmt.Fprintln(stderr, "  Verify that file (or stdin) is valid GJCS1 and canonical.")
-			fmt.Fprintln(stderr, "  --quiet  Suppress success messages")
+			if err := writeVerifyHelp(stderr); err != nil {
+				return gjcs1.ExitInternal
+			}
 			return gjcs1.ExitSuccess
 		}
 	}
 
 	if len(positional) > 1 {
-		fmt.Fprintln(stderr, "error: multiple input files specified")
+		if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 
 	input, err := readInput(positional, stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "error: reading file: %v\n", err)
+		if writeErr := writef(stderr, "error: reading file: %v\n", err); writeErr != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInternal
 	}
 
 	if err := gjcs1.Verify(input); err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
+		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+			return gjcs1.ExitInternal
+		}
 		return gjcs1.ExitInvalidInput
 	}
 
 	if !fl.quiet {
-		fmt.Fprintln(stderr, "ok")
+		if err := writeLine(stderr, "ok"); err != nil {
+			return gjcs1.ExitInternal
+		}
 	}
 	return gjcs1.ExitSuccess
+}
+
+func writeCanonicalizeHelp(stderr io.Writer) error {
+	if err := writeLine(stderr, "usage: lattice-canon canonicalize [--gjcs1] [--quiet] [file|-]"); err != nil {
+		return err
+	}
+	if err := writeLine(stderr, "  Read JSON from file (or stdin), emit canonical bytes to stdout."); err != nil {
+		return err
+	}
+	if err := writeLine(stderr, "  --gjcs1   Emit GJCS1 envelope (append trailing LF)"); err != nil {
+		return err
+	}
+	return writeLine(stderr, "  --quiet   Suppress success messages")
+}
+
+func writeVerifyHelp(stderr io.Writer) error {
+	if err := writeLine(stderr, "usage: lattice-canon verify [--quiet] [file|-]"); err != nil {
+		return err
+	}
+	if err := writeLine(stderr, "  Verify that file (or stdin) is valid GJCS1 and canonical."); err != nil {
+		return err
+	}
+	return writeLine(stderr, "  --quiet  Suppress success messages")
+}
+
+func writeLine(w io.Writer, msg string) error {
+	return writef(w, "%s\n", msg)
+}
+
+func writef(w io.Writer, format string, args ...any) error {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		return fmt.Errorf("write stream: %w", err)
+	}
+	return nil
 }
