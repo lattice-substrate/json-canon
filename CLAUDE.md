@@ -16,7 +16,7 @@ go test ./... -count=1 -timeout=10m
 # Run only unit tests (fast, ~3s)
 go test ./jcserr ./jcsfloat ./jcstoken ./jcs -count=1
 
-# Run conformance harness (builds CLI binary, runs 76 requirement checks)
+# Run conformance harness (builds CLI binary, runs all requirement checks)
 go test ./conformance -count=1 -timeout=10m
 
 # Run a single conformance requirement
@@ -75,9 +75,9 @@ Every requirement traces to one of these. Do not invent requirements that aren't
 
 Three files form the requirement traceability chain:
 
-1. **`REQ_REGISTRY.md`** — 76 formal requirements, each citing a specific RFC section
+1. **`REQ_REGISTRY.md`** — 85 formal requirements, each citing a specific RFC section
 2. **`FAILURE_TAXONOMY.md`** — 13 failure classes with exit code mappings
-3. **`REQ_ENFORCEMENT_MATRIX.md`** — CSV mapping every requirement to test functions
+3. **`REQ_ENFORCEMENT_MATRIX.md`** — CSV mapping every requirement to implementation symbols and test functions
 
 The conformance harness (`conformance/harness_test.go`) parses `REQ_REGISTRY.md` to extract requirement IDs and validates bidirectional coverage: every requirement has a check, every check maps to a requirement.
 
@@ -112,6 +112,6 @@ Exit codes: `0` success, `2` input/validation/non-canonical/usage, `10` internal
 
 - `jcstoken.Parse` returns `(*Value, error)` — the `error` is always `*jcserr.Error` underneath, but the interface type is `error`. Use `errors.As` to extract.
 - `jcsfloat.FormatDouble` returns `(string, *jcserr.Error)` — concrete type, not interface.
-- `jcs/serialize.go` uses `fmt.Errorf` (not `jcserr.Error`) for validation errors. This is the serializer's defense-in-depth layer; the parser already caught these.
+- `jcs/serialize.go` returns classified `*jcserr.Error` values (wrapped as `error`) from validation paths; use `errors.As` to extract classes.
 - The fuzz test for `FormatDouble` must allow -0 → +0 bit change (ECMA-FMT-002 mandates `-0` → `"0"`).
 - Test strings containing U+E000 need Go escape `\uE000`, not raw copy-paste (renders identically but may not byte-match in source).

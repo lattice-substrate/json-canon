@@ -171,6 +171,42 @@ func TestFormatDouble_ECMA_FMT_009(t *testing.T) {
 	}
 }
 
+// === ECMA-FMT-010: negative numbers serialize with leading '-' (step 3) ===
+
+func TestFormatDouble_ECMA_FMT_010(t *testing.T) {
+	got, err := jcsfloat.FormatDouble(-12.5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "-12.5" {
+		t.Fatalf("got %q want %q", got, "-12.5")
+	}
+}
+
+// === ECMA-FMT-011: choose minimal k (step 5 shortest representation basis) ===
+
+func TestFormatDouble_ECMA_FMT_011(t *testing.T) {
+	got, err := jcsfloat.FormatDouble(1.2300000000000002)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1.2300000000000002" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// === ECMA-FMT-012: scientific format k=1 omits decimal point (step 10 branch) ===
+
+func TestFormatDouble_ECMA_FMT_012(t *testing.T) {
+	got, err := jcsfloat.FormatDouble(1e21)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1e+21" {
+		t.Fatalf("got %q want %q", got, "1e+21")
+	}
+}
+
 // === ECMA-VEC-001: base golden oracle ===
 
 func TestGoldenOracle(t *testing.T) {

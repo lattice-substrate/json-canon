@@ -7,6 +7,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"math"
 	"os"
@@ -97,14 +100,20 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"CANON-STR-009": checkSolidusNotEscaped,
 		"CANON-STR-010": checkAboveU001FRawUTF8,
 		"CANON-STR-011": checkNoNormalization,
+		"CANON-STR-012": checkStringEnclosedInQuotes,
 		// CANON-SORT
 		"CANON-SORT-001": checkUTF16KeyOrdering,
 		"CANON-SORT-002": checkRecursiveObjectSort,
 		"CANON-SORT-003": checkArrayOrderPreserved,
+		"CANON-SORT-004": checkSortUsesRawPropertyNames,
+		"CANON-SORT-005": checkSortLexicographicRule,
 		// CANON-LIT
 		"CANON-LIT-001": checkLowercaseLiterals,
 		// CANON-ENC
 		"CANON-ENC-001": checkOutputIsUTF8,
+		"CANON-ENC-002": checkOutputHasNoBOM,
+		// GEN-GRAM
+		"GEN-GRAM-001": checkGeneratorProducesGrammarConformingJSON,
 		// ECMA-FMT
 		"ECMA-FMT-001": checkECMANaNRejected,
 		"ECMA-FMT-002": checkECMANegZeroSerializes,
@@ -115,6 +124,9 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"ECMA-FMT-007": checkECMAExponential,
 		"ECMA-FMT-008": checkECMAShortestRoundTrip,
 		"ECMA-FMT-009": checkECMAEvenDigitTieBreak,
+		"ECMA-FMT-010": checkECMANegativeSign,
+		"ECMA-FMT-011": checkECMAMinimalK,
+		"ECMA-FMT-012": checkECMAScientificK1,
 		// ECMA-VEC
 		"ECMA-VEC-001": checkBaseGoldenOracle,
 		"ECMA-VEC-002": checkStressGoldenOracle,
@@ -124,11 +136,11 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"PROF-OFLOW-001": checkNumberOverflowRejected,
 		"PROF-UFLOW-001": checkUnderflowNonZeroRejected,
 		// BOUND
-		"BOUND-DEPTH-001":   checkDepthLimitEnforced,
-		"BOUND-INPUT-001":   checkInputSizeLimitEnforced,
-		"BOUND-VALUES-001":  checkValueCountLimitEnforced,
-		"BOUND-MEMBERS-001": checkObjectMemberLimitEnforced,
-		"BOUND-ELEMS-001":   checkArrayElementLimitEnforced,
+		"BOUND-DEPTH-001":    checkDepthLimitEnforced,
+		"BOUND-INPUT-001":    checkInputSizeLimitEnforced,
+		"BOUND-VALUES-001":   checkValueCountLimitEnforced,
+		"BOUND-MEMBERS-001":  checkObjectMemberLimitEnforced,
+		"BOUND-ELEMS-001":    checkArrayElementLimitEnforced,
 		"BOUND-STRBYTES-001": checkStringByteLimitEnforced,
 		"BOUND-NUMCHARS-001": checkNumberTokenLengthLimitEnforced,
 		// CLI
@@ -150,10 +162,10 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
 		// DET
-		"DET-REPLAY-001":    checkDeterministicReplay,
+		"DET-REPLAY-001":     checkDeterministicReplay,
 		"DET-IDEMPOTENT-001": checkParseSerializeIdempotence,
-		"DET-STATIC-001":    checkDeterministicStaticBuildCommand,
-		"DET-NOSOURCE-001":  checkNoNondeterminismSources,
+		"DET-STATIC-001":     checkDeterministicStaticBuildCommand,
+		"DET-NOSOURCE-001":   checkNoNondeterminismSources,
 	}
 }
 
@@ -305,7 +317,17 @@ func assertInvalid(t *testing.T, res cliResult, needle string) {
 // ==================== PARSE-UTF8 ====================
 
 func checkInvalidUTF8Rejected(t *testing.T, h *harness) {
-	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0xff, '"'}), "valid UTF-8")
+	cases := []struct {
+		input []byte
+		need  string
+	}{
+		{[]byte{'"', 0xff, '"'}, "valid UTF-8"},
+		{[]byte{'"', 0xe2, 0x82, '"'}, "valid UTF-8"},
+		{[]byte{'"', 0xed, 0xa0, 0x80, '"'}, "valid UTF-8"},
+	}
+	for _, tc := range cases {
+		assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, tc.input), tc.need)
+	}
 }
 
 func checkOverlongUTF8Rejected(t *testing.T, h *harness) {
@@ -335,12 +357,18 @@ func checkTopLevelScalarAccepted(t *testing.T, h *harness) {
 	if res.exitCode != 0 || res.stdout != "42" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{}), "unexpected end of input")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{0xEF, 0xBB, 0xBF, '4', '2'}), "invalid number character")
 }
 
 func checkInsignificantWhitespaceAccepted(t *testing.T, h *harness) {
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(" \n\t { \"a\" : 1 } \r "))
 	if res.exitCode != 0 || res.stdout != `{"a":1}` {
 		t.Fatalf("unexpected result: %+v", res)
+	}
+	res = runCLI(t, h, []string{"canonicalize", "-"}, []byte("\r\n{\r\n\"a\"\r\n:\r\n1\r\n}\r\n"))
+	if res.exitCode != 0 || res.stdout != `{"a":1}` {
+		t.Fatalf("unexpected CRLF result: %+v", res)
 	}
 }
 
@@ -393,6 +421,7 @@ func checkValidSurrogatePairDecoded(t *testing.T, h *harness) {
 
 func checkNoncharacterRejected(t *testing.T, h *harness) {
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uFDD0"`)), "noncharacter")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uD83F\uDFFE"`)), "noncharacter")
 }
 
 // ==================== CANON-WS ====================
@@ -478,8 +507,8 @@ func checkAboveU001FRawUTF8(t *testing.T, h *harness) {
 
 func checkNoNormalization(t *testing.T, _ *harness) {
 	// NFC and NFD forms should produce different output
-	nfc := "\u00E9"            // é as single codepoint
-	nfd := "\u0065\u0301"     // e + combining acute
+	nfc := "\u00E9"       // é as single codepoint
+	nfd := "\u0065\u0301" // e + combining acute
 	v1 := &jcstoken.Value{Kind: jcstoken.KindString, Str: nfc}
 	v2 := &jcstoken.Value{Kind: jcstoken.KindString, Str: nfd}
 	o1, err := jcs.Serialize(v1)
@@ -492,6 +521,13 @@ func checkNoNormalization(t *testing.T, _ *harness) {
 	}
 	if bytes.Equal(o1, o2) {
 		t.Fatal("normalization was applied — NFC and NFD should produce different output")
+	}
+}
+
+func checkStringEnclosedInQuotes(t *testing.T, h *harness) {
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"abc"`))
+	if res.exitCode != 0 || res.stdout != `"abc"` {
+		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
@@ -522,6 +558,20 @@ func checkArrayOrderPreserved(t *testing.T, h *harness) {
 	}
 }
 
+func checkSortUsesRawPropertyNames(t *testing.T, h *harness) {
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"\\n":1,"\n":2}`))
+	if res.exitCode != 0 || res.stdout != `{"\n":2,"\\n":1}` {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
+func checkSortLexicographicRule(t *testing.T, h *harness) {
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"ab":4,"aa":3,"":1,"a":2}`))
+	if res.exitCode != 0 || res.stdout != `{"":1,"a":2,"aa":3,"ab":4}` {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+}
+
 // ==================== CANON-LIT ====================
 
 func checkLowercaseLiterals(t *testing.T, h *harness) {
@@ -546,6 +596,30 @@ func checkOutputIsUTF8(t *testing.T, h *harness) {
 			t.Fatalf("invalid UTF-8 at byte %d", i)
 		}
 		i += size
+	}
+}
+
+func checkOutputHasNoBOM(t *testing.T, h *harness) {
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1}`))
+	if res.exitCode != 0 {
+		t.Fatalf("unexpected exit: %+v", res)
+	}
+	if strings.HasPrefix(res.stdout, "\uFEFF") {
+		t.Fatalf("canonical output contains UTF-8 BOM prefix: %q", res.stdout)
+	}
+}
+
+func checkGeneratorProducesGrammarConformingJSON(t *testing.T, _ *harness) {
+	v, err := jcstoken.Parse([]byte(`{"z":[{"b":"\u0000","a":1e21}],"a":true}`))
+	if err != nil {
+		t.Fatalf("parse input: %v", err)
+	}
+	out, err := jcs.Serialize(v)
+	if err != nil {
+		t.Fatalf("serialize: %v", err)
+	}
+	if _, err := jcstoken.Parse(out); err != nil {
+		t.Fatalf("generated output violates JSON grammar: %v", err)
 	}
 }
 
@@ -697,6 +771,36 @@ func checkECMAEvenDigitTieBreak(t *testing.T, _ *harness) {
 	}
 }
 
+func checkECMANegativeSign(t *testing.T, _ *harness) {
+	got, err := jcsfloat.FormatDouble(-12.5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "-12.5" {
+		t.Fatalf("got %q want %q", got, "-12.5")
+	}
+}
+
+func checkECMAMinimalK(t *testing.T, _ *harness) {
+	got, err := jcsfloat.FormatDouble(1.2300000000000002)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1.2300000000000002" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func checkECMAScientificK1(t *testing.T, _ *harness) {
+	got, err := jcsfloat.FormatDouble(1e21)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "1e+21" {
+		t.Fatalf("got %q want %q", got, "1e+21")
+	}
+}
+
 // ==================== ECMA-VEC ====================
 
 func checkBaseGoldenOracle(t *testing.T, h *harness) {
@@ -737,6 +841,7 @@ func checkECMABoundaryConstants(t *testing.T, _ *harness) {
 
 func checkNegativeZeroRejected(t *testing.T, h *harness) {
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0`)), "negative zero token")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0.0e1`)), "negative zero token")
 }
 
 func checkNumberOverflowRejected(t *testing.T, h *harness) {
@@ -1002,14 +1107,13 @@ func checkDeterministicStaticBuildCommand(t *testing.T, h *harness) {
 }
 
 func checkNoNondeterminismSources(t *testing.T, h *harness) {
-	// Verify that the source code does not import nondeterministic packages
-	// (this is a static check of the source files)
-	badImports := []string{
-		"math/rand",
-		"crypto/rand",
-		"time",
+	// Verify no nondeterministic imports and no map iteration in core/runtime paths.
+	badImports := map[string]struct{}{
+		"math/rand":   {},
+		"crypto/rand": {},
+		"time":        {},
 	}
-	srcDirs := []string{"jcsfloat", "jcstoken", "jcs"}
+	srcDirs := []string{"jcsfloat", "jcstoken", "jcs", "cmd/jcs-canon"}
 	for _, dir := range srcDirs {
 		entries, err := os.ReadDir(filepath.Join(h.root, dir))
 		if err != nil {
@@ -1019,18 +1123,91 @@ func checkNoNondeterminismSources(t *testing.T, h *harness) {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 				continue
 			}
-			data, err := os.ReadFile(filepath.Join(h.root, dir, entry.Name()))
+			path := filepath.Join(h.root, dir, entry.Name())
+			fset := token.NewFileSet()
+			f, err := parser.ParseFile(fset, path, nil, 0)
 			if err != nil {
-				t.Fatalf("read file: %v", err)
+				t.Fatalf("parse file %s: %v", path, err)
 			}
-			content := string(data)
-			for _, bad := range badImports {
-				if strings.Contains(content, fmt.Sprintf("%q", bad)) {
-					t.Fatalf("file %s/%s imports nondeterministic package %q", dir, entry.Name(), bad)
+
+			for _, is := range f.Imports {
+				imp := strings.Trim(is.Path.Value, "\"")
+				if _, bad := badImports[imp]; bad {
+					t.Fatalf("file %s imports nondeterministic package %q", path, imp)
+				}
+			}
+
+			mapVars := collectMapVars(f)
+			ast.Inspect(f, func(n ast.Node) bool {
+				rng, ok := n.(*ast.RangeStmt)
+				if !ok {
+					return true
+				}
+				switch x := rng.X.(type) {
+				case *ast.CompositeLit:
+					if _, ok := x.Type.(*ast.MapType); ok {
+						t.Fatalf("file %s iterates over map literal; map iteration order is nondeterministic", path)
+					}
+				case *ast.Ident:
+					if _, ok := mapVars[x.Name]; ok {
+						t.Fatalf("file %s iterates over map variable %q; map iteration order is nondeterministic", path, x.Name)
+					}
+				}
+				return true
+			})
+		}
+	}
+}
+
+func collectMapVars(f *ast.File) map[string]struct{} {
+	mapVars := make(map[string]struct{})
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch v := n.(type) {
+		case *ast.ValueSpec:
+			isMap := false
+			if _, ok := v.Type.(*ast.MapType); ok {
+				isMap = true
+			}
+			if !isMap {
+				for _, val := range v.Values {
+					if isMapInitializer(val) {
+						isMap = true
+						break
+					}
+				}
+			}
+			if isMap {
+				for _, name := range v.Names {
+					mapVars[name.Name] = struct{}{}
+				}
+			}
+		case *ast.AssignStmt:
+			for i, rhs := range v.Rhs {
+				if !isMapInitializer(rhs) || i >= len(v.Lhs) {
+					continue
+				}
+				if ident, ok := v.Lhs[i].(*ast.Ident); ok {
+					mapVars[ident.Name] = struct{}{}
 				}
 			}
 		}
+		return true
+	})
+	return mapVars
+}
+
+func isMapInitializer(expr ast.Expr) bool {
+	switch x := expr.(type) {
+	case *ast.CompositeLit:
+		_, ok := x.Type.(*ast.MapType)
+		return ok
+	case *ast.CallExpr:
+		if fun, ok := x.Fun.(*ast.Ident); ok && fun.Name == "make" && len(x.Args) > 0 {
+			_, ok := x.Args[0].(*ast.MapType)
+			return ok
+		}
 	}
+	return false
 }
 
 // --- Helpers ---

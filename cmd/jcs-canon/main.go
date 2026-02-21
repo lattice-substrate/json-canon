@@ -109,8 +109,7 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(),
-			"error: serialization failed: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	// CLI-IO-004: output to stdout only
@@ -150,8 +149,7 @@ func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(),
-			"error: serialization failed: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	// VERIFY-ORDER-001, VERIFY-WS-001
@@ -174,7 +172,7 @@ func writeClassifiedError(stderr io.Writer, err error) int {
 		_ = writef(stderr, "error: %v\n", err)
 		return je.Class.ExitCode()
 	}
-	return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
+	return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(), "error: %v\n", err)
 }
 
 func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, error) {
@@ -185,13 +183,13 @@ func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, 
 
 	f, err := os.Open(positional[0])
 	if err != nil {
-		return nil, fmt.Errorf("read file %q: %w", positional[0], err)
+		return nil, jcserr.Wrap(jcserr.CLIUsage, -1, fmt.Sprintf("read file %q", positional[0]), err)
 	}
 	defer func() { _ = f.Close() }()
 
 	data, err := readBounded(f, maxInputSize)
 	if err != nil {
-		return nil, fmt.Errorf("read file %q: %w", positional[0], err)
+		return nil, jcserr.Wrap(jcserr.CLIUsage, -1, fmt.Sprintf("read file %q", positional[0]), err)
 	}
 	return data, nil
 }
@@ -200,10 +198,14 @@ func readBounded(r io.Reader, maxInputSize int) ([]byte, error) {
 	lr := io.LimitReader(r, int64(maxInputSize)+1)
 	data, err := io.ReadAll(lr)
 	if err != nil {
-		return nil, err
+		return nil, jcserr.Wrap(jcserr.InternalIO, -1, "read input stream", err)
 	}
 	if len(data) > maxInputSize {
-		return nil, fmt.Errorf("input exceeds maximum size %d bytes", maxInputSize)
+		return nil, jcserr.New(
+			jcserr.BoundExceeded,
+			0,
+			fmt.Sprintf("input exceeds maximum size %d bytes", maxInputSize),
+		)
 	}
 	return data, nil
 }

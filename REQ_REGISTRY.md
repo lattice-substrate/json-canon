@@ -79,6 +79,7 @@ Every row cites a specific section of a normative specification.
 | CANON-STR-009 | RFC 8785 | §3.2.2.2 | MUST | U+002F (solidus) MUST NOT be escaped in canonical output. |
 | CANON-STR-010 | RFC 8785 | §3.2.2.2 | MUST | Characters above U+001F (except `"` and `\`) MUST be output as raw UTF-8, not escaped. |
 | CANON-STR-011 | RFC 8785 | §3.2.2.2 | MUST | No Unicode normalization SHALL be applied to strings. |
+| CANON-STR-012 | RFC 8785 | §3.2.2.2 | MUST | Serialized strings MUST be enclosed in double quotes. |
 
 ## CANON-SORT — Object Key Sorting (RFC 8785)
 
@@ -87,6 +88,8 @@ Every row cites a specific section of a normative specification.
 | CANON-SORT-001 | RFC 8785 | §3.2.3 | MUST | Object members MUST be sorted by key using UTF-16 code-unit comparison (NOT UTF-8 byte order). |
 | CANON-SORT-002 | RFC 8785 | §3.2.3 | MUST | Sorting MUST be applied recursively to nested objects. |
 | CANON-SORT-003 | RFC 8785 | §3.2.3 | MUST | Array element order MUST be preserved (not sorted). |
+| CANON-SORT-004 | RFC 8785 | §3.2.3 | MUST | Sorting MUST be based on property names in raw (unescaped) form. |
+| CANON-SORT-005 | RFC 8785 | §3.2.3 | MUST | Lexicographic order MUST compare UTF-16 code units at first differing index; if equal prefix, shorter string precedes longer. |
 
 ## CANON-LIT — Literal Serialization (RFC 8785)
 
@@ -99,6 +102,13 @@ Every row cites a specific section of a normative specification.
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | CANON-ENC-001 | RFC 8785 | §3.2 | MUST | Canonical output MUST be encoded as UTF-8. |
+| CANON-ENC-002 | RFC 8259 | §8.1 | MUST | JSON generator output MUST NOT include a UTF-8 BOM prefix (U+FEFF). |
+
+## GEN-GRAM — Generator Grammar Conformance (RFC 8259)
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| GEN-GRAM-001 | RFC 8259 | §10 | MUST | JSON generator output MUST strictly conform to the JSON grammar. |
 
 ## ECMA-FMT — Number Formatting (ECMA-262)
 
@@ -113,6 +123,9 @@ Every row cites a specific section of a normative specification.
 | ECMA-FMT-007 | ECMA-262 | §6.1.6.1.20 | MUST | Otherwise: exponential notation with lowercase `e`, explicit `+` for positive exponents (step 10). |
 | ECMA-FMT-008 | ECMA-262 | §6.1.6.1.20 | MUST | Digit generation MUST produce the shortest representation that round-trips to the same IEEE 754 double. |
 | ECMA-FMT-009 | ECMA-262 | §6.1.6.1.20 Note 2 | MUST | Tie-breaking MUST use even-digit (banker's rounding) rule. |
+| ECMA-FMT-010 | ECMA-262 | §6.1.6.1.20 | MUST | Negative finite numbers MUST serialize with leading `-` followed by serialization of absolute value (step 3). |
+| ECMA-FMT-011 | ECMA-262 | §6.1.6.1.20 | MUST | Intermediate `(n,k,s)` selection MUST use smallest possible `k` satisfying the algorithm constraints (step 5). |
+| ECMA-FMT-012 | ECMA-262 | §6.1.6.1.20 | MUST | Scientific notation branch with single significant digit MUST omit decimal point (`k = 1` branch in step 10). |
 
 ## ECMA-VEC — Oracle Validation
 
@@ -126,7 +139,7 @@ Every row cites a specific section of a normative specification.
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
-| PROF-NEGZ-001 | RFC 8785 | §3.2.2.3 | MUST | Lexical negative zero token (`-0`, `-0.0`, `-0e0`, etc.) MUST be rejected at parse time. |
+| PROF-NEGZ-001 | Profile | — | MUST | Lexical negative zero token (`-0`, `-0.0`, `-0e0`, etc.) MUST be rejected at parse time. |
 | PROF-OFLOW-001 | IEEE 754 | §7.4 | MUST | Number tokens that overflow IEEE 754 binary64 (±Infinity result) MUST be rejected. |
 | PROF-UFLOW-001 | IEEE 754 | §7.5 | MUST | Non-zero number tokens that underflow to IEEE 754 zero MUST be rejected. |
 

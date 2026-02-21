@@ -48,9 +48,16 @@ func mustParseErrBytes(t *testing.T, in []byte) *jcserr.Error {
 // === PARSE-UTF8-001: Invalid UTF-8 rejected ===
 
 func TestParse_PARSE_UTF8_001(t *testing.T) {
-	je := mustParseErrBytes(t, []byte{'"', 0xff, '"'})
-	if je.Class != jcserr.InvalidUTF8 {
-		t.Fatalf("expected INVALID_UTF8, got %s", je.Class)
+	cases := [][]byte{
+		{'"', 0xff, '"'},
+		{'"', 0xe2, 0x82, '"'},       // truncated 3-byte sequence
+		{'"', 0xed, 0xa0, 0x80, '"'}, // raw UTF-8 surrogate encoding (invalid scalar)
+	}
+	for _, in := range cases {
+		je := mustParseErrBytes(t, in)
+		if je.Class != jcserr.InvalidUTF8 {
+			t.Fatalf("expected INVALID_UTF8, got %s for %v", je.Class, in)
+		}
 	}
 }
 
@@ -115,6 +122,16 @@ func TestParse_PARSE_GRAM_005(t *testing.T) {
 			t.Fatalf("nil value for %q", in)
 		}
 	}
+
+	// Empty input is not a JSON value.
+	if je := mustParseErrBytes(t, []byte{}); je.Class != jcserr.InvalidGrammar {
+		t.Fatalf("expected INVALID_GRAMMAR for empty input, got %s", je.Class)
+	}
+
+	// BOM-prefixed input is not accepted as leading JSON whitespace.
+	if je := mustParseErrBytes(t, []byte{0xEF, 0xBB, 0xBF, '4', '2'}); je.Class != jcserr.InvalidGrammar {
+		t.Fatalf("expected INVALID_GRAMMAR for BOM-prefixed input, got %s", je.Class)
+	}
 }
 
 // === PARSE-GRAM-006: Insignificant whitespace accepted ===
@@ -123,6 +140,11 @@ func TestParse_PARSE_GRAM_006(t *testing.T) {
 	v := mustParse(t, " \n\t { \"a\" : 1 } \r ")
 	if v.Kind != jcstoken.KindObject || len(v.Members) != 1 {
 		t.Fatalf("unexpected result: %+v", v)
+	}
+
+	v = mustParse(t, "\r\n{\r\n\"a\"\r\n:\r\n1\r\n}\r\n")
+	if v.Kind != jcstoken.KindObject || len(v.Members) != 1 {
+		t.Fatalf("unexpected CRLF parse result: %+v", v)
 	}
 }
 
@@ -232,12 +254,17 @@ func TestParse_IJSON_NONC_001(t *testing.T) {
 	if je.Class != jcserr.Noncharacter {
 		t.Fatalf("expected NONCHARACTER for U+FFFE, got %s", je.Class)
 	}
+	// Supplementary-plane noncharacter U+1FFFE
+	je = mustParseErr(t, `"\uD83F\uDFFE"`)
+	if je.Class != jcserr.Noncharacter {
+		t.Fatalf("expected NONCHARACTER for U+1FFFE, got %s", je.Class)
+	}
 }
 
 // === PROF-NEGZ-001: Lexical -0 rejected ===
 
 func TestParse_PROF_NEGZ_001(t *testing.T) {
-	for _, in := range []string{`-0`, `-0.0`, `-0e0`, `-0.0e+0`} {
+	for _, in := range []string{`-0`, `-0.0`, `-0e0`, `-0.0e+0`, `-0.0e1`} {
 		je := mustParseErr(t, in)
 		if je.Class != jcserr.NumberNegZero {
 			t.Fatalf("expected NUMBER_NEGZERO for %q, got %s", in, je.Class)

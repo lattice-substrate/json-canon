@@ -1,11 +1,13 @@
 package jcs_test
 
 import (
+	"errors"
 	"math"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/lattice-substrate/json-canon/jcs"
+	"github.com/lattice-substrate/json-canon/jcserr"
 	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
@@ -134,11 +136,8 @@ func TestSerialize_CANON_STR_010(t *testing.T) {
 
 func TestSerialize_CANON_STR_011(t *testing.T) {
 	// NFC é (U+00E9) vs NFD e + ́ (U+0065 U+0301) must remain distinct
-	nfc := "é"    // single codepoint U+00E9
-	nfd := "é" // two codepoints U+0065 + U+0301
-	if nfc == nfd {
-		t.Skip("test strings are identical on this system")
-	}
+	nfc := "\u00E9"  // single codepoint U+00E9
+	nfd := "e\u0301" // two codepoints U+0065 + U+0301
 	v1 := &jcstoken.Value{Kind: jcstoken.KindString, Str: nfc}
 	v2 := &jcstoken.Value{Kind: jcstoken.KindString, Str: nfd}
 	o1, err := jcs.Serialize(v1)
@@ -151,6 +150,17 @@ func TestSerialize_CANON_STR_011(t *testing.T) {
 	}
 	if string(o1) == string(o2) {
 		t.Fatal("normalization was applied — NFC and NFD should produce different output")
+	}
+}
+
+// === CANON-STR-012: Strings are enclosed in quotes ===
+
+func TestSerialize_CANON_STR_012(t *testing.T) {
+	if got := canon(t, `""`); got != `""` {
+		t.Fatalf("got %q", got)
+	}
+	if got := canon(t, `"abc"`); got != `"abc"` {
+		t.Fatalf("got %q", got)
 	}
 }
 
@@ -187,6 +197,24 @@ func TestSerialize_CANON_SORT_003(t *testing.T) {
 	}
 }
 
+// === CANON-SORT-004: Sorting uses unescaped/raw property names ===
+
+func TestSerialize_CANON_SORT_004(t *testing.T) {
+	got := canon(t, `{"\\n":1,"\n":2}`)
+	if got != `{"\n":2,"\\n":1}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+// === CANON-SORT-005: Lexicographic rule with prefix ordering ===
+
+func TestSerialize_CANON_SORT_005(t *testing.T) {
+	got := canon(t, `{"ab":4,"aa":3,"":1,"a":2}`)
+	if got != `{"":1,"a":2,"aa":3,"ab":4}` {
+		t.Fatalf("got %q", got)
+	}
+}
+
 // === CANON-LIT-001: Lowercase literals ===
 
 func TestSerialize_CANON_LIT_001(t *testing.T) {
@@ -210,6 +238,31 @@ func TestSerialize_CANON_ENC_001(t *testing.T) {
 	}
 }
 
+// === CANON-ENC-002: Output does not include UTF-8 BOM prefix ===
+
+func TestSerialize_CANON_ENC_002(t *testing.T) {
+	got := canon(t, `{"a":1}`)
+	if len(got) >= 3 && got[0] == 0xEF && got[1] == 0xBB && got[2] == 0xBF {
+		t.Fatalf("unexpected UTF-8 BOM prefix in %q", got)
+	}
+}
+
+// === GEN-GRAM-001: Generator output strictly conforms to RFC 8259 grammar ===
+
+func TestSerialize_GEN_GRAM_001(t *testing.T) {
+	v, err := jcstoken.Parse([]byte(`{"z":[{"b":"\u0000","a":1e21}],"a":true}`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	out, err := jcs.Serialize(v)
+	if err != nil {
+		t.Fatalf("serialize: %v", err)
+	}
+	if _, err := jcstoken.Parse(out); err != nil {
+		t.Fatalf("generated output is not valid JSON grammar: %v", err)
+	}
+}
+
 // === Serializer validation tests ===
 
 func TestSerializeRejectsNonFiniteNumber(t *testing.T) {
@@ -218,12 +271,20 @@ func TestSerializeRejectsNonFiniteNumber(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.InvalidGrammar {
+		t.Fatalf("expected INVALID_GRAMMAR, got %v", err)
+	}
 }
 
 func TestSerializeRejectsNilValue(t *testing.T) {
 	_, err := jcs.Serialize(nil)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.InternalError {
+		t.Fatalf("expected INTERNAL_ERROR, got %v", err)
 	}
 }
 
@@ -233,6 +294,10 @@ func TestSerializeRejectsInvalidBoolPayload(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.InvalidGrammar {
+		t.Fatalf("expected INVALID_GRAMMAR, got %v", err)
+	}
 }
 
 func TestSerializeRejectsInvalidUTF8StringPayload(t *testing.T) {
@@ -240,6 +305,10 @@ func TestSerializeRejectsInvalidUTF8StringPayload(t *testing.T) {
 	_, err := jcs.Serialize(v)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.InvalidUTF8 {
+		t.Fatalf("expected INVALID_UTF8, got %v", err)
 	}
 }
 
@@ -254,6 +323,10 @@ func TestSerializeRejectsDuplicateKeysInValueTree(t *testing.T) {
 	_, err := jcs.Serialize(v)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.DuplicateKey {
+		t.Fatalf("expected DUPLICATE_KEY, got %v", err)
 	}
 }
 

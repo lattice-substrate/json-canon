@@ -13,6 +13,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
+	"github.com/lattice-substrate/json-canon/jcserr"
 	"github.com/lattice-substrate/json-canon/jcsfloat"
 	"github.com/lattice-substrate/json-canon/jcstoken"
 )
@@ -24,7 +25,7 @@ import (
 // CANON-WS-001: No insignificant whitespace.
 func Serialize(v *jcstoken.Value) ([]byte, error) {
 	if v == nil {
-		return nil, fmt.Errorf("jcs: nil value")
+		return nil, jcserr.New(jcserr.InternalError, -1, "jcs: nil value")
 	}
 	state := &serializeValidationState{}
 	if err := validateValueTree(v, 0, state); err != nil {
@@ -57,14 +58,14 @@ func serializeValue(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	case jcstoken.KindObject:
 		return serializeObject(buf, v)
 	default:
-		return nil, fmt.Errorf("jcs: unknown value kind %d", v.Kind)
+		return nil, jcserr.New(jcserr.InternalError, -1, fmt.Sprintf("jcs: unknown value kind %d", v.Kind))
 	}
 }
 
 func serializeNumber(buf []byte, f float64) ([]byte, error) {
 	s, err := jcsfloat.FormatDouble(f)
 	if err != nil {
-		return nil, fmt.Errorf("jcs: number serialization error: %w", err)
+		return nil, jcserr.Wrap(err.Class, -1, "jcs: number serialization error", err)
 	}
 	return append(buf, s...), nil
 }
@@ -239,10 +240,12 @@ type serializeValidationState struct {
 func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState) error {
 	state.values++
 	if state.values > jcstoken.DefaultMaxValues {
-		return fmt.Errorf("jcs: value count exceeds maximum %d", jcstoken.DefaultMaxValues)
+		return jcserr.New(jcserr.BoundExceeded, -1,
+			fmt.Sprintf("jcs: value count exceeds maximum %d", jcstoken.DefaultMaxValues))
 	}
 	if depth > jcstoken.DefaultMaxDepth {
-		return fmt.Errorf("jcs: value nesting depth exceeds maximum %d", jcstoken.DefaultMaxDepth)
+		return jcserr.New(jcserr.BoundExceeded, -1,
+			fmt.Sprintf("jcs: value nesting depth exceeds maximum %d", jcstoken.DefaultMaxDepth))
 	}
 
 	switch v.Kind {
@@ -250,12 +253,13 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 		return nil
 	case jcstoken.KindBool:
 		if v.Str != "true" && v.Str != "false" {
-			return fmt.Errorf("jcs: invalid boolean payload %q", v.Str)
+			return jcserr.New(jcserr.InvalidGrammar, -1,
+				fmt.Sprintf("jcs: invalid boolean payload %q", v.Str))
 		}
 		return nil
 	case jcstoken.KindNumber:
 		if math.IsNaN(v.Num) || math.IsInf(v.Num, 0) {
-			return fmt.Errorf("jcs: number is not finite")
+			return jcserr.New(jcserr.InvalidGrammar, -1, "jcs: number is not finite")
 		}
 		return nil
 	case jcstoken.KindString:
@@ -265,7 +269,8 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 		return nil
 	case jcstoken.KindArray:
 		if len(v.Elems) > jcstoken.DefaultMaxArrayElements {
-			return fmt.Errorf("jcs: array element count exceeds maximum %d", jcstoken.DefaultMaxArrayElements)
+			return jcserr.New(jcserr.BoundExceeded, -1,
+				fmt.Sprintf("jcs: array element count exceeds maximum %d", jcstoken.DefaultMaxArrayElements))
 		}
 		for i := range v.Elems {
 			if err := validateValueTree(&v.Elems[i], depth+1, state); err != nil {
@@ -275,15 +280,17 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 		return nil
 	case jcstoken.KindObject:
 		if len(v.Members) > jcstoken.DefaultMaxObjectMembers {
-			return fmt.Errorf("jcs: object member count exceeds maximum %d", jcstoken.DefaultMaxObjectMembers)
+			return jcserr.New(jcserr.BoundExceeded, -1,
+				fmt.Sprintf("jcs: object member count exceeds maximum %d", jcstoken.DefaultMaxObjectMembers))
 		}
 		seen := make(map[string]struct{}, len(v.Members))
 		for i := range v.Members {
 			if err := validateString(v.Members[i].Key); err != nil {
-				return fmt.Errorf("jcs: invalid object key: %w", err)
+				return jcserr.Wrap(err.Class, err.Offset, "jcs: invalid object key", err)
 			}
 			if _, ok := seen[v.Members[i].Key]; ok {
-				return fmt.Errorf("jcs: duplicate object key %q", v.Members[i].Key)
+				return jcserr.New(jcserr.DuplicateKey, -1,
+					fmt.Sprintf("jcs: duplicate object key %q", v.Members[i].Key))
 			}
 			seen[v.Members[i].Key] = struct{}{}
 			if err := validateValueTree(&v.Members[i].Value, depth+1, state); err != nil {
@@ -292,23 +299,26 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 		}
 		return nil
 	default:
-		return fmt.Errorf("jcs: unknown value kind %d", v.Kind)
+		return jcserr.New(jcserr.InternalError, -1, fmt.Sprintf("jcs: unknown value kind %d", v.Kind))
 	}
 }
 
-func validateString(s string) error {
+func validateString(s string) *jcserr.Error {
 	if !utf8.ValidString(s) {
-		return fmt.Errorf("jcs: string is not valid UTF-8")
+		return jcserr.New(jcserr.InvalidUTF8, -1, "jcs: string is not valid UTF-8")
 	}
 	if len(s) > jcstoken.DefaultMaxStringBytes {
-		return fmt.Errorf("jcs: string length exceeds maximum %d bytes", jcstoken.DefaultMaxStringBytes)
+		return jcserr.New(jcserr.BoundExceeded, -1,
+			fmt.Sprintf("jcs: string length exceeds maximum %d bytes", jcstoken.DefaultMaxStringBytes))
 	}
 	for _, r := range s {
 		if isNoncharacter(r) {
-			return fmt.Errorf("jcs: string contains noncharacter U+%04X", r)
+			return jcserr.New(jcserr.Noncharacter, -1,
+				fmt.Sprintf("jcs: string contains noncharacter U+%04X", r))
 		}
 		if r >= 0xD800 && r <= 0xDFFF {
-			return fmt.Errorf("jcs: string contains surrogate code point U+%04X", r)
+			return jcserr.New(jcserr.LoneSurrogate, -1,
+				fmt.Sprintf("jcs: string contains surrogate code point U+%04X", r))
 		}
 	}
 	return nil
