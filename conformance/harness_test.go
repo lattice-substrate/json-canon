@@ -350,6 +350,7 @@ func checkTrailingCommaArrayRejected(t *testing.T, h *harness) {
 
 func checkUnescapedControlRejected(t *testing.T, h *harness) {
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0x01, '"'}), "control")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0x00, '"'}), "control")
 }
 
 func checkTopLevelScalarAccepted(t *testing.T, h *harness) {
@@ -540,6 +541,13 @@ func checkUTF16KeyOrdering(t *testing.T, h *harness) {
 	want := "{\"𐀀\":2,\"\uE000\":1}"
 	if res.exitCode != 0 || res.stdout != want {
 		t.Fatalf("unexpected result: exitCode=%d stdout=%q want=%q stderr=%q",
+			res.exitCode, res.stdout, want, res.stderr)
+	}
+
+	res = runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"\uE000":5,"\uD83D\uDE00":4,"\uD800\uDC00":3,"aa":2,"":1}`))
+	want = "{\"\":1,\"aa\":2,\"𐀀\":3,\"😀\":4,\"\uE000\":5}"
+	if res.exitCode != 0 || res.stdout != want {
+		t.Fatalf("unexpected mixed-order result: exitCode=%d stdout=%q want=%q stderr=%q",
 			res.exitCode, res.stdout, want, res.stderr)
 	}
 }
@@ -842,6 +850,7 @@ func checkECMABoundaryConstants(t *testing.T, _ *harness) {
 func checkNegativeZeroRejected(t *testing.T, h *harness) {
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0`)), "negative zero token")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0.0e1`)), "negative zero token")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0e-1`)), "negative zero token")
 }
 
 func checkNumberOverflowRejected(t *testing.T, h *harness) {
@@ -850,6 +859,13 @@ func checkNumberOverflowRejected(t *testing.T, h *harness) {
 
 func checkUnderflowNonZeroRejected(t *testing.T, h *harness) {
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`1e-400`)), "underflows to IEEE 754 zero")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`1e-324`)), "underflows to IEEE 754 zero")
+	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`2e-324`)), "underflows to IEEE 754 zero")
+
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`3e-324`))
+	if res.exitCode != 0 || res.stdout != "5e-324" {
+		t.Fatalf("expected accepted boundary rounding to min subnormal, got %+v", res)
+	}
 }
 
 // ==================== BOUND ====================

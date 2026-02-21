@@ -104,12 +104,17 @@ func TestParse_PARSE_GRAM_003(t *testing.T) {
 // === PARSE-GRAM-004: Unescaped control characters rejected ===
 
 func TestParse_PARSE_GRAM_004(t *testing.T) {
-	je := mustParseErrBytes(t, []byte{'"', 0x01, '"'})
-	if je.Class != jcserr.InvalidGrammar {
-		t.Fatalf("expected INVALID_GRAMMAR, got %s", je.Class)
-	}
-	if !strings.Contains(je.Message, "control character") {
-		t.Fatalf("unexpected message: %s", je.Message)
+	for _, in := range [][]byte{
+		{'"', 0x01, '"'},
+		{'"', 0x00, '"'}, // explicit raw NUL probe
+	} {
+		je := mustParseErrBytes(t, in)
+		if je.Class != jcserr.InvalidGrammar {
+			t.Fatalf("expected INVALID_GRAMMAR, got %s", je.Class)
+		}
+		if !strings.Contains(je.Message, "control character") {
+			t.Fatalf("unexpected message: %s", je.Message)
+		}
 	}
 }
 
@@ -264,7 +269,7 @@ func TestParse_IJSON_NONC_001(t *testing.T) {
 // === PROF-NEGZ-001: Lexical -0 rejected ===
 
 func TestParse_PROF_NEGZ_001(t *testing.T) {
-	for _, in := range []string{`-0`, `-0.0`, `-0e0`, `-0.0e+0`, `-0.0e1`} {
+	for _, in := range []string{`-0`, `-0.0`, `-0e0`, `-0.0e+0`, `-0.0e1`, `-0e-1`} {
 		je := mustParseErr(t, in)
 		if je.Class != jcserr.NumberNegZero {
 			t.Fatalf("expected NUMBER_NEGZERO for %q, got %s", in, je.Class)
@@ -284,9 +289,16 @@ func TestParse_PROF_OFLOW_001(t *testing.T) {
 // === PROF-UFLOW-001: Non-zero underflow to zero rejected ===
 
 func TestParse_PROF_UFLOW_001(t *testing.T) {
-	je := mustParseErr(t, `1e-400`)
-	if je.Class != jcserr.NumberUnderflow {
-		t.Fatalf("expected NUMBER_UNDERFLOW, got %s", je.Class)
+	for _, in := range []string{`1e-400`, `1e-324`, `2e-324`} {
+		je := mustParseErr(t, in)
+		if je.Class != jcserr.NumberUnderflow {
+			t.Fatalf("expected NUMBER_UNDERFLOW for %q, got %s", in, je.Class)
+		}
+	}
+	// Boundary that rounds to the minimum subnormal and must remain accepted.
+	v := mustParse(t, `3e-324`)
+	if v.Kind != jcstoken.KindNumber || v.Num == 0 {
+		t.Fatalf("expected non-zero parsed number, got %+v", v)
 	}
 }
 

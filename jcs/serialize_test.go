@@ -177,6 +177,11 @@ func TestSerialize_CANON_SORT_001(t *testing.T) {
 	if got != "{\"𐀀\":2,\"\ue000\":1}" {
 		t.Fatalf("got %q", got)
 	}
+	// Mixed empty/prefix/BMP/supplementary ordering.
+	got = canon(t, `{"\uE000":5,"\uD83D\uDE00":4,"\uD800\uDC00":3,"aa":2,"":1}`)
+	if got != "{\"\":1,\"aa\":2,\"𐀀\":3,\"😀\":4,\"\ue000\":5}" {
+		t.Fatalf("got %q", got)
+	}
 }
 
 // === CANON-SORT-002: Recursive sorting ===

@@ -75,7 +75,9 @@ CANON-WS-001,L1,jcs/serialize.go,Serialize,26,jcs/serialize_test.go,TestSerializ
 CANON-WS-001,L3,jcs/serialize.go,Serialize,26,conformance/harness_test.go,TestConformanceRequirements/CANON-WS-001,CONFORMANCE
 CLI-CMD-001,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-CMD-001,CONFORMANCE
 CLI-CMD-002,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-CMD-002,CONFORMANCE
+CLI-EXIT-001,L1,cmd/jcs-canon/main.go,run,28,cmd/jcs-canon/main_test.go,TestRunNoCommandExitCode,TEST
 CLI-EXIT-001,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-EXIT-001,CONFORMANCE
+CLI-EXIT-002,L1,cmd/jcs-canon/main.go,run,28,cmd/jcs-canon/main_test.go,TestRunUnknownCommandExitCode,TEST
 CLI-EXIT-002,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-EXIT-002,CONFORMANCE
 CLI-EXIT-003,L1,jcserr/errors.go,Error,48,jcserr/errors_test.go,TestErrorAs,TEST
 CLI-EXIT-003,L1,jcserr/errors.go,Error,48,jcserr/errors_test.go,TestErrorFormat,TEST
@@ -84,7 +86,10 @@ CLI-EXIT-003,L1,jcserr/errors.go,ExitCode,30,jcserr/errors_test.go,TestFailureCl
 CLI-EXIT-003,L1,jcserr/errors.go,Unwrap,56,jcserr/errors_test.go,TestErrorUnwrap,TEST
 CLI-EXIT-003,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-EXIT-003,CONFORMANCE
 CLI-EXIT-004,L1,jcs/serialize.go,Serialize,26,jcs/serialize_test.go,TestSerializeRejectsNilValue,TEST
+CLI-EXIT-004,L1,cmd/jcs-canon/main.go,run,28,cmd/jcs-canon/main_test.go,TestRunCanonicalizeWriteFailure,TEST
+CLI-IO-004,L1,cmd/jcs-canon/main.go,run,28,cmd/jcs-canon/main_test.go,TestRunCanonicalizeWriteFailure,TEST
 CLI-EXIT-004,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-EXIT-004,CONFORMANCE
+CLI-FLAG-001,L1,cmd/jcs-canon/main.go,parseFlags,53,cmd/jcs-canon/main_test.go,TestParseFlagsUnknownOption,TEST
 CLI-FLAG-001,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-FLAG-001,CONFORMANCE
 CLI-FLAG-002,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-FLAG-002,CONFORMANCE
 CLI-FLAG-003,L3,cmd/jcs-canon/main.go,run,28,conformance/harness_test.go,TestConformanceRequirements/CLI-FLAG-003,CONFORMANCE
