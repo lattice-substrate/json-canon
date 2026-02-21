@@ -572,7 +572,7 @@ func (p *parser) readHex4(sourceOffset int) (rune, *jcserr.Error) {
 
 // validateStringRune enforces scalar policy with source-byte offsets.
 func validateStringRune(r rune, sourceOffset int) *jcserr.Error {
-	if isNoncharacter(r) {
+	if IsNoncharacter(r) {
 		return jcserr.New(jcserr.Noncharacter, sourceOffset,
 			fmt.Sprintf("string contains Unicode noncharacter U+%04X", r))
 	}
@@ -583,9 +583,9 @@ func validateStringRune(r rune, sourceOffset int) *jcserr.Error {
 	return nil
 }
 
-// isNoncharacter returns true if r is a Unicode noncharacter.
+// IsNoncharacter returns true if r is a Unicode noncharacter.
 // IJSON-NONC-001: U+FDD0..U+FDEF and U+xFFFE, U+xFFFF for planes 0-16.
-func isNoncharacter(r rune) bool {
+func IsNoncharacter(r rune) bool {
 	if r >= 0xFDD0 && r <= 0xFDEF {
 		return true
 	}
@@ -716,7 +716,7 @@ func (p *parser) buildNumberValue(start int, raw string) (*Value, error) {
 
 func tokenRepresentsZero(raw string) bool {
 	start := 0
-	if len(raw) > 0 && (raw[0] == '-' || raw[0] == '+') {
+	if len(raw) > 0 && raw[0] == '-' {
 		start = 1
 	}
 	end := len(raw)

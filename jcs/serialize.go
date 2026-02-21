@@ -312,7 +312,7 @@ func validateString(s string) *jcserr.Error {
 			fmt.Sprintf("jcs: string length exceeds maximum %d bytes", jcstoken.DefaultMaxStringBytes))
 	}
 	for _, r := range s {
-		if isNoncharacter(r) {
+		if jcstoken.IsNoncharacter(r) {
 			return jcserr.New(jcserr.Noncharacter, -1,
 				fmt.Sprintf("jcs: string contains noncharacter U+%04X", r))
 		}
@@ -324,9 +324,3 @@ func validateString(s string) *jcserr.Error {
 	return nil
 }
 
-func isNoncharacter(r rune) bool {
-	if r >= 0xFDD0 && r <= 0xFDEF {
-		return true
-	}
-	return r <= 0x10FFFF && (r&0xFFFE == 0xFFFE)
-}

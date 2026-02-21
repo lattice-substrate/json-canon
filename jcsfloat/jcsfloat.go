@@ -445,9 +445,7 @@ func exponentBits(bits uint64) uint16 {
 }
 
 func lshByInt(z *big.Int, n int) {
-	for i := 0; i < n; i++ {
-		z.Lsh(z, 1)
-	}
+	z.Lsh(z, uint(n))
 }
 
 // estimateK returns an estimate of ceil(log10(f)) for f > 0.
