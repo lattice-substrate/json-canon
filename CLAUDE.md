@@ -28,8 +28,8 @@ go vet ./...
 # Build static binary
 CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
 
-# Gate DAG (sequential: spec → lint → test → conformance → determinism → build)
-make gate-all
+# Run everything
+go test ./... -count=1 -timeout=10m
 ```
 
 ## Architecture
