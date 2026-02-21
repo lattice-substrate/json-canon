@@ -1,7 +1,7 @@
 # lattice-canon Specification Index
 
-Status: Draft
-Version: 1.0.0-draft
+Status: Release
+Version: 1.0.0
 
 This specification defines the `lattice-canon` governed JSON canonicalization and verification contract for infrastructure tooling.
 

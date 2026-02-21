@@ -1,0 +1,14 @@
+# Compiled binary
+/lattice-canon
+
+# OS artifacts
+.DS_Store
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+
+# Go test artifacts
+*.test
+*.out

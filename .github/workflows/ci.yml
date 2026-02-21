@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-config-lock:
+    name: Lint Config Lock
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute checksums
+        id: compute
+        run: sha256sum golangci.yml golangci.base.yml > /tmp/current.sha256
+
+      - name: Diff against baseline
+        id: diff
+        run: |
+          if ! diff -u .github/lint-config-baseline.sha256 /tmp/current.sha256; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enforce policy-change label on PR
+        if: steps.diff.outputs.changed == 'true' && github.event_name == 'pull_request'
+        env:
+          LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: |
+          if ! echo "$LABELS" | grep -q '"policy-change"'; then
+            echo "ERROR: Lint config changed without 'policy-change' label on PR." >&2
+            exit 1
+          fi
+
+      - name: Fail on non-PR push with changed config
+        if: steps.diff.outputs.changed == 'true' && github.event_name != 'pull_request'
+        run: |
+          echo "ERROR: Lint config changed on push without going through PR review." >&2
+          exit 1
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+
+      - name: Full test suite
+        run: go test ./... -count=1 -v 2>&1 | tee /tmp/test-full.out
+
+      - name: Black-box CLI tests
+        run: go test ./cmd/lattice-canon -run 'TestCLI' -count=1 -v 2>&1 | tee /tmp/test-blackbox.out
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-output
+          path: |
+            /tmp/test-full.out
+            /tmp/test-blackbox.out
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.61
+          args: --timeout=5m ./...
+
+      - name: Capture lint output
+        if: always()
+        run: golangci-lint run --timeout=5m ./... > /tmp/lint.out 2>&1 || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-output
+          path: /tmp/lint.out
+
+  build:
+    name: Static Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+
+      - name: Build static binary
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
+
+      - name: Compute binary checksum
+        run: sha256sum lattice-canon | tee lattice-canon.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ github.sha }}
+          path: |
+            lattice-canon
+            lattice-canon.sha256
+
+  evidence:
+    name: Evidence Bundle
+    runs-on: ubuntu-24.04
+    needs: [lint-config-lock, test, lint, build]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.5"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/artifacts
+
+      - name: Generate manifest
+        env:
+          RESULT_LINT_CONFIG_LOCK: ${{ needs.lint-config-lock.result }}
+          RESULT_TEST: ${{ needs.test.result }}
+          RESULT_LINT: ${{ needs.lint.result }}
+          RESULT_BUILD: ${{ needs.build.result }}
+        run: |
+          GO_VERSION=$(go version)
+          cat > /tmp/manifest.txt <<EOF
+          timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          git-sha: ${{ github.sha }}
+          git-ref: ${{ github.ref }}
+          go-version: ${GO_VERSION}
+          job-results:
+            lint-config-lock: ${RESULT_LINT_CONFIG_LOCK}
+            test: ${RESULT_TEST}
+            lint: ${RESULT_LINT}
+            build: ${RESULT_BUILD}
+          EOF
+          cat /tmp/manifest.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence-${{ github.sha }}
+          path: |
+            /tmp/manifest.txt
+            /tmp/artifacts
+          retention-days: 365
