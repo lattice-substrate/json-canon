@@ -97,28 +97,20 @@ func readInput(positional []string, stdin io.Reader) ([]byte, error) {
 func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fl, positional := parseFlags(args)
 
-	for _, arg := range positional {
-		if arg == "-h" || arg == "--help" {
-			if err := writeCanonicalizeHelp(stderr); err != nil {
-				return gjcs1.ExitInternal
-			}
-			return gjcs1.ExitSuccess
-		}
-	}
-
-	if len(positional) > 1 {
-		if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
+	if hasHelpFlag(positional) {
+		if err := writeCanonicalizeHelp(stderr); err != nil {
 			return gjcs1.ExitInternal
 		}
-		return gjcs1.ExitInvalidInput
+		return gjcs1.ExitSuccess
 	}
 
-	input, err := readInput(positional, stdin)
-	if err != nil {
-		if writeErr := writef(stderr, "error: reading input: %v\n", err); writeErr != nil {
-			return gjcs1.ExitInternal
-		}
-		return gjcs1.ExitInternal
+	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
+		return exitCode
+	}
+
+	input, exitCode, ok := readInputOrExit(positional, stdin, stderr, "reading input")
+	if ok {
+		return exitCode
 	}
 
 	canonical, err := gjcs1.Canonicalize(input)
@@ -138,10 +130,7 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	_, err = stdout.Write(output)
 	if err != nil {
-		if writeErr := writef(stderr, "error: writing output: %v\n", err); writeErr != nil {
-			return gjcs1.ExitInternal
-		}
-		return gjcs1.ExitInternal
+		return writeErrorAndReturn(stderr, gjcs1.ExitInternal, "error: writing output: %v\n", err)
 	}
 
 	_ = fl.quiet // canonicalize has no success message to suppress
@@ -151,35 +140,24 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 	fl, positional := parseFlags(args)
 
-	for _, arg := range positional {
-		if arg == "-h" || arg == "--help" {
-			if err := writeVerifyHelp(stderr); err != nil {
-				return gjcs1.ExitInternal
-			}
-			return gjcs1.ExitSuccess
-		}
-	}
-
-	if len(positional) > 1 {
-		if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
+	if hasHelpFlag(positional) {
+		if err := writeVerifyHelp(stderr); err != nil {
 			return gjcs1.ExitInternal
 		}
-		return gjcs1.ExitInvalidInput
+		return gjcs1.ExitSuccess
 	}
 
-	input, err := readInput(positional, stdin)
-	if err != nil {
-		if writeErr := writef(stderr, "error: reading file: %v\n", err); writeErr != nil {
-			return gjcs1.ExitInternal
-		}
-		return gjcs1.ExitInternal
+	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
+		return exitCode
+	}
+
+	input, exitCode, ok := readInputOrExit(positional, stdin, stderr, "reading file")
+	if ok {
+		return exitCode
 	}
 
 	if err := gjcs1.Verify(input); err != nil {
-		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
-			return gjcs1.ExitInternal
-		}
-		return gjcs1.ExitInvalidInput
+		return writeErrorAndReturn(stderr, gjcs1.ExitInvalidInput, "error: %v\n", err)
 	}
 
 	if !fl.quiet {
@@ -188,6 +166,41 @@ func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
 		}
 	}
 	return gjcs1.ExitSuccess
+}
+
+func hasHelpFlag(positional []string) bool {
+	for _, arg := range positional {
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureSingleInput(positional []string, stderr io.Writer) (int, bool) {
+	if len(positional) <= 1 {
+		return 0, false
+	}
+	if err := writeLine(stderr, "error: multiple input files specified"); err != nil {
+		return gjcs1.ExitInternal, true
+	}
+	return gjcs1.ExitInvalidInput, true
+}
+
+func readInputOrExit(positional []string, stdin io.Reader, stderr io.Writer, context string) ([]byte, int, bool) {
+	input, err := readInput(positional, stdin)
+	if err == nil {
+		return input, 0, false
+	}
+	exitCode := writeErrorAndReturn(stderr, gjcs1.ExitInternal, "error: %s: %v\n", context, err)
+	return nil, exitCode, true
+}
+
+func writeErrorAndReturn(stderr io.Writer, code int, format string, args ...any) int {
+	if err := writef(stderr, format, args...); err != nil {
+		return gjcs1.ExitInternal
+	}
+	return code
 }
 
 func writeCanonicalizeHelp(stderr io.Writer) error {

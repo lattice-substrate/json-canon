@@ -1,15 +1,17 @@
-package jcstoken
+package jcstoken_test
 
 import (
 	"errors"
 	"math"
 	"strings"
 	"testing"
+
+	"lattice-canon/jcstoken"
 )
 
-func mustParse(t *testing.T, in string) *Value {
+func mustParse(t *testing.T, in string) *jcstoken.Value {
 	t.Helper()
-	v, err := Parse([]byte(in))
+	v, err := jcstoken.Parse([]byte(in))
 	if err != nil {
 		t.Fatalf("parse %q: %v", in, err)
 	}
@@ -18,11 +20,11 @@ func mustParse(t *testing.T, in string) *Value {
 
 func mustParseErr(t *testing.T, in string) error {
 	t.Helper()
-	_, err := Parse([]byte(in))
+	_, err := jcstoken.Parse([]byte(in))
 	if err == nil {
 		t.Fatalf("expected error for %q", in)
 	}
-	var pe *ParseError
+	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T: %v", err, err)
 	}
@@ -31,7 +33,7 @@ func mustParseErr(t *testing.T, in string) error {
 
 func TestParseBasicObject(t *testing.T) {
 	v := mustParse(t, `{"a":1,"b":[true,null,"x"]}`)
-	if v.Kind != KindObject || len(v.Members) != 2 {
+	if v.Kind != jcstoken.KindObject || len(v.Members) != 2 {
 		t.Fatalf("unexpected parse result: %+v", v)
 	}
 }
@@ -66,7 +68,7 @@ func TestParseRejectsLoneLowSurrogate(t *testing.T) {
 
 func TestParseDecodesValidSurrogatePair(t *testing.T) {
 	v := mustParse(t, `"\uD83D\uDE00"`)
-	if v.Kind != KindString || v.Str != "😀" {
+	if v.Kind != jcstoken.KindString || v.Str != "😀" {
 		t.Fatalf("got %q want 😀", v.Str)
 	}
 }
@@ -95,7 +97,7 @@ func TestParseRejectsUnderflowToZero(t *testing.T) {
 func TestParseAllowsZeroTokenVariants(t *testing.T) {
 	for _, in := range []string{"0", "0.0", "0e10", "0.000e+9"} {
 		v := mustParse(t, in)
-		if v.Kind != KindNumber || math.Signbit(v.Num) || v.Num != 0 {
+		if v.Kind != jcstoken.KindNumber || math.Signbit(v.Num) || v.Num != 0 {
 			t.Fatalf("bad zero parse for %q: %+v", in, v)
 		}
 	}
@@ -111,8 +113,7 @@ func TestParseRejectsLeadingZero(t *testing.T) {
 func TestParseRejectsTrailingCommaObject(t *testing.T) {
 	err := mustParseErr(t, `{"a":1,}`)
 	if !strings.Contains(err.Error(), "expected \"\\\"\"") && !strings.Contains(err.Error(), "expected '\"'") {
-		// parser wording varies by offset; only ensure this is a parse failure.
-		_ = err
+		t.Fatalf("unexpected trailing-comma object error: %v", err)
 	}
 }
 
@@ -124,7 +125,7 @@ func TestParseRejectsTrailingCommaArray(t *testing.T) {
 }
 
 func TestParseDepthLimit(t *testing.T) {
-	_, err := ParseWithOptions([]byte(`[[[]]]`), &Options{MaxDepth: 2})
+	_, err := jcstoken.ParseWithOptions([]byte(`[[[]]]`), &jcstoken.Options{MaxDepth: 2})
 	if err == nil {
 		t.Fatal("expected max-depth error")
 	}
@@ -135,7 +136,7 @@ func TestParseDepthLimit(t *testing.T) {
 
 func TestParseAllowsDuplicateKeysInDifferentScopes(t *testing.T) {
 	v := mustParse(t, `{"a":1,"nested":{"a":2}}`)
-	if v.Kind != KindObject || len(v.Members) != 2 {
+	if v.Kind != jcstoken.KindObject || len(v.Members) != 2 {
 		t.Fatalf("unexpected parse result: %+v", v)
 	}
 }

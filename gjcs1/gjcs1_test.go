@@ -1,4 +1,4 @@
-package gjcs1
+package gjcs1_test
 
 import (
 	"errors"
@@ -7,78 +7,79 @@ import (
 	"strings"
 	"testing"
 
+	"lattice-canon/gjcs1"
 	"lattice-canon/jcstoken"
 )
 
 func TestEnvelopeAppendsLF(t *testing.T) {
-	got := Envelope([]byte(`{"a":1}`))
+	got := gjcs1.Envelope([]byte(`{"a":1}`))
 	if string(got) != "{\"a\":1}\n" {
 		t.Fatalf("got %q", string(got))
 	}
 }
 
 func TestVerifyValidObject(t *testing.T) {
-	if err := Verify([]byte("{\"a\":1}\n")); err != nil {
+	if err := gjcs1.Verify([]byte("{\"a\":1}\n")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestVerifyValidNonObject(t *testing.T) {
-	if err := Verify([]byte("42\n")); err != nil {
+	if err := gjcs1.Verify([]byte("42\n")); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestVerifyRejectsBOM(t *testing.T) {
-	err := Verify([]byte{0xEF, 0xBB, 0xBF, '{', '}', '\n'})
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte{0xEF, 0xBB, 0xBF, '{', '}', '\n'})
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsCR(t *testing.T) {
-	err := Verify([]byte("{}\r\n"))
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte("{}\r\n"))
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsInvalidUTF8(t *testing.T) {
-	err := Verify([]byte{'"', 0xFF, 0xFE, '"', '\n'})
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte{'"', 0xFF, 0xFE, '"', '\n'})
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsMissingTrailingLF(t *testing.T) {
-	err := Verify([]byte("{}"))
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte("{}"))
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsMultipleTrailingLF(t *testing.T) {
-	err := Verify([]byte("{}\n\n"))
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte("{}\n\n"))
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsEmptyBody(t *testing.T) {
-	err := Verify([]byte("\n"))
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte("\n"))
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsDuplicateKey(t *testing.T) {
-	err := Verify([]byte("{\"a\":1,\"a\":2}\n"))
+	err := gjcs1.Verify([]byte("{\"a\":1,\"a\":2}\n"))
 	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T (%v)", err, err)
@@ -86,7 +87,7 @@ func TestVerifyRejectsDuplicateKey(t *testing.T) {
 }
 
 func TestVerifyRejectsLoneSurrogate(t *testing.T) {
-	err := Verify([]byte("\"\\uD800\"\n"))
+	err := gjcs1.Verify([]byte("\"\\uD800\"\n"))
 	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T (%v)", err, err)
@@ -94,7 +95,7 @@ func TestVerifyRejectsLoneSurrogate(t *testing.T) {
 }
 
 func TestVerifyRejectsNoncharacter(t *testing.T) {
-	err := Verify([]byte("\"\\uFDD0\"\n"))
+	err := gjcs1.Verify([]byte("\"\\uFDD0\"\n"))
 	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T (%v)", err, err)
@@ -102,15 +103,15 @@ func TestVerifyRejectsNoncharacter(t *testing.T) {
 }
 
 func TestVerifyRejectsUnsortedKeys(t *testing.T) {
-	err := Verify([]byte("{\"b\":1,\"a\":2}\n"))
-	var ce *CanonError
+	err := gjcs1.Verify([]byte("{\"b\":1,\"a\":2}\n"))
+	var ce *gjcs1.CanonError
 	if !errors.As(err, &ce) {
 		t.Fatalf("expected CanonError, got %T (%v)", err, err)
 	}
 }
 
 func TestVerifyRejectsNegativeZero(t *testing.T) {
-	err := Verify([]byte("-0\n"))
+	err := gjcs1.Verify([]byte("-0\n"))
 	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T (%v)", err, err)
@@ -118,7 +119,7 @@ func TestVerifyRejectsNegativeZero(t *testing.T) {
 }
 
 func TestVerifyRejectsUnderflowZero(t *testing.T) {
-	err := Verify([]byte("1e-400\n"))
+	err := gjcs1.Verify([]byte("1e-400\n"))
 	var pe *jcstoken.ParseError
 	if !errors.As(err, &pe) {
 		t.Fatalf("expected ParseError, got %T (%v)", err, err)
@@ -126,8 +127,8 @@ func TestVerifyRejectsUnderflowZero(t *testing.T) {
 }
 
 func TestVerifyEnvelopeOrderBeforeParse(t *testing.T) {
-	err := Verify([]byte{0xEF, 0xBB, 0xBF, '{', '"', 'a', '"', ':', '1', ',', '"', 'a', '"', ':', '2', '}', '\n'})
-	var ee *EnvelopeError
+	err := gjcs1.Verify([]byte{0xEF, 0xBB, 0xBF, '{', '"', 'a', '"', ':', '1', ',', '"', 'a', '"', ':', '2', '}', '\n'})
+	var ee *gjcs1.EnvelopeError
 	if !errors.As(err, &ee) {
 		t.Fatalf("expected EnvelopeError precedence, got %T (%v)", err, err)
 	}
@@ -137,14 +138,14 @@ func TestWriteAtomicAndVerify(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.gjcs1")
 	data := []byte("{\"a\":1}\n")
-	if err := WriteAtomic(path, data); err != nil {
+	if err := gjcs1.WriteAtomic(path, data); err != nil {
 		t.Fatalf("WriteAtomic: %v", err)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if err := Verify(b); err != nil {
+	if err := gjcs1.Verify(b); err != nil {
 		t.Fatalf("Verify written file: %v", err)
 	}
 }
@@ -152,7 +153,7 @@ func TestWriteAtomicAndVerify(t *testing.T) {
 func TestWriteGoverned(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.gjcs1")
-	if err := WriteGoverned(path, []byte(`{"z":3,"a":1}`)); err != nil {
+	if err := gjcs1.WriteGoverned(path, []byte(`{"z":3,"a":1}`)); err != nil {
 		t.Fatalf("WriteGoverned: %v", err)
 	}
 	b, err := os.ReadFile(path)
@@ -165,7 +166,7 @@ func TestWriteGoverned(t *testing.T) {
 }
 
 func TestVerifyReader(t *testing.T) {
-	if err := VerifyReader(strings.NewReader("{\"a\":1}\n")); err != nil {
+	if err := gjcs1.VerifyReader(strings.NewReader("{\"a\":1}\n")); err != nil {
 		t.Fatalf("VerifyReader: %v", err)
 	}
 }

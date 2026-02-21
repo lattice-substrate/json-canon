@@ -42,11 +42,17 @@ type Value struct {
 type Kind int
 
 const (
+	// KindNull identifies a JSON null value.
 	KindNull Kind = iota
+	// KindBool identifies a JSON boolean value.
 	KindBool
+	// KindNumber identifies a JSON number value.
 	KindNumber
+	// KindString identifies a JSON string value.
 	KindString
+	// KindArray identifies a JSON array value.
 	KindArray
+	// KindObject identifies a JSON object value.
 	KindObject
 )
 
@@ -227,65 +233,112 @@ func (p *parser) parseObject() (*Value, error) {
 	}
 	p.skipWhitespace()
 
-	v := &Value{Kind: KindObject}
-	seen := make(map[string]int) // key -> byte offset of first occurrence
+	return p.parseObjectMembers()
+}
 
-	c, ok := p.peek()
-	if !ok {
-		return nil, p.errorf("unexpected end of input in object")
+func (p *parser) parseObjectMembers() (*Value, error) {
+	v := &Value{Kind: KindObject}
+	seen := make(map[string]int)
+
+	empty, err := p.consumeEmptyObject()
+	if err != nil {
+		return nil, err
 	}
-	if c == '}' {
-		p.pos++
+	if empty {
 		return v, nil
 	}
 
 	for {
-		p.skipWhitespace()
-
-		keyStart := p.pos
-		keyVal, err := p.parseString()
-		if err != nil {
-			return nil, err
+		member, done, parseErr := p.parseObjectMember(seen)
+		if parseErr != nil {
+			return nil, parseErr
 		}
-		key := keyVal.Str
-
-		// Check duplicate (post-unescape, as decoded Unicode scalar sequences)
-		if firstOff, exists := seen[key]; exists {
-			return nil, &ParseError{
-				Offset: keyStart,
-				Msg:    fmt.Sprintf("duplicate object key %q (first at byte %d)", key, firstOff),
-			}
-		}
-		seen[key] = keyStart
-
-		p.skipWhitespace()
-		if err := p.expect(':'); err != nil {
-			return nil, err
-		}
-		p.skipWhitespace()
-
-		val, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
-
-		v.Members = append(v.Members, Member{Key: key, Value: *val})
-
-		p.skipWhitespace()
-		c, ok := p.peek()
-		if !ok {
-			return nil, p.errorf("unexpected end of input in object")
-		}
-		if c == '}' {
-			p.pos++
+		v.Members = append(v.Members, member)
+		if done {
 			return v, nil
 		}
-		if c == ',' {
-			p.pos++
-			continue
-		}
-		return nil, p.errorf("expected ',' or '}' in object, got %q", string(c))
 	}
+}
+
+func (p *parser) consumeEmptyObject() (bool, error) {
+	p.skipWhitespace()
+	c, ok := p.peek()
+	if !ok {
+		return false, p.errorf("unexpected end of input in object")
+	}
+	if c != '}' {
+		return false, nil
+	}
+	p.pos++
+	return true, nil
+}
+
+func (p *parser) parseObjectMember(seen map[string]int) (Member, bool, error) {
+	p.skipWhitespace()
+	keyStart := p.pos
+
+	keyVal, err := p.parseString()
+	if err != nil {
+		return Member{}, false, err
+	}
+	key := keyVal.Str
+
+	err = rejectDuplicateKey(seen, key, keyStart)
+	if err != nil {
+		return Member{}, false, err
+	}
+
+	err = p.expectObjectColon()
+	if err != nil {
+		return Member{}, false, err
+	}
+	val, err := p.parseValue()
+	if err != nil {
+		return Member{}, false, err
+	}
+
+	done, err := p.consumeObjectSeparator()
+	if err != nil {
+		return Member{}, false, err
+	}
+	return Member{Key: key, Value: *val}, done, nil
+}
+
+func rejectDuplicateKey(seen map[string]int, key string, keyStart int) error {
+	if firstOff, exists := seen[key]; exists {
+		return &ParseError{
+			Offset: keyStart,
+			Msg:    fmt.Sprintf("duplicate object key %q (first at byte %d)", key, firstOff),
+		}
+	}
+	seen[key] = keyStart
+	return nil
+}
+
+func (p *parser) expectObjectColon() error {
+	p.skipWhitespace()
+	if err := p.expect(':'); err != nil {
+		return err
+	}
+	p.skipWhitespace()
+	return nil
+}
+
+func (p *parser) consumeObjectSeparator() (bool, error) {
+	p.skipWhitespace()
+	c, ok := p.peek()
+	if !ok {
+		return false, p.errorf("unexpected end of input in object")
+	}
+	if c == '}' {
+		p.pos++
+		return true, nil
+	}
+	if c == ',' {
+		p.pos++
+		return false, nil
+	}
+	return false, p.errorf("expected ',' or '}' in object, got %q", string(c))
 }
 
 func (p *parser) parseArray() (*Value, error) {
@@ -346,46 +399,13 @@ func (p *parser) parseString() (*Value, error) {
 
 	var buf []byte
 	for {
-		if p.pos >= len(p.data) {
-			return nil, p.errorf("unterminated string")
+		done, err := p.consumeStringChunk(&buf)
+		if err != nil {
+			return nil, err
 		}
-		b := p.data[p.pos]
-
-		if b == '"' {
-			p.pos++
-			s := string(buf)
-			if err := p.validateString(s); err != nil {
-				return nil, err
-			}
-			return &Value{Kind: KindString, Str: s}, nil
+		if done {
+			return &Value{Kind: KindString, Str: string(buf)}, nil
 		}
-
-		if b == '\\' {
-			p.pos++
-			r, err := p.parseEscape()
-			if err != nil {
-				return nil, err
-			}
-			if r >= 0 {
-				var tmp [4]byte
-				n := utf8.EncodeRune(tmp[:], r)
-				buf = append(buf, tmp[:n]...)
-			}
-			continue
-		}
-
-		// Control characters U+0000-U+001F must not appear unescaped
-		if b < 0x20 {
-			return nil, p.errorf("unescaped control character 0x%02X in string", b)
-		}
-
-		// Read a UTF-8 character
-		r, size := utf8.DecodeRune(p.data[p.pos:])
-		if r == utf8.RuneError && size <= 1 {
-			return nil, p.errorf("invalid UTF-8 byte 0x%02X in string", b)
-		}
-		buf = append(buf, p.data[p.pos:p.pos+size]...)
-		p.pos += size
 	}
 }
 
@@ -397,28 +417,14 @@ func (p *parser) parseEscape() (rune, error) {
 	b := p.data[p.pos]
 	p.pos++
 
-	switch b {
-	case '"':
-		return '"', nil
-	case '\\':
-		return '\\', nil
-	case '/':
-		return '/', nil
-	case 'b':
-		return '\b', nil
-	case 'f':
-		return '\f', nil
-	case 'n':
-		return '\n', nil
-	case 'r':
-		return '\r', nil
-	case 't':
-		return '\t', nil
-	case 'u':
+	if b == 'u' {
 		return p.parseUnicodeEscape()
-	default:
+	}
+	r, ok := escapedRune(b)
+	if !ok {
 		return 0, p.errorf("invalid escape character %q", string(b))
 	}
+	return r, nil
 }
 
 // parseUnicodeEscape parses \uXXXX (and \uXXXX\uXXXX for surrogate pairs).
@@ -428,29 +434,107 @@ func (p *parser) parseUnicodeEscape() (rune, error) {
 		return 0, err
 	}
 
-	if utf16.IsSurrogate(r1) {
-		if r1 >= 0xDC00 {
-			return 0, p.errorf("lone low surrogate U+%04X", r1)
-		}
-		if p.pos+1 >= len(p.data) || p.data[p.pos] != '\\' || p.data[p.pos+1] != 'u' {
-			return 0, p.errorf("lone high surrogate U+%04X (no following \\u)", r1)
-		}
-		p.pos += 2
-		r2, err := p.readHex4()
-		if err != nil {
-			return 0, err
-		}
-		if r2 < 0xDC00 || r2 > 0xDFFF {
-			return 0, p.errorf("high surrogate U+%04X followed by non-low-surrogate U+%04X", r1, r2)
-		}
-		decoded := utf16.DecodeRune(r1, r2)
-		if decoded == unicode.ReplacementChar {
-			return 0, p.errorf("invalid surrogate pair U+%04X U+%04X", r1, r2)
-		}
-		return decoded, nil
+	if !utf16.IsSurrogate(r1) {
+		return r1, nil
+	}
+	if r1 >= 0xDC00 {
+		return 0, p.errorf("lone low surrogate U+%04X", r1)
 	}
 
-	return r1, nil
+	r2, err := p.readFollowingLowSurrogate(r1)
+	if err != nil {
+		return 0, err
+	}
+
+	decoded := utf16.DecodeRune(r1, r2)
+	if decoded == unicode.ReplacementChar {
+		return 0, p.errorf("invalid surrogate pair U+%04X U+%04X", r1, r2)
+	}
+	return decoded, nil
+}
+
+func escapedRune(b byte) (rune, bool) {
+	switch b {
+	case '"':
+		return '"', true
+	case '\\':
+		return '\\', true
+	case '/':
+		return '/', true
+	case 'b':
+		return '\b', true
+	case 'f':
+		return '\f', true
+	case 'n':
+		return '\n', true
+	case 'r':
+		return '\r', true
+	case 't':
+		return '\t', true
+	default:
+		return 0, false
+	}
+}
+
+func (p *parser) readFollowingLowSurrogate(high rune) (rune, error) {
+	if p.pos+1 >= len(p.data) || p.data[p.pos] != '\\' || p.data[p.pos+1] != 'u' {
+		return 0, p.errorf("lone high surrogate U+%04X (no following \\u)", high)
+	}
+	p.pos += 2
+
+	r2, err := p.readHex4()
+	if err != nil {
+		return 0, err
+	}
+	if r2 < 0xDC00 || r2 > 0xDFFF {
+		return 0, p.errorf("high surrogate U+%04X followed by non-low-surrogate U+%04X", high, r2)
+	}
+	return r2, nil
+}
+
+func (p *parser) consumeStringChunk(buf *[]byte) (bool, error) {
+	if p.pos >= len(p.data) {
+		return false, p.errorf("unterminated string")
+	}
+	b := p.data[p.pos]
+	if b == '"' {
+		p.pos++
+		s := string(*buf)
+		if err := p.validateString(s); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	if b == '\\' {
+		return false, p.consumeEscapedRune(buf)
+	}
+	if b < 0x20 {
+		return false, p.errorf("unescaped control character 0x%02X in string", b)
+	}
+	return false, p.consumeUTF8Chunk(buf)
+}
+
+func (p *parser) consumeEscapedRune(buf *[]byte) error {
+	p.pos++
+	r, err := p.parseEscape()
+	if err != nil {
+		return err
+	}
+	var tmp [4]byte
+	n := utf8.EncodeRune(tmp[:], r)
+	*buf = append(*buf, tmp[:n]...)
+	return nil
+}
+
+func (p *parser) consumeUTF8Chunk(buf *[]byte) error {
+	b := p.data[p.pos]
+	r, size := utf8.DecodeRune(p.data[p.pos:])
+	if r == utf8.RuneError && size <= 1 {
+		return p.errorf("invalid UTF-8 byte 0x%02X in string", b)
+	}
+	*buf = append(*buf, p.data[p.pos:p.pos+size]...)
+	p.pos += size
+	return nil
 }
 
 // readHex4 reads exactly 4 hex digits and returns the rune value.
@@ -502,84 +586,123 @@ func isNoncharacter(r rune) bool {
 func (p *parser) parseNumber() (*Value, error) {
 	start := p.pos
 
+	p.consumeNumberSign()
+	if err := p.scanIntegerPart(); err != nil {
+		return nil, err
+	}
+	if err := p.scanFractionPart(); err != nil {
+		return nil, err
+	}
+	if err := p.scanExponentPart(); err != nil {
+		return nil, err
+	}
+
+	raw := string(p.data[start:p.pos])
+	return p.buildNumberValue(start, raw)
+}
+
+func (p *parser) consumeNumberSign() {
 	if p.pos < len(p.data) && p.data[p.pos] == '-' {
 		p.pos++
 	}
+}
 
+func (p *parser) scanIntegerPart() error {
 	if p.pos >= len(p.data) {
-		return nil, p.errorf("unexpected end of input in number")
+		return p.errorf("unexpected end of input in number")
 	}
 
 	if p.data[p.pos] == '0' {
 		p.pos++
 		if p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			return nil, p.errorf("leading zero in number")
+			return p.errorf("leading zero in number")
 		}
-	} else if p.data[p.pos] >= '1' && p.data[p.pos] <= '9' {
-		for p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			p.pos++
-		}
-	} else {
-		return nil, p.errorf("invalid number character %q", string(p.data[p.pos]))
+		return nil
 	}
 
-	if p.pos < len(p.data) && p.data[p.pos] == '.' {
+	if p.data[p.pos] < '1' || p.data[p.pos] > '9' {
+		return p.errorf("invalid number character %q", string(p.data[p.pos]))
+	}
+	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
-		if p.pos >= len(p.data) || p.data[p.pos] < '0' || p.data[p.pos] > '9' {
-			return nil, p.errorf("expected digit after decimal point")
-		}
-		for p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			p.pos++
-		}
 	}
+	return nil
+}
 
-	if p.pos < len(p.data) && (p.data[p.pos] == 'e' || p.data[p.pos] == 'E') {
+func (p *parser) scanFractionPart() error {
+	if p.pos >= len(p.data) || p.data[p.pos] != '.' {
+		return nil
+	}
+	p.pos++
+
+	if p.pos >= len(p.data) || !isDigit(p.data[p.pos]) {
+		return p.errorf("expected digit after decimal point")
+	}
+	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
-		if p.pos < len(p.data) && (p.data[p.pos] == '+' || p.data[p.pos] == '-') {
-			p.pos++
-		}
-		if p.pos >= len(p.data) || p.data[p.pos] < '0' || p.data[p.pos] > '9' {
-			return nil, p.errorf("expected digit in exponent")
-		}
-		for p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			p.pos++
-		}
 	}
+	return nil
+}
 
-	raw := string(p.data[start:p.pos])
+func (p *parser) scanExponentPart() error {
+	if !p.hasExponentMarker() {
+		return nil
+	}
+	p.pos++
 
+	p.consumeExponentSign()
+	if !p.hasExponentDigit() {
+		return p.errorf("expected digit in exponent")
+	}
+	p.consumeDigits()
+	return nil
+}
+
+func (p *parser) buildNumberValue(start int, raw string) (*Value, error) {
 	f, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
 		return nil, &ParseError{Offset: start, Msg: fmt.Sprintf("invalid number: %v", err)}
 	}
-
-	// Reject non-finite (overflow produces Inf with ErrRange, but belt-and-suspenders)
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return nil, &ParseError{Offset: start, Msg: "number overflows IEEE 754 double"}
 	}
-
-	// Reject negative zero: any token that parses to -0.0.
-	// This is an ecosystem constraint (LC-REQ-1004, spec §3.3), not an RFC 8259
-	// requirement. RFC 8259 permits -0 and ECMAScript normalizes it to "0".
-	// The spec rejects it at parse time to enforce one-textual-encoding-per-value
-	// for governed bytes, per errata EID 7920.
 	if f == 0 && math.Signbit(f) {
 		return nil, &ParseError{
 			Offset: start,
 			Msg:    "numeric token parses to negative zero (rejected per EID 7920)",
 		}
 	}
-
-	// Reject underflow: non-zero token that parses to zero.
-	// This means the value is not representable as a finite IEEE 754 double.
 	if f == 0 && !isZeroToken(raw) {
 		return nil, &ParseError{
 			Offset: start,
 			Msg:    fmt.Sprintf("numeric token %q underflows to zero (not representable as IEEE 754 double)", raw),
 		}
 	}
-
 	return &Value{Kind: KindNumber, Num: f}, nil
+}
+
+func isDigit(b byte) bool {
+	return b >= '0' && b <= '9'
+}
+
+func (p *parser) hasExponentMarker() bool {
+	return p.pos < len(p.data) && (p.data[p.pos] == 'e' || p.data[p.pos] == 'E')
+}
+
+func (p *parser) consumeExponentSign() {
+	if p.pos < len(p.data) && (p.data[p.pos] == '+' || p.data[p.pos] == '-') {
+		p.pos++
+	}
+}
+
+func (p *parser) hasExponentDigit() bool {
+	return p.pos < len(p.data) && isDigit(p.data[p.pos])
+}
+
+func (p *parser) consumeDigits() {
+	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
+		p.pos++
+	}
 }
 
 // isZeroToken returns true if the raw JSON number token represents exactly zero.

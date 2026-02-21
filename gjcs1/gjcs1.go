@@ -199,10 +199,10 @@ func WriteAtomic(path string, data []byte) error {
 	defer func() {
 		if !success {
 			if closeErr := tmp.Close(); closeErr != nil {
-				// Best-effort cleanup.
+				ignoreError(closeErr)
 			}
 			if removeErr := os.Remove(tmpPath); removeErr != nil {
-				// Best-effort cleanup.
+				ignoreError(removeErr)
 			}
 		}
 	}()
@@ -281,6 +281,10 @@ func bytesEqual(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+func ignoreError(err error) {
+	_ = err
 }
 
 func requireNonEmptyFile(data []byte) error {

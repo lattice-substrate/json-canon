@@ -1,4 +1,4 @@
-package jcsfloat
+package jcsfloat_test
 
 import (
 	"bufio"
@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"lattice-canon/jcsfloat"
 )
 
 func TestFormatDoubleGoldenVectors(t *testing.T) {
@@ -17,7 +19,11 @@ func TestFormatDoubleGoldenVectors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open golden vectors: %v", err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Fatalf("close golden vectors: %v", closeErr)
+		}
+	})
 
 	s := bufio.NewScanner(f)
 	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -39,7 +45,7 @@ func TestFormatDoubleGoldenVectors(t *testing.T) {
 		}
 		expect := parts[1]
 		input := math.Float64frombits(bits)
-		got, err := FormatDouble(input)
+		got, err := jcsfloat.FormatDouble(input)
 		if err != nil {
 			t.Fatalf("line %d unexpected error for %016x: %v", lineNo, bits, err)
 		}
@@ -58,7 +64,7 @@ func TestFormatDoubleGoldenVectors(t *testing.T) {
 func TestFormatDoubleRejectsNonFinite(t *testing.T) {
 	cases := []float64{math.NaN(), math.Inf(+1), math.Inf(-1)}
 	for _, c := range cases {
-		_, err := FormatDouble(c)
+		_, err := jcsfloat.FormatDouble(c)
 		if err == nil {
 			t.Fatalf("expected error for %v", c)
 		}
@@ -66,7 +72,7 @@ func TestFormatDoubleRejectsNonFinite(t *testing.T) {
 }
 
 func TestFormatDoubleNegativeZero(t *testing.T) {
-	got, err := FormatDouble(math.Copysign(0, -1))
+	got, err := jcsfloat.FormatDouble(math.Copysign(0, -1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,7 +84,7 @@ func TestFormatDoubleNegativeZero(t *testing.T) {
 func TestFormatDoubleRoundTripProperty(t *testing.T) {
 	cases := []float64{5e-324, 1e-7, 1e-6, 0.1, 0.2, 1.1, 1, 2, 1e20, 1e21, math.MaxFloat64}
 	for _, c := range cases {
-		f1, err := FormatDouble(c)
+		f1, err := jcsfloat.FormatDouble(c)
 		if err != nil {
 			t.Fatalf("format(%.17g): %v", c, err)
 		}
@@ -86,7 +92,7 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %q: %v", f1, err)
 		}
-		f2, err := FormatDouble(v)
+		f2, err := jcsfloat.FormatDouble(v)
 		if err != nil {
 			t.Fatalf("re-format(%.17g): %v", v, err)
 		}
@@ -100,7 +106,7 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			continue
 		}
-		f1, err := FormatDouble(v)
+		f1, err := jcsfloat.FormatDouble(v)
 		if err != nil {
 			t.Fatalf("format bits=%016x: %v", math.Float64bits(v), err)
 		}
@@ -108,7 +114,7 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse bits=%016x text=%q: %v", math.Float64bits(v), f1, err)
 		}
-		f2, err := FormatDouble(parsed)
+		f2, err := jcsfloat.FormatDouble(parsed)
 		if err != nil {
 			t.Fatalf("re-format bits=%016x: %v", math.Float64bits(v), err)
 		}
@@ -118,7 +124,7 @@ func TestFormatDoubleRoundTripProperty(t *testing.T) {
 	}
 
 	if testing.Verbose() {
-		fmt.Println("jcsfloat round-trip property checks passed")
+		t.Log("jcsfloat round-trip property checks passed")
 	}
 }
 
@@ -127,7 +133,11 @@ func TestGoldenVectorsChecksum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open golden vectors: %v", err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Fatalf("close golden vectors: %v", closeErr)
+		}
+	})
 
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {

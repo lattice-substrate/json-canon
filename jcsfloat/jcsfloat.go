@@ -21,10 +21,10 @@ import (
 )
 
 var (
+	// ErrNotFinite indicates number formatting was requested for NaN or Infinity,
+	// which are not representable in RFC 8785 JSON.
 	ErrNotFinite = errors.New("jcsfloat: value is not finite (NaN or Infinity)")
 
-	bigOne = big.NewInt(1)
-	bigTwo = big.NewInt(2)
 	bigTen = big.NewInt(10)
 )
 
@@ -70,40 +70,68 @@ func formatECMA(negative bool, digits string, n int) string {
 		buf = append(buf, '-')
 	}
 
-	if k <= n && n <= 21 {
-		// Step 6: integer with trailing zeros
-		buf = append(buf, digits...)
-		for i := 0; i < n-k; i++ {
-			buf = append(buf, '0')
-		}
-	} else if 0 < n && n <= 21 {
-		// Step 7: fixed-point, decimal within digits (n < k)
-		buf = append(buf, digits[:n]...)
-		buf = append(buf, '.')
-		buf = append(buf, digits[n:]...)
-	} else if -6 < n && n <= 0 {
-		// Step 8: 0.000...digits
-		buf = append(buf, '0', '.')
-		for i := 0; i < -n; i++ {
-			buf = append(buf, '0')
-		}
-		buf = append(buf, digits...)
-	} else {
-		// Step 9: exponential notation
-		buf = append(buf, digits[0])
-		if k > 1 {
-			buf = append(buf, '.')
-			buf = append(buf, digits[1:]...)
-		}
-		buf = append(buf, 'e')
-		exp := n - 1
-		if exp >= 0 {
-			buf = append(buf, '+')
-		}
-		buf = appendInt(buf, exp)
+	switch {
+	case isIntegerFixed(k, n):
+		buf = appendIntegerFixed(buf, digits, k, n)
+	case isFractionFixed(n):
+		buf = appendFractionFixed(buf, digits, n)
+	case isSmallFraction(n):
+		buf = appendSmallFraction(buf, digits, n)
+	default:
+		buf = appendExponential(buf, digits, k, n)
 	}
 
 	return string(buf)
+}
+
+func isIntegerFixed(k, n int) bool {
+	return k <= n && n <= 21
+}
+
+func isFractionFixed(n int) bool {
+	return 0 < n && n <= 21
+}
+
+func isSmallFraction(n int) bool {
+	return -6 < n && n <= 0
+}
+
+func appendIntegerFixed(buf []byte, digits string, k, n int) []byte {
+	buf = append(buf, digits...)
+	for i := 0; i < n-k; i++ {
+		buf = append(buf, '0')
+	}
+	return buf
+}
+
+func appendFractionFixed(buf []byte, digits string, n int) []byte {
+	buf = append(buf, digits[:n]...)
+	buf = append(buf, '.')
+	buf = append(buf, digits[n:]...)
+	return buf
+}
+
+func appendSmallFraction(buf []byte, digits string, n int) []byte {
+	buf = append(buf, '0', '.')
+	for i := 0; i < -n; i++ {
+		buf = append(buf, '0')
+	}
+	buf = append(buf, digits...)
+	return buf
+}
+
+func appendExponential(buf []byte, digits string, k, n int) []byte {
+	buf = append(buf, digits[0])
+	if k > 1 {
+		buf = append(buf, '.')
+		buf = append(buf, digits[1:]...)
+	}
+	buf = append(buf, 'e')
+	exp := n - 1
+	if exp >= 0 {
+		buf = append(buf, '+')
+	}
+	return appendInt(buf, exp)
 }
 
 func appendInt(buf []byte, v int) []byte {
@@ -130,226 +158,256 @@ func appendInt(buf []byte, v int) []byte {
 //
 // Returns (digits, n) where value = 0.<digits> * 10^n.
 func generateDigits(f float64) (string, int) {
-	bits := math.Float64bits(f)
-	mantissa := bits & ((1 << 52) - 1)
-	biasedExp := int((bits >> 52) & 0x7FF)
+	parts := decodeFloatParts(f)
+	state := initScaledState(parts)
 
-	var fMant uint64
-	var fExp int
-	if biasedExp == 0 {
-		fMant = mantissa
-		fExp = 1 - 1023 - 52 // -1074
-	} else {
-		fMant = (1 << 52) | mantissa
+	k := estimateK(f)
+	scaleByPower10(state, k)
+
+	n := k
+	n = applyHighFixup(state, parts.isEven, n)
+	n = applyLowFixup(state, parts.isEven, n)
+
+	return extractDigits(state, parts.isEven, n)
+}
+
+type floatParts struct {
+	mantissa      uint64
+	biasedExp     int
+	fMant         uint64
+	fExp          int
+	lowerBoundary bool
+	isEven        bool
+}
+
+type digitState struct {
+	r      *big.Int
+	s      *big.Int
+	mPlus  *big.Int
+	mMinus *big.Int
+}
+
+func decodeFloatParts(f float64) floatParts {
+	bits := math.Float64bits(f)
+	mantissa := bits & ((uint64(1) << 52) - 1)
+	expBits := exponentBits(bits)
+	biasedExp := int(expBits)
+
+	fMant := mantissa
+	fExp := 1 - 1023 - 52
+	if biasedExp != 0 {
+		fMant = (uint64(1) << 52) | mantissa
 		fExp = biasedExp - 1023 - 52
 	}
 
-	// Is f at the lower boundary of a binade?
-	// True when mantissa bits are all zero (fMant = 2^52 for normals)
-	// and there exists a lower binade (biasedExp > 1).
-	// At a lower boundary, the gap below is smaller than the gap above.
 	lowerBoundary := biasedExp > 1 && mantissa == 0
 
-	// For round-to-nearest-even, boundaries are inclusive when fMant is even.
-	isEven := fMant%2 == 0
+	return floatParts{
+		mantissa:      mantissa,
+		biasedExp:     biasedExp,
+		fMant:         fMant,
+		fExp:          fExp,
+		lowerBoundary: lowerBoundary,
+		isEven:        fMant%2 == 0,
+	}
+}
 
-	// Burger-Dybvig scaled integers r, s, mPlus, mMinus such that:
-	//   r/s = f
-	//   mPlus/s = distance from f to upper boundary midpoint
-	//   mMinus/s = distance from f to lower boundary midpoint
-	r := new(big.Int)
-	s := new(big.Int)
-	mPlus := new(big.Int)
-	mMinus := new(big.Int)
+func initScaledState(parts floatParts) *digitState {
+	state := &digitState{
+		r:      new(big.Int),
+		s:      new(big.Int),
+		mPlus:  new(big.Int),
+		mMinus: new(big.Int),
+	}
+	if parts.fExp >= 0 {
+		initScaledPositiveExp(state, parts)
+		return state
+	}
+	initScaledNegativeExp(state, parts)
+	return state
+}
 
-	if fExp >= 0 {
-		be := uint(fExp)
-		if !lowerBoundary {
-			r.SetUint64(fMant)
-			r.Lsh(r, be+1)
-			s.SetInt64(2)
-			mPlus.SetInt64(1)
-			mPlus.Lsh(mPlus, be)
-			mMinus.Set(mPlus)
-		} else {
-			r.SetUint64(fMant)
-			r.Lsh(r, be+2)
-			s.SetInt64(4)
-			mPlus.SetInt64(1)
-			mPlus.Lsh(mPlus, be+1)
-			mMinus.SetInt64(1)
-			mMinus.Lsh(mMinus, be)
-		}
-	} else {
-		nbe := uint(-fExp)
-		if !lowerBoundary {
-			r.SetUint64(fMant)
-			r.Lsh(r, 1)
-			s.SetInt64(1)
-			s.Lsh(s, nbe+1)
-			mPlus.SetInt64(1)
-			mMinus.SetInt64(1)
-		} else {
-			r.SetUint64(fMant)
-			r.Lsh(r, 2)
-			s.SetInt64(1)
-			s.Lsh(s, nbe+2)
-			mPlus.SetInt64(2)
-			mMinus.SetInt64(1)
-		}
+func initScaledPositiveExp(state *digitState, parts floatParts) {
+	if !parts.lowerBoundary {
+		state.r.SetUint64(parts.fMant)
+		lshByInt(state.r, parts.fExp+1)
+		state.s.SetInt64(2)
+		state.mPlus.SetInt64(1)
+		lshByInt(state.mPlus, parts.fExp)
+		state.mMinus.Set(state.mPlus)
+		return
 	}
 
-	// Estimate decimal exponent: k ≈ ceil(log10(f))
-	// This is an estimate; the fixup loop below corrects it.
-	k := estimateK(f)
+	state.r.SetUint64(parts.fMant)
+	lshByInt(state.r, parts.fExp+2)
+	state.s.SetInt64(4)
+	state.mPlus.SetInt64(1)
+	lshByInt(state.mPlus, parts.fExp+1)
+	state.mMinus.SetInt64(1)
+	lshByInt(state.mMinus, parts.fExp)
+}
 
-	// Scale by 10^k: if k >= 0, multiply s; if k < 0, multiply r and m's.
-	if k > 0 {
+func initScaledNegativeExp(state *digitState, parts floatParts) {
+	if !parts.lowerBoundary {
+		state.r.SetUint64(parts.fMant)
+		lshByInt(state.r, 1)
+		state.s.SetInt64(1)
+		lshByInt(state.s, -parts.fExp+1)
+		state.mPlus.SetInt64(1)
+		state.mMinus.SetInt64(1)
+		return
+	}
+
+	state.r.SetUint64(parts.fMant)
+	lshByInt(state.r, 2)
+	state.s.SetInt64(1)
+	lshByInt(state.s, -parts.fExp+2)
+	state.mPlus.SetInt64(2)
+	state.mMinus.SetInt64(1)
+}
+
+func scaleByPower10(state *digitState, k int) {
+	switch {
+	case k > 0:
 		p := pow10Big(k)
-		s.Mul(s, p)
-	} else if k < 0 {
+		state.s.Mul(state.s, p)
+	case k < 0:
 		p := pow10Big(-k)
-		r.Mul(r, p)
-		mPlus.Mul(mPlus, p)
-		mMinus.Mul(mMinus, p)
+		state.r.Mul(state.r, p)
+		state.mPlus.Mul(state.mPlus, p)
+		state.mMinus.Mul(state.mMinus, p)
 	}
+}
 
-	// n is the ECMA "decimal exponent": the position of the decimal point.
-	// After scaling by 10^k, we have r/s ≈ f/10^k.
-	// The digit extraction produces digits d1 d2 ... and n = k tells us
-	// where the decimal point goes.
-	n := k
-
-	// Fixup: ensure the first digit will be in [1,9].
-	// Check the "high" condition first: can we round up to the next power of 10?
-	// The upper bound of the interval is (r + mPlus) / s.
-	// If this >= 1, our first digit might be 10 (overflow), so multiply s by 10.
-	{
-		high := new(big.Int).Add(r, mPlus)
-		if isEven {
-			if high.Cmp(s) >= 0 {
-				s.Mul(s, bigTen)
-				n++
-			}
-		} else {
-			if high.Cmp(s) > 0 {
-				s.Mul(s, bigTen)
-				n++
-			}
-		}
+func applyHighFixup(state *digitState, isEven bool, n int) int {
+	high := new(big.Int).Add(state.r, state.mPlus)
+	if cmpHigh(high, state.s, isEven) {
+		state.s.Mul(state.s, bigTen)
+		return n + 1
 	}
+	return n
+}
 
-	// Check the "low" condition: is the first digit going to be 0?
-	// If 10*r < s (or <= for non-even), the leading digit is 0.
+func applyLowFixup(state *digitState, isEven bool, n int) int {
 	for {
-		tenR := new(big.Int).Mul(r, bigTen)
-		low := false
-		if isEven {
-			low = tenR.Cmp(s) < 0
-		} else {
-			low = tenR.Cmp(s) <= 0
+		tenR := new(big.Int).Mul(state.r, bigTen)
+		if !cmpLow(tenR, state.s, isEven) {
+			return n
 		}
-		// Also check upper bound
-		if low {
-			tenHigh := new(big.Int).Mul(new(big.Int).Add(r, mPlus), bigTen)
-			highOk := false
-			if isEven {
-				highOk = tenHigh.Cmp(s) < 0
-			} else {
-				highOk = tenHigh.Cmp(s) <= 0
-			}
-			if highOk {
-				// First digit is 0 and we can't round up past it
-				r.Mul(r, bigTen)
-				mPlus.Mul(mPlus, bigTen)
-				mMinus.Mul(mMinus, bigTen)
-				n--
-				continue
-			}
-		}
-		break
-	}
 
-	// Digit extraction loop
+		tenHigh := new(big.Int).Mul(new(big.Int).Add(state.r, state.mPlus), bigTen)
+		if !cmpLow(tenHigh, state.s, isEven) {
+			return n
+		}
+
+		state.r.Mul(state.r, bigTen)
+		state.mPlus.Mul(state.mPlus, bigTen)
+		state.mMinus.Mul(state.mMinus, bigTen)
+		n--
+	}
+}
+
+func cmpLow(lhs, rhs *big.Int, isEven bool) bool {
+	if isEven {
+		return lhs.Cmp(rhs) < 0
+	}
+	return lhs.Cmp(rhs) <= 0
+}
+
+func cmpHigh(lhs, rhs *big.Int, isEven bool) bool {
+	if isEven {
+		return lhs.Cmp(rhs) >= 0
+	}
+	return lhs.Cmp(rhs) > 0
+}
+
+func extractDigits(state *digitState, isEven bool, n int) (string, int) {
 	var digitBuf [30]byte
 	dIdx := 0
 	quot := new(big.Int)
 	rem := new(big.Int)
 
 	for {
-		// Multiply r, mPlus, mMinus by 10
-		r.Mul(r, bigTen)
-		mPlus.Mul(mPlus, bigTen)
-		mMinus.Mul(mMinus, bigTen)
+		scaleDigitState(state)
+		d := divideAndRemainder(state, quot, rem)
 
-		// digit = floor(r / s), r = r mod s
-		quot.DivMod(r, s, rem)
-		d := int(quot.Int64())
-		r.Set(rem)
-
-		// Termination: can we round down? can we round up?
-		var tc1, tc2 bool
-		if isEven {
-			tc1 = r.Cmp(mMinus) <= 0
-		} else {
-			tc1 = r.Cmp(mMinus) < 0
-		}
-		{
-			high := new(big.Int).Add(r, mPlus)
-			if isEven {
-				tc2 = high.Cmp(s) >= 0
-			} else {
-				tc2 = high.Cmp(s) > 0
-			}
-		}
-
+		tc1, tc2 := terminationConditions(state, isEven)
 		if !tc1 && !tc2 {
-			// Not done yet
 			digitBuf[dIdx] = byte('0' + d)
 			dIdx++
 			continue
 		}
 
-		if tc1 && !tc2 {
-			// Round down
-			digitBuf[dIdx] = byte('0' + d)
-			dIdx++
-			break
-		}
-
-		if !tc1 && tc2 {
-			// Round up
-			digitBuf[dIdx] = byte('0' + d + 1)
-			dIdx++
-			break
-		}
-
-		// Both: compare 2*r with s for midpoint
-		twoR := new(big.Int).Lsh(r, 1)
-		cmp := twoR.Cmp(s)
-		if cmp < 0 {
-			digitBuf[dIdx] = byte('0' + d)
-		} else if cmp > 0 {
-			digitBuf[dIdx] = byte('0' + d + 1)
-		} else {
-			// Exact midpoint: ECMA Note 2 — even digit
-			if d%2 == 0 {
-				digitBuf[dIdx] = byte('0' + d)
-			} else {
-				digitBuf[dIdx] = byte('0' + d + 1)
-			}
-		}
+		digitBuf[dIdx] = finalDigit(d, tc1, tc2, state.r, state.s)
 		dIdx++
 		break
 	}
 
-	// Carry propagation
+	n = normalizeDigitBuffer(digitBuf[:], dIdx, &dIdx, n)
+	return string(digitBuf[:dIdx]), n
+}
+
+func scaleDigitState(state *digitState) {
+	state.r.Mul(state.r, bigTen)
+	state.mPlus.Mul(state.mPlus, bigTen)
+	state.mMinus.Mul(state.mMinus, bigTen)
+}
+
+func divideAndRemainder(state *digitState, quot, rem *big.Int) int {
+	quot.DivMod(state.r, state.s, rem)
+	d := int(quot.Int64())
+	state.r.Set(rem)
+	return d
+}
+
+func terminationConditions(state *digitState, isEven bool) (bool, bool) {
+	tc1 := cmpRoundDown(state.r, state.mMinus, isEven)
+	high := new(big.Int).Add(state.r, state.mPlus)
+	tc2 := cmpHigh(high, state.s, isEven)
+	return tc1, tc2
+}
+
+func cmpRoundDown(lhs, rhs *big.Int, isEven bool) bool {
+	if isEven {
+		return lhs.Cmp(rhs) <= 0
+	}
+	return lhs.Cmp(rhs) < 0
+}
+
+func finalDigit(d int, tc1, tc2 bool, r, s *big.Int) byte {
+	switch {
+	case tc1 && !tc2:
+		return byte('0' + d)
+	case !tc1 && tc2:
+		return byte('0' + d + 1)
+	default:
+		return midpointDigit(d, r, s)
+	}
+}
+
+func midpointDigit(d int, r, s *big.Int) byte {
+	twoR := new(big.Int).Lsh(r, 1)
+	cmp := twoR.Cmp(s)
+	if cmp < 0 {
+		return byte('0' + d)
+	}
+	if cmp > 0 {
+		return byte('0' + d + 1)
+	}
+	if d%2 == 0 {
+		return byte('0' + d)
+	}
+	return byte('0' + d + 1)
+}
+
+func normalizeDigitBuffer(digitBuf []byte, dIdx int, dIdxPtr *int, n int) int {
 	for i := dIdx - 1; i > 0; i-- {
 		if digitBuf[i] > '9' {
 			digitBuf[i] = '0'
 			digitBuf[i-1]++
 		}
 	}
+
 	if dIdx > 0 && digitBuf[0] > '9' {
 		copy(digitBuf[1:dIdx+1], digitBuf[0:dIdx])
 		digitBuf[0] = '1'
@@ -358,12 +416,23 @@ func generateDigits(f float64) (string, int) {
 		n++
 	}
 
-	// Strip trailing zeros (can occur from carry propagation)
 	for dIdx > 1 && digitBuf[dIdx-1] == '0' {
 		dIdx--
 	}
+	*dIdxPtr = dIdx
+	return n
+}
 
-	return string(digitBuf[:dIdx]), n
+func exponentBits(bits uint64) uint16 {
+	hi := byte((bits >> 56) & 0xFF)
+	lo := byte((bits >> 48) & 0xFF)
+	return (uint16(hi&0x7F) << 4) | uint16(lo>>4)
+}
+
+func lshByInt(z *big.Int, n int) {
+	for i := 0; i < n; i++ {
+		z.Lsh(z, 1)
+	}
 }
 
 // estimateK returns an estimate of ceil(log10(f)) for f > 0.
@@ -371,7 +440,8 @@ func estimateK(f float64) int {
 	// log10(f) = log2(f) / log2(10)
 	// Use the bit representation for a quick estimate.
 	bits := math.Float64bits(f)
-	biasedExp := int((bits >> 52) & 0x7FF)
+	expBits := exponentBits(bits)
+	biasedExp := int(expBits)
 
 	var log2f float64
 	if biasedExp == 0 {

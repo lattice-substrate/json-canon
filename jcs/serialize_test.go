@@ -1,9 +1,10 @@
-package jcs
+package jcs_test
 
 import (
 	"math"
 	"testing"
 
+	"lattice-canon/jcs"
 	"lattice-canon/jcstoken"
 )
 
@@ -13,7 +14,7 @@ func canon(t *testing.T, in string) string {
 	if err != nil {
 		t.Fatalf("parse %q: %v", in, err)
 	}
-	out, err := Serialize(v)
+	out, err := jcs.Serialize(v)
 	if err != nil {
 		t.Fatalf("serialize %q: %v", in, err)
 	}
@@ -129,7 +130,7 @@ func TestSerializeNonObjectTopLevel(t *testing.T) {
 
 func TestSerializeRejectsNonFiniteNumber(t *testing.T) {
 	v := &jcstoken.Value{Kind: jcstoken.KindNumber, Num: math.Inf(1)}
-	_, err := Serialize(v)
+	_, err := jcs.Serialize(v)
 	if err == nil {
 		t.Fatal("expected error")
 	}

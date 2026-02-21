@@ -68,54 +68,56 @@ func serializeNumber(buf []byte, f float64) ([]byte, error) {
 func serializeString(buf []byte, s string) []byte {
 	buf = append(buf, '"')
 	for i := 0; i < len(s); {
-		b := s[i]
-		switch {
-		case b == '"':
-			buf = append(buf, '\\', '"')
+		next, consumed := appendEscapedByte(buf, s[i])
+		if consumed {
+			buf = next
 			i++
-		case b == '\\':
-			buf = append(buf, '\\', '\\')
-			i++
-		case b == '\b':
-			buf = append(buf, '\\', 'b')
-			i++
-		case b == '\t':
-			buf = append(buf, '\\', 't')
-			i++
-		case b == '\n':
-			buf = append(buf, '\\', 'n')
-			i++
-		case b == '\f':
-			buf = append(buf, '\\', 'f')
-			i++
-		case b == '\r':
-			buf = append(buf, '\\', 'r')
-			i++
-		case b < 0x20:
-			// Other control characters: \u00xx with lowercase hex
-			buf = append(buf, '\\', 'u', '0', '0',
-				hexDigit(b>>4), hexDigit(b&0x0F))
-			i++
-		default:
-			// Raw UTF-8 byte(s) — no escaping
-			// For multi-byte sequences, just copy all bytes of the character
-			if b < 0x80 {
-				buf = append(buf, b)
-				i++
-			} else {
-				// Find the length of this UTF-8 sequence and copy it verbatim
-				size := utf8SeqLen(b)
-				if i+size > len(s) {
-					// Should not happen with valid input from jcstoken
-					size = len(s) - i
-				}
-				buf = append(buf, s[i:i+size]...)
-				i += size
-			}
+			continue
 		}
+
+		size := byteSpanForCopy(s, i)
+		buf = append(buf, s[i:i+size]...)
+		i += size
 	}
 	buf = append(buf, '"')
 	return buf
+}
+
+func appendEscapedByte(buf []byte, b byte) ([]byte, bool) {
+	switch b {
+	case '"':
+		return append(buf, '\\', '"'), true
+	case '\\':
+		return append(buf, '\\', '\\'), true
+	case '\b':
+		return append(buf, '\\', 'b'), true
+	case '\t':
+		return append(buf, '\\', 't'), true
+	case '\n':
+		return append(buf, '\\', 'n'), true
+	case '\f':
+		return append(buf, '\\', 'f'), true
+	case '\r':
+		return append(buf, '\\', 'r'), true
+	default:
+		if b < 0x20 {
+			return append(buf, '\\', 'u', '0', '0', hexDigit(b>>4), hexDigit(b&0x0F)), true
+		}
+		return buf, false
+	}
+}
+
+func byteSpanForCopy(s string, i int) int {
+	b := s[i]
+	if b < 0x80 {
+		return 1
+	}
+
+	size := utf8SeqLen(b)
+	if i+size > len(s) {
+		return len(s) - i
+	}
+	return size
 }
 
 func hexDigit(b byte) byte {
