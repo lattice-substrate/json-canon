@@ -4,9 +4,11 @@
 
 ### Review Requirements
 
-- All changes require at least one maintainer review.
-- ABI-impacting changes (commands, flags, exit codes, output format) require
-  review from two maintainers.
+- All changes require review by an active maintainer.
+- ABI-impacting changes (commands, flags, exit codes, output format) require:
+  - review from two maintainers when two or more active maintainers exist;
+  - documented self-review (risk checklist + rationale) when exactly one active
+    maintainer exists.
 - Major version release requires explicit signoff from all active maintainers.
 - Any new shell-script-based required gate (CI/release/conformance/traceability)
   requires explicit maintainer approval with written rationale in the PR.
@@ -25,8 +27,10 @@
 
 ### Maintainer Succession
 
-- If a maintainer is inactive for 6 months, remaining maintainers may appoint
-  a replacement via documented consensus.
+- If two or more maintainers are active, inactive maintainers (6+ months) may
+  be replaced by documented consensus of remaining maintainers.
+- If exactly one maintainer is active and becomes inactive for 6+ months, the
+  project enters maintenance-only status until a successor is appointed.
 - The release process is documented sufficiently for a new maintainer to
   execute independently (see `VERIFICATION.md`, `CONTRIBUTING.md`).
 

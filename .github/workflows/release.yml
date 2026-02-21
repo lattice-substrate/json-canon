@@ -11,8 +11,34 @@ permissions:
   attestations: write
 
 jobs:
+  pre_release:
+    name: Pre-Release Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24.x'
+      - name: go vet
+        run: go vet ./...
+      - name: unit tests
+        run: go test ./... -count=1 -timeout=20m
+      - name: race tests
+        run: go test ./... -race -count=1 -timeout=25m
+      - name: conformance
+        run: go test ./conformance -count=1 -timeout=10m -v
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v1.64.8
+      - name: fuzz jcstoken
+        run: go test ./jcstoken -run=^$ -fuzz=FuzzParseCanonicalRoundTrip -fuzztime=30s
+      - name: fuzz jcsfloat
+        run: go test ./jcsfloat -run=^$ -fuzz=FuzzFormatDoubleRoundTrip -fuzztime=30s
+
   build:
     name: Build Artifacts (${{ matrix.os }})
+    needs: pre_release
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

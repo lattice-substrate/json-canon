@@ -31,9 +31,23 @@ jobs:
             exit 1
           fi
 
+  lint:
+    name: Lint
+    needs: binary_hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24.x'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v1.64.8
+
   test_matrix:
     name: Vet+Unit (${{ matrix.os }}, Go ${{ matrix.go }})
-    needs: binary_hygiene
+    needs: [binary_hygiene, lint]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -50,7 +64,7 @@ jobs:
         run: go vet ./...
       - name: unit tests
         shell: bash
-        run: go test ./jcserr ./jcsfloat ./jcstoken ./jcs ./cmd/jcs-canon -count=1 -timeout=10m
+        run: go test $(go list ./... | grep -v '^github.com/lattice-substrate/json-canon/conformance$') -count=1 -timeout=10m
 
   conformance:
     name: Conformance
@@ -72,11 +86,25 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.24.x'
-      - run: go test ./... -race -count=1 -timeout=15m
+      - run: go test ./... -race -count=1 -timeout=25m
+
+  fuzz:
+    name: Fuzz Smoke
+    needs: test_matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24.x'
+      - name: fuzz jcstoken
+        run: go test ./jcstoken -run=^$ -fuzz=FuzzParseCanonicalRoundTrip -fuzztime=30s
+      - name: fuzz jcsfloat
+        run: go test ./jcsfloat -run=^$ -fuzz=FuzzFormatDoubleRoundTrip -fuzztime=30s
 
   reproducible_build:
     name: Reproducible Build
-    needs: conformance
+    needs: [conformance, race, fuzz]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
