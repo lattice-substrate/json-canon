@@ -24,6 +24,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - ADR framework and accepted foundational decisions under `docs/adr/`.
 
 ### Changed
+- CI unit test timeout aligned to 20m (matching CONFORMANCE.md and release workflow).
+- Release workflow expanded with pre-release validation job.
+- `GOVERNANCE.md` updated for single-maintainer review and succession policy.
 - File-based oversized input now preserves `BOUND_EXCEEDED` classification, matching stdin behavior.
 - CI expanded with platform/version matrix, race tests, reproducibility checks, and binary tracking guard.
 - Subcommand `--help` output now writes to stdout (was stderr). This is a frozen stream policy.
@@ -43,5 +46,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Conformance gates now enforce fully static Linux binaries and prohibit outbound network/subprocess imports in core runtime packages.
 
 ### Fixed
+- Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.
+- Removed unreachable `+` prefix check in `tokenRepresentsZero`.
+- Deduplicated `isNoncharacter`; canonical definition exported as `jcstoken.IsNoncharacter`.
 - Map-iterated test tables in `jcsfloat_test.go` and `conformance/harness_test.go` converted to deterministic slices.
 - Digit buffer safety invariant documented in `jcsfloat.go`.
