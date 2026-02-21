@@ -85,11 +85,11 @@ func TestCLIAdversarialDepthBomb(t *testing.T) {
 func TestCLIAdversarialHugeExponent(t *testing.T) {
 	t.Parallel()
 
-	res := runCLI(t, []string{"verify", "--quiet", "-"}, []byte("1e999999\n"))
+	res := runCLI(t, []string{"verify", "--quiet", "-"}, []byte("1e999999"))
 	if res.exitCode != 2 {
 		t.Fatalf("expected exit 2, got %d stderr=%q", res.exitCode, res.stderr)
 	}
-	if !strings.Contains(res.stderr, "value out of range") {
+	if !strings.Contains(res.stderr, "overflows IEEE 754 double") {
 		t.Fatalf("expected range error, got stderr=%q", res.stderr)
 	}
 }
@@ -244,16 +244,16 @@ func buildCLI() (string, error) {
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(thisFile), "..", ".."))
 
-	binDir, err := os.MkdirTemp("", "lattice-canon-blackbox-*")
+	binDir, err := os.MkdirTemp("", "jcs-canon-blackbox-*")
 	if err != nil {
 		return "", err
 	}
-	binPath := filepath.Join(binDir, "lattice-canon")
+	binPath := filepath.Join(binDir, "jcs-canon")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, "./cmd/lattice-canon")
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, "./cmd/jcs-canon")
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 

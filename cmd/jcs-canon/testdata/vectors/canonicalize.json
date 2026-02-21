@@ -103,12 +103,5 @@
     "stdin": "\"hello\"",
     "exit_code": 0,
     "stdout": "\"hello\""
-  },
-  {
-    "name": "gjcs1 output",
-    "args": ["canonicalize", "--gjcs1", "-"],
-    "stdin": "{\"a\":1}",
-    "exit_code": 0,
-    "stdout": "{\"a\":1}\n"
   }
 ]

@@ -4,13 +4,13 @@ test:
 	go test ./... -count=1 -v
 
 test-blackbox:
-	go test ./cmd/lattice-canon -run 'TestCLI' -count=1 -v
+	go test ./cmd/jcs-canon -run 'TestCLI' -count=1 -v
 
 lint:
 	golangci-lint run --timeout=5m ./...
 
 build:
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
+	CGO_ENABLED=0 go build -ldflags="-s -w" -o jcs-canon ./cmd/jcs-canon
 
 check: lint test build
 

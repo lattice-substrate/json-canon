@@ -1,17 +1,14 @@
-// Package jcstoken provides a strict JSON tokenizer that enforces the
-// lattice-canon §3.3 strict input domain constraints.
+// Package jcstoken provides a strict JSON tokenizer/parser for RFC 8785 JCS.
 //
-// This tokenizer is not a general-purpose JSON parser. It is purpose-built
-// for JCS canonicalization and rejects inputs that standard JSON parsers
-// would accept, including duplicate keys, lone surrogates, noncharacters,
-// and the -0 numeric token.
+// It enforces RFC 8259 JSON grammar plus RFC 7493 I-JSON constraints required
+// by JCS, including duplicate-key rejection after unescaping and strict string
+// scalar validation (no lone surrogates, no noncharacters).
 //
 // The output is an ordered tree of JSON values suitable for canonical
 // re-serialization.
 package jcstoken
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -100,16 +97,15 @@ type parser struct {
 	maxDepth int
 }
 
-// Parse parses a complete JSON text under the strict domain constraints of
-// lattice-canon §3.3. It returns the parsed value tree or a ParseError.
+// Parse parses a complete JSON text under RFC 8785's strict input domain.
+// It returns the parsed value tree or a ParseError.
 //
 // Constraints enforced:
 //   - No duplicate object member names (compared as decoded Unicode scalars)
 //   - No lone surrogates in \uXXXX escapes
 //   - No Unicode noncharacters in strings or member names
-//   - No -0 numeric literal (or any token that parses to negative zero)
-//   - No non-finite numbers
-//   - No numeric tokens that underflow to zero (non-representable)
+//   - Input must be valid UTF-8 (RFC 3629)
+//   - No non-finite numbers (must fit IEEE 754 binary64)
 //   - Valid surrogate pairs decoded to supplementary-plane scalars
 //   - Nesting depth bounded by MaxDepth
 //   - Input size bounded by MaxInputSize
@@ -124,6 +120,12 @@ func ParseWithOptions(data []byte, opts *Options) (*Value, error) {
 		return nil, &ParseError{
 			Offset: 0,
 			Msg:    fmt.Sprintf("input size %d exceeds maximum %d", len(data), maxInput),
+		}
+	}
+	if !utf8.Valid(data) {
+		return nil, &ParseError{
+			Offset: firstInvalidUTF8Offset(data),
+			Msg:    "input is not valid UTF-8",
 		}
 	}
 
@@ -148,6 +150,17 @@ func ParseWithOptions(data []byte, opts *Options) (*Value, error) {
 
 func (p *parser) errorf(format string, args ...any) *ParseError {
 	return &ParseError{Offset: p.pos, Msg: fmt.Sprintf(format, args...)}
+}
+
+func firstInvalidUTF8Offset(data []byte) int {
+	for i := 0; i < len(data); {
+		_, size := utf8.DecodeRune(data[i:])
+		if size == 1 && data[i] >= 0x80 {
+			return i
+		}
+		i += size
+	}
+	return 0
 }
 
 func (p *parser) peek() (byte, bool) {
@@ -660,25 +673,24 @@ func (p *parser) scanExponentPart() error {
 
 func (p *parser) buildNumberValue(start int, raw string) (*Value, error) {
 	f, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
+	if err != nil && !errorsIsRange(err) {
 		return nil, &ParseError{Offset: start, Msg: fmt.Sprintf("invalid number: %v", err)}
 	}
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return nil, &ParseError{Offset: start, Msg: "number overflows IEEE 754 double"}
 	}
-	if f == 0 && math.Signbit(f) {
-		return nil, &ParseError{
-			Offset: start,
-			Msg:    "numeric token parses to negative zero (rejected per EID 7920)",
-		}
-	}
-	if f == 0 && !isZeroToken(raw) {
-		return nil, &ParseError{
-			Offset: start,
-			Msg:    fmt.Sprintf("numeric token %q underflows to zero (not representable as IEEE 754 double)", raw),
-		}
-	}
 	return &Value{Kind: KindNumber, Num: f}, nil
+}
+
+func errorsIsRange(err error) bool {
+	if err == nil {
+		return false
+	}
+	numErr, ok := err.(*strconv.NumError)
+	if !ok {
+		return false
+	}
+	return numErr.Err == strconv.ErrRange
 }
 
 func isDigit(b byte) bool {
@@ -705,26 +717,6 @@ func (p *parser) consumeDigits() {
 	}
 }
 
-// isZeroToken returns true if the raw JSON number token represents exactly zero.
-// Zero tokens are: "0", "-0", "0.0", "0.00", "0e0", "0.0e5", etc.
-// (Note: -0 is caught separately before this is called, but we include it
-// for completeness.)
-func isZeroToken(raw string) bool {
-	i := 0
-	if i < len(raw) && raw[i] == '-' {
-		i++
-	}
-	// All digit characters in the significand must be '0'
-	for i < len(raw) && raw[i] != 'e' && raw[i] != 'E' {
-		if raw[i] != '0' && raw[i] != '.' {
-			return false
-		}
-		i++
-	}
-	// Exponent doesn't matter if significand is all zeros
-	return true
-}
-
 func (p *parser) parseBool() (*Value, error) {
 	if p.pos+4 <= len(p.data) && string(p.data[p.pos:p.pos+4]) == "true" {
 		p.pos += 4
@@ -744,11 +736,3 @@ func (p *parser) parseNull() (*Value, error) {
 	}
 	return nil, p.errorf("invalid literal")
 }
-
-// Exported sentinel errors for use by callers.
-var (
-	ErrDuplicateKey  = errors.New("duplicate object key")
-	ErrLoneSurrogate = errors.New("lone surrogate")
-	ErrNoncharacter  = errors.New("noncharacter")
-	ErrNegativeZero  = errors.New("negative zero token")
-)

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"lattice-canon/jcstoken"
+	"jcs-canon/jcstoken"
 )
 
 func mustParse(t *testing.T, in string) *jcstoken.Value {
@@ -80,16 +80,23 @@ func TestParseRejectsNoncharacterEscape(t *testing.T) {
 	}
 }
 
-func TestParseRejectsNegativeZero(t *testing.T) {
-	err := mustParseErr(t, `-0`)
-	if !strings.Contains(err.Error(), "negative zero") {
-		t.Fatalf("unexpected error: %v", err)
+func TestParseAllowsNegativeZero(t *testing.T) {
+	v := mustParse(t, `-0`)
+	if v.Kind != jcstoken.KindNumber || !math.Signbit(v.Num) || v.Num != 0 {
+		t.Fatalf("bad parse for -0: %+v", v)
 	}
 }
 
-func TestParseRejectsUnderflowToZero(t *testing.T) {
-	err := mustParseErr(t, `1e-400`)
-	if !strings.Contains(err.Error(), "underflows to zero") {
+func TestParseAllowsUnderflowToZero(t *testing.T) {
+	v := mustParse(t, `1e-400`)
+	if v.Kind != jcstoken.KindNumber || math.Signbit(v.Num) || v.Num != 0 {
+		t.Fatalf("bad parse for underflow: %+v", v)
+	}
+}
+
+func TestParseRejectsOverflow(t *testing.T) {
+	err := mustParseErr(t, `1e999999`)
+	if !strings.Contains(err.Error(), "overflows IEEE 754 double") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -138,5 +145,15 @@ func TestParseAllowsDuplicateKeysInDifferentScopes(t *testing.T) {
 	v := mustParse(t, `{"a":1,"nested":{"a":2}}`)
 	if v.Kind != jcstoken.KindObject || len(v.Members) != 2 {
 		t.Fatalf("unexpected parse result: %+v", v)
+	}
+}
+
+func TestParseRejectsInvalidUTF8Input(t *testing.T) {
+	_, err := jcstoken.Parse([]byte{'"', 0xff, '"'})
+	if err == nil {
+		t.Fatal("expected UTF-8 error")
+	}
+	if !strings.Contains(err.Error(), "not valid UTF-8") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

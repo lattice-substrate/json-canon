@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"lattice-canon/jcsfloat"
+	"jcs-canon/jcsfloat"
 )
 
 func TestFormatDoubleGoldenVectors(t *testing.T) {
@@ -144,7 +144,7 @@ func TestGoldenVectorsChecksum(t *testing.T) {
 		t.Fatalf("hash golden vectors: %v", err)
 	}
 
-	const want = "b7cf58a7d9de15cd27adb95ee596f4a3092ec3ace2fc52a6e065a28dbe81f438"
+	const want = "593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636"
 	got := fmt.Sprintf("%x", h.Sum(nil))
 	if got != want {
 		t.Fatalf("golden vector checksum mismatch: got %s want %s", got, want)

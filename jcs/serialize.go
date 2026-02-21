@@ -11,12 +11,12 @@ import (
 	"sort"
 	"unicode/utf16"
 
-	"lattice-canon/jcsfloat"
-	"lattice-canon/jcstoken"
+	"jcs-canon/jcsfloat"
+	"jcs-canon/jcstoken"
 )
 
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed
-// JSON value. No trailing LF is appended (that is the GJCS1 envelope's concern).
+// JSON value.
 //
 // The output is deterministic: for any given value tree, the output bytes are
 // always identical. This is the core invariant that enables byte-identical replay.

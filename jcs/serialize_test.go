@@ -4,8 +4,8 @@ import (
 	"math"
 	"testing"
 
-	"lattice-canon/jcs"
-	"lattice-canon/jcstoken"
+	"jcs-canon/jcs"
+	"jcs-canon/jcstoken"
 )
 
 func canon(t *testing.T, in string) string {
@@ -82,6 +82,20 @@ func TestSerializeBoundary1e21(t *testing.T) {
 func TestSerializeExponentFormat(t *testing.T) {
 	got := canon(t, `1e-7`)
 	if got != `1e-7` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestSerializeNegativeZero(t *testing.T) {
+	got := canon(t, `-0`)
+	if got != `0` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestSerializeUnderflowToZero(t *testing.T) {
+	got := canon(t, `1e-400`)
+	if got != `0` {
 		t.Fatalf("got %q", got)
 	}
 }
