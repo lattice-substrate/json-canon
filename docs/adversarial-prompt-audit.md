@@ -1,7 +1,7 @@
 # Adversarial Prompt Audit
 
 Status: Draft
-Scope: `lattice-canon` development and release workflow hardening
+Scope: `jcs-canon` development and release workflow hardening
 Date: 2026-02-21
 
 ## 1. Audit Objective
@@ -109,7 +109,7 @@ Observed controls in repository state:
 1. Strict linter suite enabled and passing.
 2. Black-box CLI vector tests and adversarial tests present.
 3. Strict profile enforcement (`-0`, underflow-to-zero, unicode constraints) present.
-4. GJCS1 envelope-first verification ordering present.
+4. Deterministic verify path and strict-profile rejection behavior present.
 5. Go-only runtime path documented; static build path validated.
 
 Assessment:
@@ -122,7 +122,7 @@ To make prompt attacks non-actionable, CI MUST block merges when any assertion f
 
 1. `golangci-lint run -c golangci.yml ./...`
 2. `go test ./... -count=1`
-3. `CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon`
+3. `CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon`
 4. No changes to lint config unless explicitly approved in a dedicated policy PR.
 5. Black-box vector suites remain present and passing.
 
@@ -165,12 +165,12 @@ Pass criteria:
 ## 8. Remediation Plan
 
 1. Add CI job that diffs `golangci.yml` and `golangci.base.yml` against protected baseline unless a policy label is present.
-2. Add required CI stage for black-box vector tests only (`go test ./cmd/lattice-canon -run 'TestCLI' -count=1`).
+2. Add required CI stage for black-box vector tests only (`go test ./cmd/jcs-canon -run 'TestCLI' -count=1`).
 3. Persist release evidence artifacts (test, lint, static build, checksums) as immutable CI artifacts.
 4. Promote `docs/spec/*` from draft to versioned normative release doc.
 
 ## 9. Audit Conclusion
 
-`lattice-canon` is substantially hardened against adversarial development prompts at code level.
+`jcs-canon` is substantially hardened against adversarial development prompts at code level.
 
 For infrastructure-grade assurance, enforce the documented controls as non-bypassable CI gates so prompt pressure cannot alter release outcomes.

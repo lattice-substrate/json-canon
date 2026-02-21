@@ -13,7 +13,7 @@ Input:
 Command:
 
 ```bash
-echo '{"z":3,"a":1}' | ./lattice-canon canonicalize
+echo '{"z":3,"a":1}' | ./jcs-canon canonicalize
 ```
 
 Output:
@@ -39,40 +39,40 @@ Output:
 ### Number formatting boundaries
 
 ```bash
-echo '1e20' | ./lattice-canon canonicalize   # 100000000000000000000
-echo '1e21' | ./lattice-canon canonicalize   # 1e+21
-echo '1e-7' | ./lattice-canon canonicalize   # 1e-7
+echo '1e20' | ./jcs-canon canonicalize   # 100000000000000000000
+echo '1e21' | ./jcs-canon canonicalize   # 1e+21
+echo '1e-7' | ./jcs-canon canonicalize   # 1e-7
 ```
 
 ## Verification examples
 
-### Valid GJCS1
+### Canonical input
 
 ```bash
-printf '{"a":1}\n' | ./lattice-canon verify --quiet -
+printf '%s' '{"a":1}' | ./jcs-canon verify --quiet -
 echo $?  # 0
 ```
 
 ### Non-canonical ordering
 
 ```bash
-printf '{"b":1,"a":2}\n' | ./lattice-canon verify --quiet -
+printf '%s' '{"b":1,"a":2}' | ./jcs-canon verify --quiet -
 echo $?  # 2
 ```
 
 ### `-0` profile rejection
 
 ```bash
-printf '%s\n' '-0' | ./lattice-canon verify --quiet -
+printf '%s\n' '-0' | ./jcs-canon verify --quiet -
 echo $?  # 2
 ```
 
 This fails by design in the strict profile and is not normalized.
 
-### Missing trailing LF
+### Trailing whitespace rejected
 
 ```bash
-printf '{"a":1}' | ./lattice-canon verify --quiet -
+printf '{"a":1}\n' | ./jcs-canon verify --quiet -
 echo $?  # 2
 ```
 
@@ -88,7 +88,7 @@ Input keys:
 Command:
 
 ```bash
-echo '{"\uE000":1,"\uD800\uDC00":2}' | ./lattice-canon canonicalize
+echo '{"\uE000":1,"\uD800\uDC00":2}' | ./jcs-canon canonicalize
 ```
 
 Output order places U+10000 key first due to UTF-16 code-unit ordering.

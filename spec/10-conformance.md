@@ -9,9 +9,9 @@ Conformance testing MUST include:
 1. JCS number formatting vectors (`jcsfloat` golden corpus).
 2. Strict-profile parse vectors (positive and negative).
 3. Canonical serialization vectors.
-4. GJCS1 envelope and verification-order vectors.
-5. Black-box CLI vectors for `canonicalize` and `verify`.
-6. Adversarial CLI cases (depth bounds, malformed bytes, invalid numeric ranges).
+4. Black-box CLI vectors for `canonicalize` and `verify`.
+5. Adversarial CLI cases (depth bounds, malformed bytes, invalid numeric ranges).
+6. Deterministic replay checks (same input -> same bytes across repeated executions).
 
 ## 10.2 Black-Box CLI Requirement
 
@@ -26,7 +26,7 @@ A release candidate MUST satisfy all of the following:
 
 1. `go test ./... -count=1` passes.
 2. linter suite passes using repository lint config.
-3. static build of CLI succeeds with `CGO_ENABLED=0`.
+3. static-friendly build of CLI succeeds with `CGO_ENABLED=0`.
 4. golden vector line-count and checksum assertions pass.
 
 ## 10.4 Non-Goals Of Conformance

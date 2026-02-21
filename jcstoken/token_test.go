@@ -80,17 +80,17 @@ func TestParseRejectsNoncharacterEscape(t *testing.T) {
 	}
 }
 
-func TestParseAllowsNegativeZero(t *testing.T) {
-	v := mustParse(t, `-0`)
-	if v.Kind != jcstoken.KindNumber || !math.Signbit(v.Num) || v.Num != 0 {
-		t.Fatalf("bad parse for -0: %+v", v)
+func TestParseRejectsNegativeZero(t *testing.T) {
+	err := mustParseErr(t, `-0`)
+	if !strings.Contains(err.Error(), "negative zero token") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestParseAllowsUnderflowToZero(t *testing.T) {
-	v := mustParse(t, `1e-400`)
-	if v.Kind != jcstoken.KindNumber || math.Signbit(v.Num) || v.Num != 0 {
-		t.Fatalf("bad parse for underflow: %+v", v)
+func TestParseRejectsUnderflowToZeroForNonZeroToken(t *testing.T) {
+	err := mustParseErr(t, `1e-400`)
+	if !strings.Contains(err.Error(), "underflows to IEEE 754 zero") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -137,6 +137,68 @@ func TestParseDepthLimit(t *testing.T) {
 		t.Fatal("expected max-depth error")
 	}
 	if !strings.Contains(err.Error(), "nesting depth") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseNumberLengthLimit(t *testing.T) {
+	_, err := jcstoken.ParseWithOptions([]byte(`12345`), &jcstoken.Options{MaxNumberChars: 4})
+	if err == nil {
+		t.Fatal("expected number-length error")
+	}
+	if !strings.Contains(err.Error(), "number token length") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseObjectMemberLimit(t *testing.T) {
+	_, err := jcstoken.ParseWithOptions(
+		[]byte(`{"a":1,"b":2}`),
+		&jcstoken.Options{MaxObjectMembers: 1},
+	)
+	if err == nil {
+		t.Fatal("expected object-member-limit error")
+	}
+	if !strings.Contains(err.Error(), "object member count exceeds maximum") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseArrayElementLimit(t *testing.T) {
+	_, err := jcstoken.ParseWithOptions(
+		[]byte(`[1,2]`),
+		&jcstoken.Options{MaxArrayElements: 1},
+	)
+	if err == nil {
+		t.Fatal("expected array-element-limit error")
+	}
+	if !strings.Contains(err.Error(), "array element count exceeds maximum") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseStringLengthLimit(t *testing.T) {
+	_, err := jcstoken.ParseWithOptions(
+		[]byte(`"ab"`),
+		&jcstoken.Options{MaxStringBytes: 1},
+	)
+	if err == nil {
+		t.Fatal("expected string-length error")
+	}
+	if !strings.Contains(err.Error(), "string decoded length exceeds maximum") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseValueCountLimit(t *testing.T) {
+	_, err := jcstoken.ParseWithOptions(
+		[]byte(`[1,2]`),
+		&jcstoken.Options{MaxValues: 2},
+	)
+	if err == nil {
+		t.Fatal("expected value-count error")
+	}
+	if !strings.Contains(err.Error(), "value count") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

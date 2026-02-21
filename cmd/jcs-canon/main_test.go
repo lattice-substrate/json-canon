@@ -80,6 +80,17 @@ func TestUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestUnknownOption(t *testing.T) {
+	var stderr bytes.Buffer
+	code := run([]string{"verify", "--bad-flag"}, strings.NewReader(`{"a":1}`), nil, &stderr)
+	if code != 2 {
+		t.Fatalf("expected exit 2, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "unknown option") {
+		t.Fatalf("unexpected stderr: %q", stderr.String())
+	}
+}
+
 func TestNoCommand(t *testing.T) {
 	var stderr bytes.Buffer
 	code := run([]string{}, nil, nil, &stderr)

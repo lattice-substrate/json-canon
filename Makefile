@@ -10,7 +10,7 @@ lint:
 	golangci-lint run --timeout=5m ./...
 
 build:
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o jcs-canon ./cmd/jcs-canon
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
 
 check: lint test build
 

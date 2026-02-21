@@ -40,18 +40,18 @@
     "stderr_contains": ["noncharacter"]
   },
   {
-    "name": "reject negative zero as non-canonical",
+    "name": "reject negative zero token",
     "args": ["verify", "--quiet", "-"],
     "stdin": "-0",
     "exit_code": 2,
-    "stderr_contains": ["not canonical"]
+    "stderr_contains": ["negative zero token is not allowed"]
   },
   {
-    "name": "reject underflow-as-zero as non-canonical",
+    "name": "reject underflow-as-zero token",
     "args": ["verify", "--quiet", "-"],
     "stdin": "1e-400",
     "exit_code": 2,
-    "stderr_contains": ["not canonical"]
+    "stderr_contains": ["underflows to IEEE 754 zero"]
   },
   {
     "name": "reject trailing whitespace",

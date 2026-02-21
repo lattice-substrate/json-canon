@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -24,6 +25,21 @@ const (
 
 	// DefaultMaxInputSize is the maximum input size in bytes (64 MiB).
 	DefaultMaxInputSize = 64 * 1024 * 1024
+
+	// DefaultMaxValues limits the number of JSON values in a document.
+	DefaultMaxValues = 1_000_000
+
+	// DefaultMaxObjectMembers limits members in a single object.
+	DefaultMaxObjectMembers = 250_000
+
+	// DefaultMaxArrayElements limits elements in a single array.
+	DefaultMaxArrayElements = 250_000
+
+	// DefaultMaxStringBytes limits decoded UTF-8 bytes per string.
+	DefaultMaxStringBytes = 8 * 1024 * 1024
+
+	// DefaultMaxNumberChars limits lexical number token length.
+	DefaultMaxNumberChars = 4096
 )
 
 // Value represents a parsed JSON value.
@@ -71,8 +87,13 @@ func (e *ParseError) Error() string {
 
 // Options controls parser behavior.
 type Options struct {
-	MaxDepth     int // 0 means DefaultMaxDepth
-	MaxInputSize int // 0 means DefaultMaxInputSize
+	MaxDepth         int // 0 means DefaultMaxDepth
+	MaxInputSize     int // 0 means DefaultMaxInputSize
+	MaxValues        int // 0 means DefaultMaxValues
+	MaxObjectMembers int // 0 means DefaultMaxObjectMembers
+	MaxArrayElements int // 0 means DefaultMaxArrayElements
+	MaxStringBytes   int // 0 means DefaultMaxStringBytes
+	MaxNumberChars   int // 0 means DefaultMaxNumberChars
 }
 
 func (o *Options) maxDepth() int {
@@ -89,12 +110,53 @@ func (o *Options) maxInputSize() int {
 	return DefaultMaxInputSize
 }
 
+func (o *Options) maxValues() int {
+	if o != nil && o.MaxValues > 0 {
+		return o.MaxValues
+	}
+	return DefaultMaxValues
+}
+
+func (o *Options) maxObjectMembers() int {
+	if o != nil && o.MaxObjectMembers > 0 {
+		return o.MaxObjectMembers
+	}
+	return DefaultMaxObjectMembers
+}
+
+func (o *Options) maxArrayElements() int {
+	if o != nil && o.MaxArrayElements > 0 {
+		return o.MaxArrayElements
+	}
+	return DefaultMaxArrayElements
+}
+
+func (o *Options) maxStringBytes() int {
+	if o != nil && o.MaxStringBytes > 0 {
+		return o.MaxStringBytes
+	}
+	return DefaultMaxStringBytes
+}
+
+func (o *Options) maxNumberChars() int {
+	if o != nil && o.MaxNumberChars > 0 {
+		return o.MaxNumberChars
+	}
+	return DefaultMaxNumberChars
+}
+
 // parser holds the state for parsing.
 type parser struct {
-	data     []byte
-	pos      int
-	depth    int
-	maxDepth int
+	data             []byte
+	pos              int
+	depth            int
+	valueCount       int
+	maxDepth         int
+	maxValues        int
+	maxObjectMembers int
+	maxArrayElements int
+	maxStringBytes   int
+	maxNumberChars   int
 }
 
 // Parse parses a complete JSON text under RFC 8785's strict input domain.
@@ -106,9 +168,12 @@ type parser struct {
 //   - No Unicode noncharacters in strings or member names
 //   - Input must be valid UTF-8 (RFC 3629)
 //   - No non-finite numbers (must fit IEEE 754 binary64)
+//   - No negative-zero lexical tokens
+//   - No non-zero tokens that underflow to IEEE 754 zero
 //   - Valid surrogate pairs decoded to supplementary-plane scalars
 //   - Nesting depth bounded by MaxDepth
 //   - Input size bounded by MaxInputSize
+//   - Value/member/element/string/number lexical bounds
 func Parse(data []byte) (*Value, error) {
 	return ParseWithOptions(data, nil)
 }
@@ -130,10 +195,16 @@ func ParseWithOptions(data []byte, opts *Options) (*Value, error) {
 	}
 
 	p := &parser{
-		data:     data,
-		pos:      0,
-		depth:    0,
-		maxDepth: opts.maxDepth(),
+		data:             data,
+		pos:              0,
+		depth:            0,
+		valueCount:       0,
+		maxDepth:         opts.maxDepth(),
+		maxValues:        opts.maxValues(),
+		maxObjectMembers: opts.maxObjectMembers(),
+		maxArrayElements: opts.maxArrayElements(),
+		maxStringBytes:   opts.maxStringBytes(),
+		maxNumberChars:   opts.maxNumberChars(),
 	}
 
 	p.skipWhitespace()
@@ -214,6 +285,11 @@ func (p *parser) popDepth() {
 }
 
 func (p *parser) parseValue() (*Value, error) {
+	p.valueCount++
+	if p.valueCount > p.maxValues {
+		return nil, p.errorf("value count %d exceeds maximum %d", p.valueCount, p.maxValues)
+	}
+
 	c, ok := p.peek()
 	if !ok {
 		return nil, p.errorf("unexpected end of input")
@@ -265,6 +341,9 @@ func (p *parser) parseObjectMembers() (*Value, error) {
 		member, done, parseErr := p.parseObjectMember(seen)
 		if parseErr != nil {
 			return nil, parseErr
+		}
+		if len(v.Members) >= p.maxObjectMembers {
+			return nil, p.errorf("object member count exceeds maximum %d", p.maxObjectMembers)
 		}
 		v.Members = append(v.Members, member)
 		if done {
@@ -381,6 +460,9 @@ func (p *parser) parseArray() (*Value, error) {
 		elem, err := p.parseValue()
 		if err != nil {
 			return nil, err
+		}
+		if len(v.Elems) >= p.maxArrayElements {
+			return nil, p.errorf("array element count exceeds maximum %d", p.maxArrayElements)
 		}
 		v.Elems = append(v.Elems, *elem)
 
@@ -535,6 +617,9 @@ func (p *parser) consumeEscapedRune(buf *[]byte) error {
 	}
 	var tmp [4]byte
 	n := utf8.EncodeRune(tmp[:], r)
+	if len(*buf)+n > p.maxStringBytes {
+		return p.errorf("string decoded length exceeds maximum %d bytes", p.maxStringBytes)
+	}
 	*buf = append(*buf, tmp[:n]...)
 	return nil
 }
@@ -544,6 +629,9 @@ func (p *parser) consumeUTF8Chunk(buf *[]byte) error {
 	r, size := utf8.DecodeRune(p.data[p.pos:])
 	if r == utf8.RuneError && size <= 1 {
 		return p.errorf("invalid UTF-8 byte 0x%02X in string", b)
+	}
+	if len(*buf)+size > p.maxStringBytes {
+		return p.errorf("string decoded length exceeds maximum %d bytes", p.maxStringBytes)
 	}
 	*buf = append(*buf, p.data[p.pos:p.pos+size]...)
 	p.pos += size
@@ -608,6 +696,9 @@ func (p *parser) parseNumber() (*Value, error) {
 	}
 	if err := p.scanExponentPart(); err != nil {
 		return nil, err
+	}
+	if p.pos-start > p.maxNumberChars {
+		return nil, p.errorf("number token length %d exceeds maximum %d", p.pos-start, p.maxNumberChars)
 	}
 
 	raw := string(p.data[start:p.pos])
@@ -679,7 +770,33 @@ func (p *parser) buildNumberValue(start int, raw string) (*Value, error) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return nil, &ParseError{Offset: start, Msg: "number overflows IEEE 754 double"}
 	}
+	if strings.HasPrefix(raw, "-") && tokenRepresentsZero(raw) {
+		return nil, &ParseError{Offset: start, Msg: "negative zero token is not allowed"}
+	}
+	if f == 0 && !tokenRepresentsZero(raw) {
+		return nil, &ParseError{Offset: start, Msg: "non-zero number underflows to IEEE 754 zero"}
+	}
 	return &Value{Kind: KindNumber, Num: f}, nil
+}
+
+func tokenRepresentsZero(raw string) bool {
+	start := 0
+	if len(raw) > 0 && (raw[0] == '-' || raw[0] == '+') {
+		start = 1
+	}
+	end := len(raw)
+	for i := start; i < len(raw); i++ {
+		if raw[i] == 'e' || raw[i] == 'E' {
+			end = i
+			break
+		}
+	}
+	for i := start; i < end; i++ {
+		if raw[i] >= '1' && raw[i] <= '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func errorsIsRange(err error) bool {

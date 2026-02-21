@@ -1,6 +1,6 @@
-# lattice-canon Documentation
+# jcs-canon Documentation
 
-This folder documents how `lattice-canon` works, how to use it in tooling, and how to produce objective correctness evidence for production gates.
+This folder documents how `jcs-canon` works, how to use it in tooling, and how to produce objective correctness evidence for production gates.
 
 Design target: Go-only, self-contained tooling with static binary builds (`CGO_ENABLED=0`), zero runtime external dependencies.
 
@@ -17,9 +17,9 @@ Design target: Go-only, self-contained tooling with static binary builds (`CGO_E
 5. `docs/runbook-correctness.md`
    Operator runbook to generate reproducible evidence of correctness for release approvals.
 6. `docs/infrastructure-alignment.md`
-   Maps `lattice-canon` behavior to lattice-substrate infrastructure invariants and gate usage.
+   Maps `jcs-canon` behavior to lattice-substrate infrastructure invariants and gate usage.
 7. `docs/spec/00-index.md`
-   OCI-style normative specification chapters for lattice-canon behavior and conformance.
+   OCI-style normative specification chapters for jcs-canon behavior and conformance.
 
 ## Fast path
 

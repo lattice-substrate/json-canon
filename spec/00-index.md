@@ -1,9 +1,9 @@
-# lattice-canon Specification Index
+# jcs-canon Specification Index
 
 Status: Release
 Version: 1.0.0
 
-This specification defines the `lattice-canon` governed JSON canonicalization and verification contract for infrastructure tooling.
+This specification defines the `jcs-canon` canonicalization and verification contract for infrastructure tooling.
 
 ## Contents
 
@@ -12,7 +12,6 @@ This specification defines the `lattice-canon` governed JSON canonicalization an
 - [03. Data Model](03-data-model.md)
 - [04. Strict JSON Profile](04-strict-json-profile.md)
 - [05. JCS Serialization](05-jcs-serialization.md)
-- [06. GJCS1 Envelope And Verification](06-gjcs1-envelope.md)
 - [07. CLI Contract](07-cli-contract.md)
 - [08. Errors And Exit Codes](08-errors-and-exit-codes.md)
 - [09. Security And Determinism](09-security-and-determinism.md)

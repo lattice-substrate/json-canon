@@ -44,5 +44,10 @@ Parser bounds MUST be enforced:
 
 - Maximum nesting depth default: `1000`.
 - Maximum input size default: `64 MiB`.
+- Maximum JSON values default: `1,000,000`.
+- Maximum object members per object default: `250,000`.
+- Maximum array elements per array default: `250,000`.
+- Maximum decoded string length default: `8 MiB`.
+- Maximum number token length default: `4096` characters.
 
 Implementations MAY expose configuration for these limits.

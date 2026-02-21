@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"jcs-canon/jcs"
 	"jcs-canon/jcstoken"
@@ -47,26 +48,45 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 
 type flags struct {
 	quiet bool
+	help  bool
 }
 
-func parseFlags(args []string) (flags, []string) {
+func parseFlags(args []string) (flags, []string, error) {
 	var f flags
 	var positional []string
+	consumeAsPositional := false
 	for _, arg := range args {
+		if consumeAsPositional {
+			positional = append(positional, arg)
+			continue
+		}
+
 		switch arg {
 		case "--quiet", "-q":
 			f.quiet = true
+		case "--help", "-h":
+			f.help = true
+		case "--":
+			consumeAsPositional = true
+		case "-":
+			positional = append(positional, arg)
 		default:
+			if strings.HasPrefix(arg, "-") {
+				return flags{}, nil, fmt.Errorf("unknown option: %s", arg)
+			}
 			positional = append(positional, arg)
 		}
 	}
-	return f, positional
+	return f, positional, nil
 }
 
 func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	_, positional := parseFlags(args)
+	fl, positional, err := parseFlags(args)
+	if err != nil {
+		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+	}
 
-	if hasHelpFlag(positional) {
+	if fl.help {
 		if err := writeCanonicalizeHelp(stderr); err != nil {
 			return exitInternal
 		}
@@ -100,9 +120,12 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 }
 
 func cmdVerify(args []string, stdin io.Reader, stderr io.Writer) int {
-	fl, positional := parseFlags(args)
+	fl, positional, err := parseFlags(args)
+	if err != nil {
+		return writeErrorAndReturn(stderr, exitInvalid, "error: %v\n", err)
+	}
 
-	if hasHelpFlag(positional) {
+	if fl.help {
 		if err := writeVerifyHelp(stderr); err != nil {
 			return exitInternal
 		}
@@ -172,15 +195,6 @@ func readBounded(r io.Reader, maxInputSize int) ([]byte, error) {
 	return data, nil
 }
 
-func hasHelpFlag(positional []string) bool {
-	for _, arg := range positional {
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
-	}
-	return false
-}
-
 func ensureSingleInput(positional []string, stderr io.Writer) (int, bool) {
 	if len(positional) <= 1 {
 		return 0, false
@@ -205,7 +219,7 @@ func writeCanonicalizeHelp(stderr io.Writer) error {
 	if err := writeLine(stderr, "  Read JSON from file (or stdin), emit canonical bytes to stdout."); err != nil {
 		return err
 	}
-	return writeLine(stderr, "  --quiet   Suppress success messages")
+	return writeLine(stderr, "  --quiet   Accepted for command symmetry; canonicalize is silent on success")
 }
 
 func writeVerifyHelp(stderr io.Writer) error {

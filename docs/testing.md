@@ -2,52 +2,45 @@
 
 ## Test topology
 
-The project currently validates behavior across five packages:
+The project validates behavior across four packages:
 
 - `jcsfloat`: number formatting correctness and golden-vector conformance.
-- `jcstoken`: strict parse-domain enforcement.
-- `jcs`: RFC 8785 canonical serialization behavior.
-- `gjcs1`: envelope verification order, canonical byte checks, and atomic write behavior.
-- `cmd/lattice-canon`: CLI and exit-code contract.
+- `jcstoken`: strict parse-domain enforcement and resource bounds.
+- `jcs`: RFC 8785 serialization behavior and library misuse resistance.
+- `cmd/jcs-canon`: black-box CLI contract and exit-code behavior.
 
 ## Golden vector policy
 
-`jcsfloat/testdata/golden_vectors.csv` is vendored in-repo as a pinned reference oracle for ECMAScript number formatting behavior.
+`jcsfloat/testdata/golden_vectors.csv` is vendored in-repo as a pinned oracle for ECMAScript number formatting.
 
-Current expected invariants:
+Expected invariants:
 
-- Exactly `54,445` lines.
-- CSV rows of `<16 hex chars>,<expected string>`.
-- No header row.
+- exactly `54,445` lines,
+- rows are `<16 hex chars>,<expected string>`,
+- no header row,
 - SHA-256 checksum:
-  - `b7cf58a7d9de15cd27adb95ee596f4a3092ec3ace2fc52a6e065a28dbe81f438`
+  - `593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636`
 
-These invariants are enforced in Go tests (`TestFormatDoubleGoldenVectors` and `TestGoldenVectorsChecksum`).
+These invariants are enforced in Go tests.
 
 ## Required release validation commands
 
 ```bash
 go build ./...
 go test ./... -count=1
-CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
-```
-
-In restricted environments (sandboxed CI), set writable caches (still Go-only):
-
-```bash
-GOCACHE=/tmp/go-build-cache GOMODCACHE=/tmp/go-mod-cache go test ./... -count=1
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
 ```
 
 ## Correctness properties to keep enforced
 
 1. Canonicalization is deterministic for accepted values.
-2. Verify path enforces envelope checks before parse.
-3. Re-serialization mismatch is rejected as non-canonical.
-4. Profile constraints (`-0`, underflow-to-zero, duplicate keys, invalid Unicode scalars) are hard failures.
+2. Strict profile constraints fail closed.
+3. Verify path rejects any byte-level non-canonical input.
+4. Unknown CLI options are rejected.
+5. Resource bounds are enforced.
 
 ## Additional production gates (recommended)
 
-1. Add `go test -race ./...` in CI.
-2. Add corpus-based fuzzing for `jcstoken.Parse` and `gjcs1.Verify`.
-3. Record and publish binary and vector-file checksums for each release.
-4. Add regression tests for every discovered production defect before patch release.
+1. `go test -race ./... -count=1`.
+2. Periodic fuzzing for `jcstoken.Parse` and `jcs.Serialize`.
+3. Publish binary and vector checksums per release.

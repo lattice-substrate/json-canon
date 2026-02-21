@@ -30,6 +30,7 @@ This component validates structure and bytes only.
 For infrastructure-grade deployment, release binaries SHOULD be built with:
 
 - `CGO_ENABLED=0`
-- stripped linker flags for minimized, reproducible artifacts.
+- `-trimpath -buildvcs=false`
+- stripped linker flags with empty build id (`-ldflags="-s -w -buildid="`).
 
 Runtime external dependencies SHOULD be avoided.

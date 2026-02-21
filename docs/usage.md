@@ -6,62 +6,41 @@ From repository root:
 
 ```bash
 go build ./...
-CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
 ```
 
 ## CLI
 
-### Canonicalize JSON input
+### Canonicalize
 
 ```bash
-./lattice-canon canonicalize [--gjcs1] [--quiet] [file|-]
+./jcs-canon canonicalize [--quiet] [file|-]
 ```
 
 Behavior:
 
 - Reads from `stdin` if file is omitted or `-`.
-- Emits canonical JCS JSON to `stdout`.
-- With `--gjcs1`, appends exactly one trailing LF.
+- Parses with strict profile validation.
+- Emits canonical RFC 8785 JSON bytes to `stdout`.
 
-### Verify governed file/input
+### Verify canonical form
 
 ```bash
-./lattice-canon verify [--quiet] [file|-]
+./jcs-canon verify [--quiet] [file|-]
 ```
 
 Behavior:
 
-- Validates envelope constraints first.
-- Parses with strict profile constraints.
-- Re-serializes and byte-compares with original body.
+- Parses with strict profile validation.
+- Canonicalizes parsed value.
+- Compares canonical bytes to original input.
+- On success, emits `ok` to `stderr` unless `--quiet`.
 
-## Exit codes
+### Exit codes
 
 - `0`: success
-- `2`: invalid input / non-canonical / profile violation
+- `2`: invalid input / profile violation / non-canonical bytes
 - `10`: internal runtime error
-
-## Integration patterns
-
-### Pipeline canonicalization
-
-```bash
-cat input.json | ./lattice-canon canonicalize > output.jcs
-```
-
-### Produce governed file
-
-```bash
-cat input.json | ./lattice-canon canonicalize --gjcs1 > output.gjcs1
-```
-
-### Pre-commit or CI gate
-
-```bash
-./lattice-canon verify --quiet path/to/file.gjcs1
-```
-
-Fail pipeline on non-zero exit code.
 
 ## Library usage (Go)
 
@@ -70,22 +49,24 @@ package main
 
 import (
     "fmt"
-    "lattice-canon/gjcs1"
+
+    "jcs-canon/jcs"
+    "jcs-canon/jcstoken"
 )
 
 func main() {
     in := []byte(`{"z":3,"a":1}`)
 
-    canonical, err := gjcs1.Canonicalize(in)
+    v, err := jcstoken.Parse(in)
     if err != nil {
         panic(err)
     }
 
-    governed := gjcs1.Envelope(canonical)
-    if err := gjcs1.Verify(governed); err != nil {
+    out, err := jcs.Serialize(v)
+    if err != nil {
         panic(err)
     }
 
-    fmt.Printf("%s", governed)
+    fmt.Printf("%s\n", out) // {"a":1,"z":3}
 }
 ```

@@ -1,6 +1,6 @@
 # Correctness Runbook
 
-This runbook produces objective evidence that the implementation is behaving correctly for a release candidate.
+This runbook produces release evidence for `jcs-canon`.
 
 ## 1. Preconditions
 
@@ -8,79 +8,54 @@ This runbook produces objective evidence that the implementation is behaving cor
 - Go 1.22+.
 - Run from repository root.
 
-Optional for restricted environments:
-
-```bash
-export GOCACHE=/tmp/go-build-cache
-export GOMODCACHE=/tmp/go-mod-cache
-mkdir -p "$GOCACHE" "$GOMODCACHE"
-```
-
-## 2. Validate pinned golden vectors (Go-only)
+## 2. Validate pinned number oracle
 
 ```bash
 go test ./jcsfloat -run 'TestFormatDoubleGoldenVectors|TestGoldenVectorsChecksum' -count=1
 ```
 
-Acceptance criteria:
+Acceptance:
 
-- both tests pass.
-- vectors are exactly 54,445 rows and checksum matches pinned value.
+- both tests pass,
+- vectors are exactly 54,445 rows,
+- checksum matches pinned value.
 
 ## 3. Full build and test
 
 ```bash
 go build ./...
 go test ./... -count=1
+go test ./... -race -count=1
 ```
 
-Acceptance criteria:
-
-- all packages pass.
-- zero test failures.
-
-## 4. Static release binary build
+## 4. Static-friendly release build
 
 ```bash
-CGO_ENABLED=0 go build -ldflags="-s -w" -o lattice-canon ./cmd/lattice-canon
-file ./lattice-canon
-sha256sum ./lattice-canon
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o jcs-canon ./cmd/jcs-canon
+file ./jcs-canon
+sha256sum ./jcs-canon
 ```
-
-Acceptance criteria:
-
-- binary is ELF, statically linked, stripped.
-- checksum recorded in release evidence.
 
 ## 5. Functional smoke checks
 
 ```bash
-echo '{"z":3,"a":1}' | ./lattice-canon canonicalize
-printf '{"a":1,"z":3}\n' | ./lattice-canon verify --quiet -
-printf '%s\n' '-0' | ./lattice-canon verify --quiet -; echo $?
+echo '{"z":3,"a":1}' | ./jcs-canon canonicalize
+printf '%s' '{"a":1,"z":3}' | ./jcs-canon verify --quiet -; echo $?
+printf '%s' '-0' | ./jcs-canon verify --quiet -; echo $?
 ```
 
 Expected:
 
-- canonicalize emits `{"a":1,"z":3}`.
-- verify on canonical input exits `0`.
-- verify on `-0` exits `2` (profile rejection).
+- canonicalize emits `{"a":1,"z":3}`,
+- verify canonical input exits `0`,
+- verify `-0` exits `2`.
 
-## 6. Enforced evidence bundle
+## 6. Evidence bundle
 
-Store the following artifacts per release:
+Store:
 
-- `go version` output.
-- vector validation test output.
-- full `go test ./... -count=1` output.
-- release binary checksum and metadata.
-- smoke check transcript with exit codes.
-
-## 7. Release stop conditions
-
-Do not release if any of the following occurs:
-
-- golden vector validation tests fail.
-- any package test fails.
-- smoke checks do not match expected outcomes.
-- binary build fails or is not static.
+- `go version`,
+- targeted oracle-test output,
+- full test output,
+- binary checksum and metadata,
+- smoke-check transcript with exit codes.

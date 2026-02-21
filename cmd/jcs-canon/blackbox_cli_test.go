@@ -106,6 +106,18 @@ func TestCLIAdversarialUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestCLIAdversarialUnknownFlag(t *testing.T) {
+	t.Parallel()
+
+	res := runCLI(t, []string{"verify", "--definitely-not-a-flag"}, nil)
+	if res.exitCode != 2 {
+		t.Fatalf("expected exit 2, got %d", res.exitCode)
+	}
+	if !strings.Contains(res.stderr, "unknown option") {
+		t.Fatalf("expected unknown-option error, got stderr=%q", res.stderr)
+	}
+}
+
 func TestCLIDeterministicReplay(t *testing.T) {
 	t.Parallel()
 

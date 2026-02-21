@@ -8,8 +8,10 @@ package jcs
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"unicode/utf16"
+	"unicode/utf8"
 
 	"jcs-canon/jcsfloat"
 	"jcs-canon/jcstoken"
@@ -21,6 +23,14 @@ import (
 // The output is deterministic: for any given value tree, the output bytes are
 // always identical. This is the core invariant that enables byte-identical replay.
 func Serialize(v *jcstoken.Value) ([]byte, error) {
+	if v == nil {
+		return nil, fmt.Errorf("jcs: nil value")
+	}
+	state := &serializeValidationState{}
+	if err := validateValueTree(v, 0, state); err != nil {
+		return nil, err
+	}
+
 	var buf []byte
 	var err error
 	buf, err = serializeValue(buf, v)
@@ -35,7 +45,7 @@ func serializeValue(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	case jcstoken.KindNull:
 		return append(buf, "null"...), nil
 	case jcstoken.KindBool:
-		return append(buf, v.Str...), nil // "true" or "false"
+		return append(buf, v.Str...), nil // validated as "true" or "false"
 	case jcstoken.KindNumber:
 		return serializeNumber(buf, v.Num)
 	case jcstoken.KindString:
@@ -158,11 +168,17 @@ func serializeArray(buf []byte, v *jcstoken.Value) ([]byte, error) {
 }
 
 func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
-	// Sort members by key using UTF-16 code-unit ordering (RFC 8785 §3.2.3)
-	sorted := make([]jcstoken.Member, len(v.Members))
-	copy(sorted, v.Members)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return compareUTF16(sorted[i].Key, sorted[j].Key) < 0
+	// Sort members by key using UTF-16 code-unit ordering (RFC 8785 §3.2.3).
+	// UTF-16 encodings are precomputed once per key to avoid repeated allocations.
+	sorted := make([]sortableMember, len(v.Members))
+	for i := range v.Members {
+		sorted[i] = sortableMember{
+			member: v.Members[i],
+			key16:  utf16.Encode([]rune(v.Members[i].Key)),
+		}
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		return compareUTF16Units(sorted[i].key16, sorted[j].key16) < 0
 	})
 
 	buf = append(buf, '{')
@@ -170,16 +186,21 @@ func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
 		if i > 0 {
 			buf = append(buf, ',')
 		}
-		buf = serializeString(buf, sorted[i].Key)
+		buf = serializeString(buf, sorted[i].member.Key)
 		buf = append(buf, ':')
 		var err error
-		buf, err = serializeValue(buf, &sorted[i].Value)
+		buf, err = serializeValue(buf, &sorted[i].member.Value)
 		if err != nil {
 			return nil, err
 		}
 	}
 	buf = append(buf, '}')
 	return buf, nil
+}
+
+type sortableMember struct {
+	member jcstoken.Member
+	key16  []uint16
 }
 
 // compareUTF16 compares two Go strings by their UTF-16 code-unit arrays,
@@ -192,6 +213,10 @@ func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
 func compareUTF16(a, b string) int {
 	ua := utf16.Encode([]rune(a))
 	ub := utf16.Encode([]rune(b))
+	return compareUTF16Units(ua, ub)
+}
+
+func compareUTF16Units(ua, ub []uint16) int {
 	minLen := len(ua)
 	if len(ub) < minLen {
 		minLen = len(ub)
@@ -211,4 +236,93 @@ func compareUTF16(a, b string) int {
 		return 1
 	}
 	return 0
+}
+
+type serializeValidationState struct {
+	values int
+}
+
+func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState) error {
+	state.values++
+	if state.values > jcstoken.DefaultMaxValues {
+		return fmt.Errorf("jcs: value count exceeds maximum %d", jcstoken.DefaultMaxValues)
+	}
+	if depth > jcstoken.DefaultMaxDepth {
+		return fmt.Errorf("jcs: value nesting depth exceeds maximum %d", jcstoken.DefaultMaxDepth)
+	}
+
+	switch v.Kind {
+	case jcstoken.KindNull:
+		return nil
+	case jcstoken.KindBool:
+		if v.Str != "true" && v.Str != "false" {
+			return fmt.Errorf("jcs: invalid boolean payload %q", v.Str)
+		}
+		return nil
+	case jcstoken.KindNumber:
+		if math.IsNaN(v.Num) || math.IsInf(v.Num, 0) {
+			return fmt.Errorf("jcs: number is not finite")
+		}
+		return nil
+	case jcstoken.KindString:
+		if err := validateString(v.Str); err != nil {
+			return err
+		}
+		return nil
+	case jcstoken.KindArray:
+		if len(v.Elems) > jcstoken.DefaultMaxArrayElements {
+			return fmt.Errorf("jcs: array element count exceeds maximum %d", jcstoken.DefaultMaxArrayElements)
+		}
+		for i := range v.Elems {
+			if err := validateValueTree(&v.Elems[i], depth+1, state); err != nil {
+				return err
+			}
+		}
+		return nil
+	case jcstoken.KindObject:
+		if len(v.Members) > jcstoken.DefaultMaxObjectMembers {
+			return fmt.Errorf("jcs: object member count exceeds maximum %d", jcstoken.DefaultMaxObjectMembers)
+		}
+		seen := make(map[string]struct{}, len(v.Members))
+		for i := range v.Members {
+			if err := validateString(v.Members[i].Key); err != nil {
+				return fmt.Errorf("jcs: invalid object key: %w", err)
+			}
+			if _, ok := seen[v.Members[i].Key]; ok {
+				return fmt.Errorf("jcs: duplicate object key %q", v.Members[i].Key)
+			}
+			seen[v.Members[i].Key] = struct{}{}
+			if err := validateValueTree(&v.Members[i].Value, depth+1, state); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("jcs: unknown value kind %d", v.Kind)
+	}
+}
+
+func validateString(s string) error {
+	if !utf8.ValidString(s) {
+		return fmt.Errorf("jcs: string is not valid UTF-8")
+	}
+	if len(s) > jcstoken.DefaultMaxStringBytes {
+		return fmt.Errorf("jcs: string length exceeds maximum %d bytes", jcstoken.DefaultMaxStringBytes)
+	}
+	for _, r := range s {
+		if isNoncharacter(r) {
+			return fmt.Errorf("jcs: string contains noncharacter U+%04X", r)
+		}
+		if r >= 0xD800 && r <= 0xDFFF {
+			return fmt.Errorf("jcs: string contains surrogate code point U+%04X", r)
+		}
+	}
+	return nil
+}
+
+func isNoncharacter(r rune) bool {
+	if r >= 0xFDD0 && r <= 0xFDEF {
+		return true
+	}
+	return r <= 0x10FFFF && (r&0xFFFE == 0xFFFE)
 }

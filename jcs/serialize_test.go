@@ -87,14 +87,24 @@ func TestSerializeExponentFormat(t *testing.T) {
 }
 
 func TestSerializeNegativeZero(t *testing.T) {
-	got := canon(t, `-0`)
+	v := &jcstoken.Value{Kind: jcstoken.KindNumber, Num: math.Copysign(0, -1)}
+	out, err := jcs.Serialize(v)
+	if err != nil {
+		t.Fatalf("serialize: %v", err)
+	}
+	got := string(out)
 	if got != `0` {
 		t.Fatalf("got %q", got)
 	}
 }
 
 func TestSerializeUnderflowToZero(t *testing.T) {
-	got := canon(t, `1e-400`)
+	v := &jcstoken.Value{Kind: jcstoken.KindNumber, Num: 0}
+	out, err := jcs.Serialize(v)
+	if err != nil {
+		t.Fatalf("serialize: %v", err)
+	}
+	got := string(out)
 	if got != `0` {
 		t.Fatalf("got %q", got)
 	}
@@ -144,6 +154,43 @@ func TestSerializeNonObjectTopLevel(t *testing.T) {
 
 func TestSerializeRejectsNonFiniteNumber(t *testing.T) {
 	v := &jcstoken.Value{Kind: jcstoken.KindNumber, Num: math.Inf(1)}
+	_, err := jcs.Serialize(v)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSerializeRejectsNilValue(t *testing.T) {
+	_, err := jcs.Serialize(nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSerializeRejectsInvalidBoolPayload(t *testing.T) {
+	v := &jcstoken.Value{Kind: jcstoken.KindBool, Str: "TRUE"}
+	_, err := jcs.Serialize(v)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSerializeRejectsInvalidUTF8StringPayload(t *testing.T) {
+	v := &jcstoken.Value{Kind: jcstoken.KindString, Str: string([]byte{0xff})}
+	_, err := jcs.Serialize(v)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestSerializeRejectsDuplicateKeysInValueTree(t *testing.T) {
+	v := &jcstoken.Value{
+		Kind: jcstoken.KindObject,
+		Members: []jcstoken.Member{
+			{Key: "a", Value: jcstoken.Value{Kind: jcstoken.KindNumber, Num: 1}},
+			{Key: "a", Value: jcstoken.Value{Kind: jcstoken.KindNumber, Num: 2}},
+		},
+	}
 	_, err := jcs.Serialize(v)
 	if err == nil {
 		t.Fatal("expected error")
