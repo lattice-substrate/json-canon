@@ -55,4 +55,5 @@ Behavioral changes should update:
 - `REQ_ENFORCEMENT_MATRIX.md`
 - `standards/CITATION_INDEX.md` (for normative requirement changes)
 - `abi_manifest.json` (for CLI behavior changes)
+- `docs/adr/` (for compatibility-impacting architectural decisions)
 - tests and conformance checks for each affected requirement

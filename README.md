@@ -63,6 +63,15 @@ Requirement registries are split for audit clarity:
 - `REQ_REGISTRY_NORMATIVE.md` (RFC/ECMA obligations)
 - `REQ_REGISTRY_POLICY.md` (profile/ABI/process policy)
 
+## Documentation
+
+Official engineering docs are indexed in `docs/README.md`.
+Key references:
+- `docs/TRACEABILITY_MODEL.md`
+- `docs/VECTOR_FORMAT.md`
+- `docs/ALGORITHMIC_INVARIANTS.md`
+- `docs/adr/` (architectural decisions)
+
 ## Normative References
 
 | Spec | Scope |

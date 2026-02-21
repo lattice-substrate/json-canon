@@ -58,10 +58,12 @@ Supported operating environment: Linux only.
 
 ## Decision Records
 
-Decisions with compatibility impact are recorded in the `CHANGELOG.md` under the
-relevant release section. The rationale for significant architectural decisions
-is captured in:
+Decisions with compatibility impact are recorded in:
 
+- `CHANGELOG.md` under the relevant release section
+- `docs/adr/` (authoritative architectural decision records)
+
+Rationale details for specific domains are captured in:
 - `FAILURE_TAXONOMY.md` (error classification rationale)
 - `BOUNDS.md` (resource limit rationale)
 - `standards/CITATION_INDEX.md` (standards interpretation decisions)

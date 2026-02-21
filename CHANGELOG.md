@@ -17,6 +17,11 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Conformance vector corpus expanded from 4 to 73 vectors across 4 categorized files.
 - Traceability gate tests: registry/matrix parity, impl/test symbol existence, ID format validation, vector schema validation, ABI manifest validation, citation index coverage.
 - Build provenance attestation in release workflow (SLSA via `actions/attest-build-provenance`).
+- Official engineering documentation index and specs under `docs/`:
+  - `docs/TRACEABILITY_MODEL.md`
+  - `docs/VECTOR_FORMAT.md`
+  - `docs/ALGORITHMIC_INVARIANTS.md`
+- ADR framework and accepted foundational decisions under `docs/adr/`.
 
 ### Changed
 - File-based oversized input now preserves `BOUND_EXCEEDED` classification, matching stdin behavior.
