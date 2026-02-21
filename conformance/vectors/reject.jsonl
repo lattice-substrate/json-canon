@@ -1,0 +1,21 @@
+{"id":"VEC-REJ-0001","mode":"canonicalize","input":"-0","want_stderr_contains":"NUMBER_NEGZERO","want_exit":2}
+{"id":"VEC-REJ-0002","mode":"canonicalize","input":"-0.0","want_stderr_contains":"NUMBER_NEGZERO","want_exit":2}
+{"id":"VEC-REJ-0003","mode":"canonicalize","input":"-0e0","want_stderr_contains":"NUMBER_NEGZERO","want_exit":2}
+{"id":"VEC-REJ-0004","mode":"canonicalize","input":"01","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0005","mode":"canonicalize","input":"[1,]","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0006","mode":"canonicalize","input":"{\"a\":1,}","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0007","mode":"canonicalize","input":"","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0008","mode":"canonicalize","input":"   ","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0009","mode":"canonicalize","input":"1 2","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0010","mode":"canonicalize","input":"tru","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0011","mode":"canonicalize","input":"True","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0012","mode":"canonicalize","input":"FALSE","want_stderr_contains":"INVALID_GRAMMAR","want_exit":2}
+{"id":"VEC-REJ-0013","mode":"canonicalize","input":"\"\\uD800\"","want_stderr_contains":"LONE_SURROGATE","want_exit":2}
+{"id":"VEC-REJ-0014","mode":"canonicalize","input":"\"\\uDC00\"","want_stderr_contains":"LONE_SURROGATE","want_exit":2}
+{"id":"VEC-REJ-0015","mode":"canonicalize","input":"\"\\uD800\\u0041\"","want_stderr_contains":"LONE_SURROGATE","want_exit":2}
+{"id":"VEC-REJ-0016","mode":"canonicalize","input":"\"\\uFDD0\"","want_stderr_contains":"NONCHARACTER","want_exit":2}
+{"id":"VEC-REJ-0017","mode":"canonicalize","input":"\"\\uFFFE\"","want_stderr_contains":"NONCHARACTER","want_exit":2}
+{"id":"VEC-REJ-0018","mode":"canonicalize","input":"\"\\uFFFF\"","want_stderr_contains":"NONCHARACTER","want_exit":2}
+{"id":"VEC-REJ-0019","mode":"canonicalize","input":"{\"a\":1,\"a\":2}","want_stderr_contains":"DUPLICATE_KEY","want_exit":2}
+{"id":"VEC-REJ-0020","mode":"canonicalize","input":"1e999","want_stderr_contains":"NUMBER_OVERFLOW","want_exit":2}
+{"id":"VEC-REJ-0021","mode":"canonicalize","input":"1e-400","want_stderr_contains":"NUMBER_UNDERFLOW","want_exit":2}

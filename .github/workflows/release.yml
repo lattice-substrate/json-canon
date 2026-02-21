@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build:
@@ -17,10 +19,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.23.x'
+          go-version: '1.24.x'
       - name: Build binary
         shell: bash
         run: |
@@ -35,7 +37,7 @@ jobs:
           cp NOTICE dist/
           cp README.md dist/
           cp CHANGELOG.md dist/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: jcs-canon-${{ runner.os }}
           path: dist/*
@@ -45,7 +47,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
       - name: Create SHA256SUMS
@@ -53,20 +55,38 @@ jobs:
         run: |
           set -euo pipefail
           find dist -type f \( -name 'jcs-canon' -o -name 'jcs-canon.exe' \) -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
-      - uses: actions/upload-artifact@v4
+          cat dist/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: checksums
           path: dist/SHA256SUMS
 
+  attest:
+    name: Attest Build Provenance
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        artifact: [jcs-canon-Linux, jcs-canon-macOS, jcs-canon-Windows]
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+      - name: Attest binary
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+        with:
+          subject-path: dist/jcs-canon*
+
   publish:
     name: Publish GitHub Release
-    needs: checksums
+    needs: [checksums, attest]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           files: release/**/*
           generate_release_notes: true

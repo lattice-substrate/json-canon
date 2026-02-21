@@ -1,0 +1,69 @@
+{
+  "abi_version": "1.0.0",
+  "tool": "jcs-canon",
+  "description": "Machine-readable ABI contract for jcs-canon CLI",
+  "commands": {
+    "canonicalize": {
+      "stable": true,
+      "synopsis": "jcs-canon canonicalize [--quiet] [file|-]",
+      "description": "Parse JSON, emit canonical RFC 8785 bytes to stdout.",
+      "flags": {
+        "--quiet": {"short": "-q", "stable": true, "description": "Accepted for command symmetry; canonicalize is silent on success."},
+        "--help": {"short": "-h", "stable": true, "description": "Display command help to stdout and exit 0."}
+      },
+      "input": "stdin (default or explicit '-') or file path",
+      "stdout": "Canonical JSON bytes (on success)",
+      "stderr": "Error diagnostics (on failure)",
+      "exit_codes": [0, 2, 10]
+    },
+    "verify": {
+      "stable": true,
+      "synopsis": "jcs-canon verify [--quiet] [file|-]",
+      "description": "Parse JSON, canonicalize, compare bytes to verify canonical form.",
+      "flags": {
+        "--quiet": {"short": "-q", "stable": true, "description": "Suppress 'ok' success message on stderr."},
+        "--help": {"short": "-h", "stable": true, "description": "Display command help to stdout and exit 0."}
+      },
+      "input": "stdin (default or explicit '-') or file path",
+      "stdout": "Empty (verify never writes to stdout)",
+      "stderr": "'ok\\n' on success (unless --quiet), error diagnostics on failure",
+      "exit_codes": [0, 2, 10]
+    }
+  },
+  "global_flags": {
+    "--help": {"short": "-h", "stable": true, "description": "Display global help to stdout and exit 0."},
+    "--version": {"stable": true, "description": "Display version to stdout and exit 0."}
+  },
+  "exit_codes": {
+    "0": {"class": "SUCCESS", "description": "Operation completed successfully."},
+    "2": {"class": "INPUT_REJECTION", "description": "Input rejected: parse error, profile violation, non-canonical form, or CLI usage error."},
+    "10": {"class": "INTERNAL_ERROR", "description": "Internal I/O failure or unexpected error."}
+  },
+  "failure_classes": [
+    {"name": "INVALID_UTF8", "exit_code": 2},
+    {"name": "INVALID_GRAMMAR", "exit_code": 2},
+    {"name": "DUPLICATE_KEY", "exit_code": 2},
+    {"name": "LONE_SURROGATE", "exit_code": 2},
+    {"name": "NONCHARACTER", "exit_code": 2},
+    {"name": "NUMBER_OVERFLOW", "exit_code": 2},
+    {"name": "NUMBER_NEGZERO", "exit_code": 2},
+    {"name": "NUMBER_UNDERFLOW", "exit_code": 2},
+    {"name": "BOUND_EXCEEDED", "exit_code": 2},
+    {"name": "NOT_CANONICAL", "exit_code": 2},
+    {"name": "CLI_USAGE", "exit_code": 2},
+    {"name": "INTERNAL_IO", "exit_code": 10},
+    {"name": "INTERNAL_ERROR", "exit_code": 10}
+  ],
+  "stream_policy": {
+    "help_output": "stdout (all --help invocations, both global and subcommand)",
+    "version_output": "stdout",
+    "error_output": "stderr",
+    "canonical_data": "stdout (canonicalize command only)",
+    "verify_ok": "stderr (verify command, suppressible with --quiet)"
+  },
+  "compatibility": {
+    "policy": "Strict SemVer. Any change to items marked 'stable: true' requires major version bump.",
+    "stderr_wording": "Non-stable. Diagnostic message text may change in minor/patch releases. Failure class names in stderr are stable.",
+    "exit_code_mapping": "Stable. Failure class → exit code mapping is frozen."
+  }
+}

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -272,7 +273,12 @@ func validateRequirementCoverage(t *testing.T, reqs []string, checks map[string]
 			t.Fatalf("requirement %s has no conformance check", id)
 		}
 	}
+	sortedCheckIDs := make([]string, 0, len(checks))
 	for id := range checks {
+		sortedCheckIDs = append(sortedCheckIDs, id)
+	}
+	sort.Strings(sortedCheckIDs)
+	for _, id := range sortedCheckIDs {
 		if _, ok := seen[id]; !ok {
 			t.Fatalf("check %s exists but is not listed in split registries", id)
 		}
@@ -919,25 +925,28 @@ func checkStressGoldenOracle(t *testing.T, h *harness) {
 }
 
 func checkECMABoundaryConstants(t *testing.T, _ *harness) {
-	cases := map[uint64]string{
-		0x0000000000000000: "0",
-		0x8000000000000000: "0",
-		0x0000000000000001: "5e-324",
-		0x7fefffffffffffff: "1.7976931348623157e+308",
-		0x3eb0c6f7a0b5ed8d: "0.000001",
-		0x3eb0c6f7a0b5ed8c: "9.999999999999997e-7",
-		0x3eb0c6f7a0b5ed8e: "0.0000010000000000000002",
-		0x444b1ae4d6e2ef50: "1e+21",
-		0x444b1ae4d6e2ef4f: "999999999999999900000",
-		0x444b1ae4d6e2ef51: "1.0000000000000001e+21",
+	cases := []struct {
+		bits uint64
+		want string
+	}{
+		{0x0000000000000000, "0"},
+		{0x8000000000000000, "0"},
+		{0x0000000000000001, "5e-324"},
+		{0x7fefffffffffffff, "1.7976931348623157e+308"},
+		{0x3eb0c6f7a0b5ed8d, "0.000001"},
+		{0x3eb0c6f7a0b5ed8c, "9.999999999999997e-7"},
+		{0x3eb0c6f7a0b5ed8e, "0.0000010000000000000002"},
+		{0x444b1ae4d6e2ef50, "1e+21"},
+		{0x444b1ae4d6e2ef4f, "999999999999999900000"},
+		{0x444b1ae4d6e2ef51, "1.0000000000000001e+21"},
 	}
-	for bits, want := range cases {
-		got, err := jcsfloat.FormatDouble(math.Float64frombits(bits))
+	for _, tc := range cases {
+		got, err := jcsfloat.FormatDouble(math.Float64frombits(tc.bits))
 		if err != nil {
-			t.Fatalf("format bits=%016x: %v", bits, err)
+			t.Fatalf("format bits=%016x: %v", tc.bits, err)
 		}
-		if got != want {
-			t.Fatalf("bits=%016x got=%q want=%q", bits, got, want)
+		if got != tc.want {
+			t.Fatalf("bits=%016x got=%q want=%q", tc.bits, got, tc.want)
 		}
 	}
 }
@@ -1106,13 +1115,32 @@ func checkHelpExitsZero(t *testing.T, h *harness) {
 	if res.exitCode != 0 {
 		t.Fatalf("expected exit 0 for top-level --help, got %d", res.exitCode)
 	}
+	if !strings.Contains(res.stdout, "usage: jcs-canon") {
+		t.Fatalf("expected help on stdout, got stdout=%q", res.stdout)
+	}
+	if res.stderr != "" {
+		t.Fatalf("expected empty stderr for top-level --help, got stderr=%q", res.stderr)
+	}
+	// Frozen stream policy: subcommand --help writes to stdout.
 	res = runCLI(t, h, []string{"canonicalize", "--help"}, nil)
 	if res.exitCode != 0 {
-		t.Fatalf("expected exit 0 for --help, got %d", res.exitCode)
+		t.Fatalf("expected exit 0 for canonicalize --help, got %d", res.exitCode)
+	}
+	if !strings.Contains(res.stdout, "usage: jcs-canon canonicalize") {
+		t.Fatalf("expected help on stdout for canonicalize --help, got stdout=%q", res.stdout)
+	}
+	if res.stderr != "" {
+		t.Fatalf("expected empty stderr for canonicalize --help, got stderr=%q", res.stderr)
 	}
 	res = runCLI(t, h, []string{"verify", "--help"}, nil)
 	if res.exitCode != 0 {
-		t.Fatalf("expected exit 0 for --help, got %d", res.exitCode)
+		t.Fatalf("expected exit 0 for verify --help, got %d", res.exitCode)
+	}
+	if !strings.Contains(res.stdout, "usage: jcs-canon verify") {
+		t.Fatalf("expected help on stdout for verify --help, got stdout=%q", res.stdout)
+	}
+	if res.stderr != "" {
+		t.Fatalf("expected empty stderr for verify --help, got stderr=%q", res.stderr)
 	}
 }
 
@@ -1354,6 +1382,513 @@ func isMapInitializer(expr ast.Expr) bool {
 }
 
 // --- Helpers ---
+
+// ==================== TRACEABILITY GATES ====================
+
+// TestMatrixRegistryParity verifies that every requirement ID in the split
+// registries appears in the enforcement matrix, and vice versa.
+func TestMatrixRegistryParity(t *testing.T) {
+	h := testHarness(t)
+
+	regIDs := loadRequirementIDs(
+		t,
+		filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"),
+		filepath.Join(h.root, "REQ_REGISTRY_POLICY.md"),
+	)
+	matrixIDs := loadMatrixIDs(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+
+	regSet := make(map[string]struct{}, len(regIDs))
+	for _, id := range regIDs {
+		regSet[id] = struct{}{}
+	}
+
+	// Every registry ID must appear in matrix.
+	for _, id := range regIDs {
+		if _, ok := matrixIDs[id]; !ok {
+			t.Errorf("registry ID %s missing from enforcement matrix", id)
+		}
+	}
+
+	// Every matrix ID must appear in a registry.
+	sortedMatIDs := make([]string, 0, len(matrixIDs))
+	for id := range matrixIDs {
+		sortedMatIDs = append(sortedMatIDs, id)
+	}
+	sort.Strings(sortedMatIDs)
+	for _, id := range sortedMatIDs {
+		if _, ok := regSet[id]; !ok {
+			t.Errorf("matrix ID %s not found in any registry", id)
+		}
+	}
+}
+
+// TestMatrixImplSymbolsExist verifies that every impl_file+impl_symbol
+// referenced in the enforcement matrix exists in the source tree.
+func TestMatrixImplSymbolsExist(t *testing.T) {
+	h := testHarness(t)
+	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+
+	symbolsCache := make(map[string]map[string]struct{})
+	lineCountCache := make(map[string]int)
+	checked := 0
+	for _, row := range rows {
+		if row.implFile == "" || row.implSymbol == "" {
+			continue
+		}
+		path := filepath.Join(h.root, row.implFile)
+
+		symbols, ok := symbolsCache[path]
+		if !ok {
+			var err error
+			symbols, lineCountCache[path], err = loadGoTopLevelSymbols(path)
+			if err != nil {
+				t.Errorf("%s: impl_file %q not parseable: %v", row.reqID, row.implFile, err)
+				continue
+			}
+			symbolsCache[path] = symbols
+		}
+
+		if _, ok := symbols[row.implSymbol]; !ok {
+			t.Errorf("%s: impl_symbol %q not found in %s", row.reqID, row.implSymbol, row.implFile)
+		}
+
+		if row.implLine != "" {
+			lineNo, err := strconv.Atoi(row.implLine)
+			if err != nil || lineNo < 1 {
+				t.Errorf("%s: invalid impl_line %q in matrix", row.reqID, row.implLine)
+			} else if maxLine := lineCountCache[path]; lineNo > maxLine {
+				t.Errorf("%s: impl_line %d out of range for %s (max %d)", row.reqID, lineNo, row.implFile, maxLine)
+			}
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no matrix impl symbols checked")
+	}
+	t.Logf("checked %d impl symbol references", checked)
+}
+
+// TestMatrixTestSymbolsExist verifies that every test_file+test_function
+// referenced in the enforcement matrix exists in the source tree.
+func TestMatrixTestSymbolsExist(t *testing.T) {
+	h := testHarness(t)
+	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+
+	funcsCache := make(map[string]map[string]struct{})
+	checked := 0
+	for _, row := range rows {
+		if row.testFile == "" || row.testFunc == "" {
+			continue
+		}
+		path := filepath.Join(h.root, row.testFile)
+
+		funcNames, ok := funcsCache[path]
+		if !ok {
+			var err error
+			funcNames, err = loadGoFunctionNames(path)
+			if err != nil {
+				t.Errorf("%s: test_file %q not parseable: %v", row.reqID, row.testFile, err)
+				continue
+			}
+			funcsCache[path] = funcNames
+		}
+		// Handle conformance subtest names like TestConformanceRequirements/ID
+		baseFunc := row.testFunc
+		if idx := strings.IndexByte(baseFunc, '/'); idx >= 0 {
+			baseFunc = baseFunc[:idx]
+		}
+		if _, ok := funcNames[baseFunc]; !ok {
+			t.Errorf("%s: test_function %q not found in %s", row.reqID, baseFunc, row.testFile)
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Fatal("no matrix test symbols checked")
+	}
+	t.Logf("checked %d test symbol references", checked)
+}
+
+// TestRegistryIDFormat verifies all requirement IDs conform to the
+// DOMAIN-NAME-NNN pattern.
+func TestRegistryIDFormat(t *testing.T) {
+	h := testHarness(t)
+	ids := loadRequirementIDs(
+		t,
+		filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"),
+		filepath.Join(h.root, "REQ_REGISTRY_POLICY.md"),
+	)
+
+	re := regexp.MustCompile(`^[A-Z]+-[A-Z0-9]+-[0-9]+$`)
+	for _, id := range ids {
+		if !re.MatchString(id) {
+			t.Errorf("malformed requirement ID: %q", id)
+		}
+	}
+	t.Logf("validated %d requirement ID formats", len(ids))
+}
+
+// TestVectorSchemaValid verifies all JSONL vector files conform to the
+// expected schema: required fields id, mode/args, want_exit.
+func TestVectorSchemaValid(t *testing.T) {
+	h := testHarness(t)
+	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob vectors: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("no vector files found")
+	}
+
+	seenIDs := make(map[string]string) // id → file
+	totalVectors := 0
+
+	for _, f := range files {
+		data, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		lines := strings.Split(string(data), "\n")
+		for lineNo, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+
+			var raw map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(line), &raw); err != nil {
+				t.Errorf("%s:%d invalid JSON: %v", filepath.Base(f), lineNo+1, err)
+				continue
+			}
+
+			// Required: id
+			if _, ok := raw["id"]; !ok {
+				t.Errorf("%s:%d missing required field 'id'", filepath.Base(f), lineNo+1)
+				continue
+			}
+			var id string
+			if err := json.Unmarshal(raw["id"], &id); err != nil {
+				t.Errorf("%s:%d 'id' is not a string: %v", filepath.Base(f), lineNo+1, err)
+				continue
+			}
+
+			// Unique ID across all files
+			if prev, dup := seenIDs[id]; dup {
+				t.Errorf("%s:%d duplicate vector ID %q (first in %s)", filepath.Base(f), lineNo+1, id, prev)
+			}
+			seenIDs[id] = filepath.Base(f)
+
+			// Required: mode or args
+			_, hasMode := raw["mode"]
+			_, hasArgs := raw["args"]
+			if !hasMode && !hasArgs {
+				t.Errorf("%s:%d id=%s requires 'mode' or 'args'", filepath.Base(f), lineNo+1, id)
+			}
+
+			// Required: want_exit
+			if _, ok := raw["want_exit"]; !ok {
+				t.Errorf("%s:%d id=%s missing required field 'want_exit'", filepath.Base(f), lineNo+1, id)
+			}
+
+			totalVectors++
+		}
+	}
+	if totalVectors == 0 {
+		t.Fatal("no vectors validated")
+	}
+	t.Logf("validated %d vectors across %d files, %d unique IDs", totalVectors, len(files), len(seenIDs))
+}
+
+// TestABIManifestValid verifies the ABI manifest is valid JSON and contains
+// expected top-level keys.
+func TestABIManifestValid(t *testing.T) {
+	h := testHarness(t)
+	path := filepath.Join(h.root, "abi_manifest.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read abi_manifest.json: %v", err)
+	}
+
+	var manifest map[string]json.RawMessage
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("abi_manifest.json is not valid JSON: %v", err)
+	}
+
+	required := []string{"abi_version", "tool", "commands", "exit_codes", "failure_classes", "stream_policy", "compatibility"}
+	for _, key := range required {
+		if _, ok := manifest[key]; !ok {
+			t.Errorf("abi_manifest.json missing required key %q", key)
+		}
+	}
+
+	// Validate failure_classes matches jcserr constants
+	var classes []struct {
+		Name     string `json:"name"`
+		ExitCode int    `json:"exit_code"`
+	}
+	if err := json.Unmarshal(manifest["failure_classes"], &classes); err != nil {
+		t.Fatalf("parse failure_classes: %v", err)
+	}
+
+	expectedClasses := map[string]int{
+		"INVALID_UTF8":     2,
+		"INVALID_GRAMMAR":  2,
+		"DUPLICATE_KEY":    2,
+		"LONE_SURROGATE":   2,
+		"NONCHARACTER":     2,
+		"NUMBER_OVERFLOW":  2,
+		"NUMBER_NEGZERO":   2,
+		"NUMBER_UNDERFLOW": 2,
+		"BOUND_EXCEEDED":   2,
+		"NOT_CANONICAL":    2,
+		"CLI_USAGE":        2,
+		"INTERNAL_IO":      10,
+		"INTERNAL_ERROR":   10,
+	}
+
+	for _, c := range classes {
+		expected, ok := expectedClasses[c.Name]
+		if !ok {
+			t.Errorf("unexpected failure class in manifest: %s", c.Name)
+			continue
+		}
+		if c.ExitCode != expected {
+			t.Errorf("failure class %s: exit_code=%d, want %d", c.Name, c.ExitCode, expected)
+		}
+		delete(expectedClasses, c.Name)
+	}
+	for name := range expectedClasses {
+		t.Errorf("missing failure class in manifest: %s", name)
+	}
+}
+
+// TestCitationIndexCoversNormativeRequirements verifies every normative
+// requirement ID appears in the standards citation index.
+func TestCitationIndexCoversNormativeRequirements(t *testing.T) {
+	h := testHarness(t)
+	normIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"))
+	citationPath := filepath.Join(h.root, "standards", "CITATION_INDEX.md")
+	entries := loadCitationIndexEntries(t, citationPath)
+
+	normSet := make(map[string]struct{}, len(normIDs))
+	for _, id := range normIDs {
+		normSet[id] = struct{}{}
+	}
+	for _, id := range normIDs {
+		entry, ok := entries[id]
+		if !ok {
+			t.Errorf("normative requirement %s missing from standards/CITATION_INDEX.md", id)
+			continue
+		}
+		if strings.TrimSpace(entry.source) == "" || strings.Trim(entry.source, "- ") == "" {
+			t.Errorf("normative requirement %s has empty source in citation index", id)
+		}
+		if strings.TrimSpace(entry.clause) == "" || strings.Trim(entry.clause, "- ") == "" {
+			t.Errorf("normative requirement %s has empty clause in citation index", id)
+		}
+	}
+	for id := range entries {
+		if _, ok := normSet[id]; !ok {
+			t.Errorf("citation index contains non-normative or unknown requirement ID %s", id)
+		}
+	}
+	t.Logf("verified %d normative requirement IDs in citation index with structured mappings", len(normIDs))
+}
+
+// --- Matrix parsing helpers ---
+
+type matrixRow struct {
+	reqID      string
+	domain     string
+	level      string
+	implFile   string
+	implSymbol string
+	implLine   string
+	testFile   string
+	testFunc   string
+	gate       string
+}
+
+type citationEntry struct {
+	source string
+	clause string
+}
+
+func loadMatrixIDs(t *testing.T, path string) map[string]struct{} {
+	t.Helper()
+	rows := loadMatrixRows(t, path)
+	ids := make(map[string]struct{}, len(rows))
+	for _, r := range rows {
+		ids[r.reqID] = struct{}{}
+	}
+	return ids
+}
+
+func loadMatrixRows(t *testing.T, path string) []matrixRow {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read matrix: %v", err)
+	}
+
+	// Extract CSV block between ```csv and ```
+	content := string(data)
+	csvStart := strings.Index(content, "```csv\n")
+	if csvStart < 0 {
+		t.Fatalf("no ```csv block in matrix file")
+	}
+	csvStart += len("```csv\n")
+	csvEnd := strings.Index(content[csvStart:], "```")
+	if csvEnd < 0 {
+		t.Fatalf("unterminated ```csv block in matrix file")
+	}
+	csvBlock := content[csvStart : csvStart+csvEnd]
+
+	var rows []matrixRow
+	for i, line := range strings.Split(csvBlock, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Skip header
+		if strings.HasPrefix(line, "requirement_id,") {
+			continue
+		}
+		parts := strings.SplitN(line, ",", 9)
+		if len(parts) < 9 {
+			t.Fatalf("matrix line %d: expected 9 CSV fields, got %d: %q", i+1, len(parts), line)
+		}
+		rows = append(rows, matrixRow{
+			reqID:      parts[0],
+			domain:     parts[1],
+			level:      parts[2],
+			implFile:   parts[3],
+			implSymbol: parts[4],
+			implLine:   parts[5],
+			testFile:   parts[6],
+			testFunc:   parts[7],
+			gate:       parts[8],
+		})
+		if parts[1] != "normative" && parts[1] != "policy" {
+			t.Fatalf("matrix line %d: invalid domain %q", i+1, parts[1])
+		}
+		if parts[2] != "L1" && parts[2] != "L3" {
+			t.Fatalf("matrix line %d: invalid level %q", i+1, parts[2])
+		}
+		if parts[8] != "TEST" && parts[8] != "CONFORMANCE" {
+			t.Fatalf("matrix line %d: invalid gate %q", i+1, parts[8])
+		}
+	}
+	if len(rows) == 0 {
+		t.Fatal("no matrix rows found")
+	}
+	return rows
+}
+
+func loadGoTopLevelSymbols(path string) (map[string]struct{}, int, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, data, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	symbols := make(map[string]struct{})
+	for _, decl := range f.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			symbols[d.Name.Name] = struct{}{}
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					symbols[s.Name.Name] = struct{}{}
+				case *ast.ValueSpec:
+					for _, name := range s.Names {
+						symbols[name.Name] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+
+	lineCount := 1 + strings.Count(string(data), "\n")
+	return symbols, lineCount, nil
+}
+
+func loadGoFunctionNames(path string) (map[string]struct{}, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, data, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	funcs := make(map[string]struct{})
+	for _, decl := range f.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			funcs[fn.Name.Name] = struct{}{}
+		}
+	}
+	return funcs, nil
+}
+
+func loadCitationIndexEntries(t *testing.T, path string) map[string]citationEntry {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read citation index: %v", err)
+	}
+
+	idPattern := regexp.MustCompile(`^[A-Z]+-[A-Z0-9]+-[0-9]+$`)
+	entries := make(map[string]citationEntry)
+	for lineNo, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "|") {
+			continue
+		}
+		cols := splitMarkdownTableLine(line)
+		if len(cols) < 3 {
+			continue
+		}
+
+		id := cols[0]
+		if !idPattern.MatchString(id) {
+			continue
+		}
+		if _, dup := entries[id]; dup {
+			t.Fatalf("citation index duplicate requirement ID %s at line %d", id, lineNo+1)
+		}
+		entries[id] = citationEntry{
+			source: cols[1],
+			clause: cols[2],
+		}
+	}
+	if len(entries) == 0 {
+		t.Fatal("no requirement mappings found in citation index")
+	}
+	return entries
+}
+
+func splitMarkdownTableLine(line string) []string {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.Trim(trimmed, "|")
+	raw := strings.Split(trimmed, "|")
+	for i := range raw {
+		raw[i] = strings.TrimSpace(raw[i])
+	}
+	return raw
+}
+
+// --- Float oracle helpers ---
 
 func verifyFloatOracle(t *testing.T, path string, expectedRows int, expectedSHA256 string) {
 	t.Helper()

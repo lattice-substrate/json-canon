@@ -1,4 +1,35 @@
-{"id":"VEC-0001","mode":"canonicalize","input":"{\"a\":1}","want_stdout":"{\"a\":1}","want_exit":0}
-{"id":"VEC-0002","mode":"verify","input":"{ \"a\" : 1 }","want_stderr_contains":"not canonical","want_exit":2}
-{"id":"VEC-OFFSET-0001","mode":"canonicalize","input":"\"\\uD800\"","want_stderr_contains":"at byte 1","want_exit":2}
-{"id":"VEC-OFFSET-0002","mode":"canonicalize","input":"\"\\uD800\\u0041\"","want_stderr_contains":"at byte 7","want_exit":2}
+{"id":"VEC-CANON-0001","mode":"canonicalize","input":"{\"a\":1}","want_stdout":"{\"a\":1}","want_exit":0}
+{"id":"VEC-CANON-0002","mode":"canonicalize","input":"{}","want_stdout":"{}","want_exit":0}
+{"id":"VEC-CANON-0003","mode":"canonicalize","input":"[]","want_stdout":"[]","want_exit":0}
+{"id":"VEC-CANON-0004","mode":"canonicalize","input":"42","want_stdout":"42","want_exit":0}
+{"id":"VEC-CANON-0005","mode":"canonicalize","input":"\"hello\"","want_stdout":"\"hello\"","want_exit":0}
+{"id":"VEC-CANON-0006","mode":"canonicalize","input":"true","want_stdout":"true","want_exit":0}
+{"id":"VEC-CANON-0007","mode":"canonicalize","input":"false","want_stdout":"false","want_exit":0}
+{"id":"VEC-CANON-0008","mode":"canonicalize","input":"null","want_stdout":"null","want_exit":0}
+{"id":"VEC-CANON-0009","mode":"canonicalize","input":"  { \"b\" : 2 , \"a\" : 1 }  ","want_stdout":"{\"a\":1,\"b\":2}","want_exit":0}
+{"id":"VEC-CANON-0010","mode":"canonicalize","input":"[3,1,2]","want_stdout":"[3,1,2]","want_exit":0}
+{"id":"VEC-CANON-0011","mode":"canonicalize","input":"{\"z\":1,\"a\":2}","want_stdout":"{\"a\":2,\"z\":1}","want_exit":0}
+{"id":"VEC-CANON-0012","mode":"canonicalize","input":"{\"a\":{\"c\":1,\"b\":2}}","want_stdout":"{\"a\":{\"b\":2,\"c\":1}}","want_exit":0}
+{"id":"VEC-CANON-0013","mode":"canonicalize","input":"[{\"b\":1,\"a\":2},{\"d\":3,\"c\":4}]","want_stdout":"[{\"a\":2,\"b\":1},{\"c\":4,\"d\":3}]","want_exit":0}
+{"id":"VEC-CANON-0014","mode":"canonicalize","input":"\"\\u0008\"","want_stdout":"\"\\b\"","want_exit":0}
+{"id":"VEC-CANON-0015","mode":"canonicalize","input":"\"\\u0009\"","want_stdout":"\"\\t\"","want_exit":0}
+{"id":"VEC-CANON-0016","mode":"canonicalize","input":"\"\\u000a\"","want_stdout":"\"\\n\"","want_exit":0}
+{"id":"VEC-CANON-0017","mode":"canonicalize","input":"\"\\u000c\"","want_stdout":"\"\\f\"","want_exit":0}
+{"id":"VEC-CANON-0018","mode":"canonicalize","input":"\"\\u000d\"","want_stdout":"\"\\r\"","want_exit":0}
+{"id":"VEC-CANON-0019","mode":"canonicalize","input":"\"\\u0000\"","want_stdout":"\"\\u0000\"","want_exit":0}
+{"id":"VEC-CANON-0020","mode":"canonicalize","input":"\"\\u001f\"","want_stdout":"\"\\u001f\"","want_exit":0}
+{"id":"VEC-CANON-0021","mode":"canonicalize","input":"\"a\\/b\"","want_stdout":"\"a/b\"","want_exit":0}
+{"id":"VEC-CANON-0022","mode":"canonicalize","input":"0","want_stdout":"0","want_exit":0}
+{"id":"VEC-CANON-0023","mode":"canonicalize","input":"1e2","want_stdout":"100","want_exit":0}
+{"id":"VEC-CANON-0024","mode":"canonicalize","input":"1.0","want_stdout":"1","want_exit":0}
+{"id":"VEC-CANON-0025","mode":"canonicalize","input":"1.00000","want_stdout":"1","want_exit":0}
+{"id":"VEC-CANON-0026","mode":"canonicalize","input":"0.5","want_stdout":"0.5","want_exit":0}
+{"id":"VEC-CANON-0027","mode":"canonicalize","input":"1e20","want_stdout":"100000000000000000000","want_exit":0}
+{"id":"VEC-CANON-0028","mode":"canonicalize","input":"1e21","want_stdout":"1e+21","want_exit":0}
+{"id":"VEC-CANON-0029","mode":"canonicalize","input":"1e-7","want_stdout":"1e-7","want_exit":0}
+{"id":"VEC-CANON-0030","mode":"canonicalize","input":"0.000001","want_stdout":"0.000001","want_exit":0}
+{"id":"VEC-CANON-0031","mode":"canonicalize","input":"9.999999999999997e-7","want_stdout":"9.999999999999997e-7","want_exit":0}
+{"id":"VEC-CANON-0032","mode":"canonicalize","input":"-1","want_stdout":"-1","want_exit":0}
+{"id":"VEC-CANON-0033","mode":"canonicalize","input":"5e-324","want_stdout":"5e-324","want_exit":0}
+{"id":"VEC-CANON-0034","mode":"canonicalize","input":"1.7976931348623157e+308","want_stdout":"1.7976931348623157e+308","want_exit":0}
+{"id":"VEC-CANON-0035","mode":"canonicalize","input":"\"\\uD834\\uDD1E\"","want_stdout":"\"\ud834\udd1e\"","want_exit":0}
