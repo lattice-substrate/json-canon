@@ -15,6 +15,7 @@
 
 ```bash
 go vet ./...
+go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --config=golangci.yml
 go test ./... -count=1 -timeout=20m
 go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
@@ -26,14 +27,7 @@ Single-command Go harness (includes offline evidence gate):
 go run ./cmd/jcs-gate
 ```
 
-## Lint Readiness
-
-When ready to begin lint remediation, run lint explicitly against repository
-rules:
-
-```bash
-golangci-lint run --config golangci.yml
-```
+Lint is a required gate and must pass before merge.
 
 ## Tooling Policy (Infrastructure/ABI)
 

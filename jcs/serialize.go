@@ -237,7 +237,7 @@ type serializeValidationState struct {
 	values int
 }
 
-//nolint:gocyclo,cyclop // Spec-bound validation logic is intentionally explicit for requirement traceability.
+//nolint:gocyclo,cyclop,gocognit // REQ:IJSON-DUP-001 spec-bound validation logic is intentionally explicit for requirement traceability.
 func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState) error {
 	state.values++
 	if state.values > jcstoken.DefaultMaxValues {

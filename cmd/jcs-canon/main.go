@@ -27,7 +27,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-//nolint:cyclop // Top-level CLI dispatch is explicit to preserve stable ABI behavior.
+//nolint:cyclop // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		// CLI-EXIT-001
@@ -178,11 +178,11 @@ func parseCanonicalFromInput(positional []string, stdin io.Reader) ([]byte, []by
 	}
 	parsed, err := jcstoken.Parse(input)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("parse input: %w", err)
 	}
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("serialize input: %w", err)
 	}
 	return input, canonical, nil
 }

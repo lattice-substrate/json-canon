@@ -66,6 +66,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Offline release gating now requires both `x86_64` and `arm64` evidence validation paths in release workflow and documentation.
 - Offline release architecture policy now explicitly supports `x86_64` and `arm64` (including evidence schema enum and architecture contract checks).
 - Added `docs/BOOK.md` as a book-style operator/developer guide for architecture, usage, offline replay, and troubleshooting.
+- Lint governance hardened to fail-closed: PR/main CI lint gate restored with pinned golangci-lint config/version, local mandatory gates now require the same pinned lint invocation, strict `nolint` rationale enforcement added, and policy traceability expanded with `LINT-*` requirements.
 
 ### Fixed
 - Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.

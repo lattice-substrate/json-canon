@@ -76,10 +76,10 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 		return err
 	}
 	if _, loadErr := replay.LoadMatrix(matrixPath); loadErr != nil {
-		return loadErr
+		return fmt.Errorf("load matrix: %w", loadErr)
 	}
 	if _, loadErr := replay.LoadProfile(profilePath); loadErr != nil {
-		return loadErr
+		return fmt.Errorf("load profile: %w", loadErr)
 	}
 
 	workerPath, cleanupWorker, err := resolveWorkerPath(flags)
@@ -98,7 +98,7 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 		Version:     "bundle.v1",
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("create bundle: %w", err)
 	}
 	return writePrepareSummary(stdout, bundlePath, manifest)
 }
@@ -137,7 +137,7 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	}
 	matrix, profile, manifest, bundleSHA, matrixSHA, profileSHA, err := loadRunInputs(matrixPath, profilePath, bundlePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load run inputs: %w", err)
 	}
 	timeout, err := parseTimeout(flags)
 	if err != nil {
@@ -156,10 +156,10 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 		Orchestrator:        "jcs-offline-replay",
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("run replay matrix: %w", err)
 	}
 	if err := replay.WriteEvidence(evidencePath, evidence); err != nil {
-		return err
+		return fmt.Errorf("write evidence: %w", err)
 	}
 	return writeRunSummary(stdout, evidencePath, evidence)
 }
@@ -194,15 +194,15 @@ func writeRunSummary(stdout io.Writer, evidencePath string, evidence *replay.Evi
 func loadRunInputs(matrixPath, profilePath, bundlePath string) (*replay.Matrix, *replay.Profile, *replay.BundleManifest, string, string, string, error) {
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
-		return nil, nil, nil, "", "", "", err
+		return nil, nil, nil, "", "", "", fmt.Errorf("load matrix: %w", err)
 	}
 	profile, err := replay.LoadProfile(profilePath)
 	if err != nil {
-		return nil, nil, nil, "", "", "", err
+		return nil, nil, nil, "", "", "", fmt.Errorf("load profile: %w", err)
 	}
 	manifest, bundleSHA, err := replay.VerifyBundle(bundlePath)
 	if err != nil {
-		return nil, nil, nil, "", "", "", err
+		return nil, nil, nil, "", "", "", fmt.Errorf("verify bundle: %w", err)
 	}
 	matrixSHA, err := fileSHA256(matrixPath)
 	if err != nil {
@@ -239,19 +239,19 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	bundlePath, controlBinaryPath := resolveVerifyPaths(flags, evidencePath)
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load matrix: %w", err)
 	}
 	profile, err := replay.LoadProfile(profilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load profile: %w", err)
 	}
 	evidence, err := replay.LoadEvidence(evidencePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load evidence: %w", err)
 	}
 	bundleSHA, controlBinarySHA, matrixSHA, profileSHA, err := loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load verification digests: %w", err)
 	}
 
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
@@ -261,7 +261,7 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		ExpectedProfileSHA256:       profileSHA,
 		ExpectedArchitecture:        matrix.Architecture,
 	}); err != nil {
-		return err
+		return fmt.Errorf("validate evidence bundle: %w", err)
 	}
 	return writeLine(stdout, "ok")
 }
@@ -292,11 +292,11 @@ func loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profileP
 	}
 	matrixSHA, err := fileSHA256(matrixPath)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", fmt.Errorf("resolve matrix sha256: %w", err)
 	}
 	profileSHA, err := fileSHA256(profilePath)
 	if err != nil {
-		return "", "", "", "", err
+		return "", "", "", "", fmt.Errorf("resolve profile sha256: %w", err)
 	}
 	return bundleSHA, controlBinarySHA, matrixSHA, profileSHA, nil
 }
@@ -308,7 +308,7 @@ func cmdReport(flags map[string]string, stdout io.Writer) error {
 	}
 	evidence, err := replay.LoadEvidence(evidencePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load evidence: %w", err)
 	}
 	if err := writeReportHeader(stdout, evidence); err != nil {
 		return err
@@ -357,7 +357,7 @@ func cmdInspectMatrix(flags map[string]string, stdout io.Writer) error {
 	}
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("load matrix: %w", err)
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
@@ -425,6 +425,7 @@ func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
 }
 
 func fileSHA256(path string) (string, error) {
+	// #nosec G304 -- offline verification intentionally reads user-specified artifact paths.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("read file %s: %w", path, err)

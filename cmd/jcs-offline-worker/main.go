@@ -229,6 +229,7 @@ func runVectors(binaryPath, root string, manifest *replay.BundleManifest, canoni
 	return totalCount, nil
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 replay worker reads validated bundle/vector file paths.
 func runVectorFile(binaryPath, root, rel string, canonicalAcc, verifyAcc, classAcc, exitAcc *digestAccumulator) (int, error) {
 	vectorPath := filepath.Join(root, filepath.FromSlash(rel))
 	fd, err := os.Open(vectorPath)
@@ -418,6 +419,7 @@ func parseKV(args []string) (map[string]string, error) {
 	return flags, nil
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 bundle extraction intentionally opens operator-provided bundle paths.
 func extractBundle(bundlePath, outDir string) (*replay.BundleManifest, error) {
 	f, err := os.Open(bundlePath)
 	if err != nil {
@@ -461,6 +463,7 @@ func extractBundle(bundlePath, outDir string) (*replay.BundleManifest, error) {
 	return &manifest, nil
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 tar extraction writes controlled archive members under bounded root.
 func extractTarFile(tr *tar.Reader, outDir string, hdr *tar.Header) error {
 	clean := path.Clean(hdr.Name)
 	if clean == "." || strings.HasPrefix(clean, "../") || strings.HasPrefix(clean, "/") {
@@ -565,6 +568,7 @@ func verifyVectorSetChecksum(manifest *replay.BundleManifest) error {
 	return nil
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 digest verification reads expected artifact paths from validated manifests.
 func fileSHA256(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -593,7 +597,7 @@ func writeErrorLine(w io.Writer, err error) {
 	}
 }
 
-//nolint:forbidigo // worker evidence intentionally records wall-clock observation timestamps.
+//nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 worker evidence intentionally records wall-clock observation timestamps.
 func wallClockNowUTC() time.Time {
 	return time.Now().UTC()
 }

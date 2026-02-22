@@ -55,7 +55,7 @@ type bundleEntry struct {
 
 // CreateBundle packages immutable replay inputs and their digests into a bundle.
 //
-//nolint:gocyclo,cyclop,funlen // Bundle assembly is intentionally explicit for deterministic artifact provenance.
+//nolint:gocyclo,cyclop,funlen,gosec // REQ:OFFLINE-EVIDENCE-001 bundle assembly is explicit; file paths are validated operator inputs.
 func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	if opts.OutputPath == "" {
 		return nil, fmt.Errorf("bundle output path is required")
@@ -149,7 +149,7 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 
 // ReadBundleManifest loads the embedded bundle manifest from a bundle archive.
 //
-//nolint:gocyclo,cyclop // Tar stream traversal stays explicit to keep audit and error context straightforward.
+//nolint:gocyclo,cyclop,gosec // REQ:OFFLINE-EVIDENCE-001 tar stream traversal stays explicit for audit/error attribution.
 func ReadBundleManifest(bundlePath string) (*BundleManifest, error) {
 	f, err := os.Open(bundlePath)
 	if err != nil {
@@ -197,6 +197,8 @@ func ReadBundleManifest(bundlePath string) (*BundleManifest, error) {
 }
 
 // VerifyBundle validates required manifest fields and returns the bundle digest.
+//
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 bundle verification reads operator-provided bundle artifacts.
 func VerifyBundle(bundlePath string) (*BundleManifest, string, error) {
 	manifest, err := ReadBundleManifest(bundlePath)
 	if err != nil {
@@ -221,6 +223,7 @@ func VerifyBundle(bundlePath string) (*BundleManifest, string, error) {
 	return manifest, bundleSHA, nil
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 bundle writer persists deterministic artifacts to configured output path.
 func writeBundleTarGz(path string, entries []bundleEntry) error {
 	out, err := os.Create(path)
 	if err != nil {
@@ -273,7 +276,7 @@ func sha256Hex(data []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-//nolint:forbidigo // bundle creation records an actual creation timestamp in manifest metadata.
+//nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 bundle creation records an actual creation timestamp in manifest metadata.
 func wallClockNowUTC() time.Time {
 	return time.Now().UTC()
 }

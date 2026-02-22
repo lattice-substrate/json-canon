@@ -3,6 +3,7 @@ package replay_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -34,9 +35,12 @@ func (fakeAdapter) RunReplay(_ context.Context, node replay.NodeSpec, _ string, 
 	}
 	b, err := json.Marshal(run)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal node run evidence: %w", err)
 	}
-	return os.WriteFile(evidencePath, b, 0o600)
+	if err := os.WriteFile(evidencePath, b, 0o600); err != nil {
+		return fmt.Errorf("write node run evidence: %w", err)
+	}
+	return nil
 }
 
 func TestRunMatrix(t *testing.T) {

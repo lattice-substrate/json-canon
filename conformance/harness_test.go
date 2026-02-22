@@ -13,6 +13,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"os/exec"
@@ -75,7 +76,6 @@ func TestConformanceRequirements(t *testing.T) {
 	validateRequirementCoverage(t, requirements, checks)
 
 	for _, id := range requirements {
-		id := id
 		t.Run(id, func(t *testing.T) {
 			checks[id](t, h)
 		})
@@ -83,6 +83,8 @@ func TestConformanceRequirements(t *testing.T) {
 }
 
 // TestConformanceVectors executes JSONL vectors under conformance/vectors.
+//
+//nolint:gocognit,gosec // REQ:CLI-CMD-001 vector harness intentionally executes binaries and opens repository vector files.
 func TestConformanceVectors(t *testing.T) {
 	h := testHarness(t)
 	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
@@ -264,6 +266,10 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"SUPPLY-PROV-001":      checkReleaseWorkflowVerificationArtifacts,
 		"GOV-DUR-001":          checkGovernanceDurabilityClausesPresent,
 		"TRACE-LINK-001":       checkBehaviorTestsLinkedToRequirements,
+		"LINT-CI-001":          checkCILintGateEnforced,
+		"LINT-GATE-001":        checkLocalMandatoryLintGate,
+		"LINT-CONFIG-001":      checkGolangCILintConfigStrict,
+		"LINT-NOLINT-001":      checkNolintDirectiveDiscipline,
 		"OFFLINE-MATRIX-001":   checkOfflineMatrixManifestPresent,
 		"OFFLINE-COLD-001":     checkOfflineProfileColdReplayPolicy,
 		"OFFLINE-EVIDENCE-001": checkOfflineEvidenceSchemaAndVerifyCLI,
@@ -305,6 +311,7 @@ func validateRequirementCoverage(t *testing.T, reqs []string, checks map[string]
 	}
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 traceability registry loader reads repository-controlled files.
 func loadRequirementIDs(t *testing.T, paths ...string) []string {
 	t.Helper()
 	re := regexp.MustCompile(`(?m)^\|\s*([A-Z]+-[A-Z0-9]+-[0-9]+)\s*\|`)
@@ -352,13 +359,14 @@ func repoRoot(t *testing.T) string {
 func buildConformanceBinary(root string) (string, error) {
 	binDir, err := os.MkdirTemp("", "jcs-canon-conformance-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("create conformance temp dir: %w", err)
 	}
 	bin := filepath.Join(binDir, "jcs-canon")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
+	// #nosec G204 -- controlled build invocation for local test binary.
 	cmd := exec.CommandContext(
 		ctx,
 		"go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", bin, "./cmd/jcs-canon",
@@ -375,6 +383,7 @@ func buildConformanceBinary(root string) (string, error) {
 	return bin, nil
 }
 
+//nolint:gosec // REQ:CLI-CMD-001 conformance harness executes the just-built local CLI binary.
 func runCLI(t *testing.T, h *harness, args []string, stdin []byte) cliResult {
 	t.Helper()
 
@@ -401,6 +410,7 @@ func runCLI(t *testing.T, h *harness, args []string, stdin []byte) cliResult {
 	return cliResult{exitCode: code, stdout: outBuf.String(), stderr: errBuf.String()}
 }
 
+//nolint:gosec // REQ:CLI-CMD-001 conformance harness executes the just-built local CLI binary.
 func runCLIToWriter(t *testing.T, h *harness, args []string, stdin []byte, stdout io.Writer) cliResult {
 	t.Helper()
 
@@ -1453,6 +1463,7 @@ func checkDeterministicStaticBuildCommand(t *testing.T, h *harness) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
 
+	// #nosec G204 -- controlled build invocation for deterministic release flags.
 	cmd := exec.CommandContext(
 		ctx,
 		"go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", out, "./cmd/jcs-canon",
@@ -1500,6 +1511,7 @@ func assertELFStatic(t *testing.T, path string) {
 	}
 }
 
+//nolint:gocognit // REQ:DET-NOSOURCE-001 nondeterminism checks keep explicit branch coverage for auditability.
 func checkNoNondeterminismSources(t *testing.T, h *harness) {
 	t.Helper()
 	// Verify no nondeterministic imports, no outbound/network subprocess imports,
@@ -1560,6 +1572,7 @@ func checkNoNondeterminismSources(t *testing.T, h *harness) {
 	}
 }
 
+//nolint:gocognit // REQ:DET-NOSOURCE-001 AST map-variable extraction keeps explicit cases for deterministic-policy checks.
 func collectMapVars(f *ast.File) map[string]struct{} {
 	mapVars := make(map[string]struct{})
 	ast.Inspect(f, func(n ast.Node) bool {
@@ -1654,6 +1667,8 @@ func TestMatrixRegistryParity(t *testing.T) {
 
 // TestMatrixImplSymbolsExist verifies that every impl_file+impl_symbol
 // referenced in the enforcement matrix exists in the source tree.
+//
+//nolint:gocognit // REQ:TRACE-LINK-001 matrix symbol validation is intentionally explicit for actionable diagnostics.
 func TestMatrixImplSymbolsExist(t *testing.T) {
 	h := testHarness(t)
 	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
@@ -1815,6 +1830,8 @@ func TestRegistryIDFormat(t *testing.T) {
 
 // TestVectorSchemaValid verifies all JSONL vector files conform to the
 // expected schema: required fields id, mode/args, want_exit.
+//
+//nolint:gocognit,gosec // REQ:CLI-CMD-001 vector schema validation reads repository fixture files by design.
 func TestVectorSchemaValid(t *testing.T) {
 	h := testHarness(t)
 	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
@@ -1887,6 +1904,8 @@ func TestVectorSchemaValid(t *testing.T) {
 
 // TestABIManifestValid verifies the ABI manifest is valid JSON and contains
 // expected top-level keys.
+//
+//nolint:gosec // REQ:ABI-PARITY-001 ABI validation reads repository contract files by path.
 func TestABIManifestValid(t *testing.T) {
 	h := testHarness(t)
 	path := filepath.Join(h.root, "abi_manifest.json")
@@ -2038,6 +2057,170 @@ func TestCIReproducibleBuildCheckPresent(t *testing.T) {
 	assertContains(t, ciWorkflow, "build twice and compare sha256", "ci reproducible build gate")
 	assertContains(t, ciWorkflow, "-buildid=", "ci deterministic build flags")
 	assertContains(t, ciWorkflow, "CGO_ENABLED=0 go build", "ci static build gate")
+}
+
+// TestCILintGateEnforced verifies CI includes a pinned and explicit lint gate.
+func TestCILintGateEnforced(t *testing.T) {
+	h := testHarness(t)
+	checkCILintGateEnforced(t, h)
+}
+
+func checkCILintGateEnforced(t *testing.T, h *harness) {
+	t.Helper()
+	ciWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "ci.yml"))
+	assertContains(t, ciWorkflow, "name: Lint", "ci lint gate presence")
+	assertContains(t, ciWorkflow, "golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9", "ci lint gate action pin")
+	assertContains(t, ciWorkflow, "version: v1.64.8", "ci lint gate version pin")
+	assertContains(t, ciWorkflow, "args: --config=golangci.yml", "ci lint gate deterministic config")
+	assertContains(t, ciWorkflow, "needs: [binary_hygiene, lint]", "ci lint gate dependency enforcement")
+}
+
+// TestLocalMandatoryLintGate verifies required local-gate docs/tools include lint.
+func TestLocalMandatoryLintGate(t *testing.T) {
+	h := testHarness(t)
+	checkLocalMandatoryLintGate(t, h)
+}
+
+func checkLocalMandatoryLintGate(t *testing.T, h *harness) {
+	t.Helper()
+	const lintCmd = "go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --config=golangci.yml"
+
+	agents := mustReadText(t, filepath.Join(h.root, "AGENTS.md"))
+	assertContains(t, agents, lintCmd, "agents mandatory lint gate")
+
+	contributing := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, contributing, lintCmd, "contributing mandatory lint gate")
+
+	gateMain := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-gate", "main.go"))
+	assertContains(t, gateMain, "label: \"golangci-lint\"", "jcs-gate lint step label")
+	assertContains(t, gateMain, "golangci-lint/cmd/golangci-lint@v1.64.8", "jcs-gate lint version pin")
+	assertContains(t, gateMain, "--config=golangci.yml", "jcs-gate lint config pin")
+}
+
+// TestGolangCILintConfigStrict verifies strict lint policy invariants stay enabled.
+func TestGolangCILintConfigStrict(t *testing.T) {
+	h := testHarness(t)
+	checkGolangCILintConfigStrict(t, h)
+}
+
+func checkGolangCILintConfigStrict(t *testing.T, h *harness) {
+	t.Helper()
+	cfg := mustReadText(t, filepath.Join(h.root, "golangci.yml"))
+
+	required := []string{
+		"- forbidigo",
+		"- depguard",
+		"- bidichk",
+		"- asciicheck",
+		"- gocognit",
+		"- copyloopvar",
+		"- durationcheck",
+		"- makezero",
+		"- nolintlint",
+		"require-explanation: true",
+		"require-specific: true",
+		"allow-unused: false",
+	}
+	for _, token := range required {
+		assertContains(t, cfg, token, "strict lint config")
+	}
+
+	if strings.Contains(cfg, "ignorePackageGlobs:") {
+		t.Fatal("golangci.yml must not use wrapcheck ignorePackageGlobs wildcard exemptions")
+	}
+	if strings.Contains(cfg, "G304") {
+		t.Fatal("golangci.yml must not globally exclude gosec G304")
+	}
+	testRuleDisablesGosec := regexp.MustCompile(`(?s)- path: _test\\.go\\s+linters:\\s+.*?- gosec`)
+	if testRuleDisablesGosec.MatchString(cfg) {
+		t.Fatal("golangci.yml must not blanket-disable gosec for all _test.go files")
+	}
+}
+
+// TestNolintDirectiveDiscipline verifies suppression directives remain specific and justified.
+func TestNolintDirectiveDiscipline(t *testing.T) {
+	h := testHarness(t)
+	checkNolintDirectiveDiscipline(t, h)
+}
+
+//nolint:gocognit,gosec // REQ:LINT-NOLINT-001 suppression governance scanner intentionally walks repository sources.
+func checkNolintDirectiveDiscipline(t *testing.T, h *harness) {
+	t.Helper()
+	nolintRe := regexp.MustCompile(`^//\s*nolint:([a-z0-9]+(?:,[a-z0-9]+)*)\s+//`)
+	reqIDRe := regexp.MustCompile(`[A-Z]+-[A-Z0-9]+-[0-9]+`)
+	total := 0
+
+	err := filepath.WalkDir(h.root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if d.IsDir() {
+			base := filepath.Base(path)
+			switch base {
+			case ".git", "vendor", ".tmp":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+		rel, err := filepath.Rel(h.root, path)
+		if err != nil {
+			return fmt.Errorf("resolve relative path %q: %w", path, err)
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return fmt.Errorf("open %s: %w", rel, err)
+		}
+		defer func() {
+			if closeErr := f.Close(); closeErr != nil {
+				t.Errorf("close %s: %v", rel, closeErr)
+			}
+		}()
+
+		sc := bufio.NewScanner(f)
+		lineNo := 0
+		for sc.Scan() {
+			lineNo++
+			line := sc.Text()
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "//nolint") {
+				continue
+			}
+			total++
+			if strings.Contains(trimmed, "nolint:all") {
+				t.Errorf("%s:%d uses forbidden blanket suppression: %s", rel, lineNo, trimmed)
+				continue
+			}
+
+			match := nolintRe.FindStringSubmatch(trimmed)
+			if match == nil {
+				t.Errorf("%s:%d must use //nolint:<linter>[,<linter>...] with inline rationale", rel, lineNo)
+				continue
+			}
+			if strings.Contains(match[1], "all") {
+				t.Errorf("%s:%d must not suppress linter 'all'", rel, lineNo)
+			}
+			if !strings.Contains(trimmed, "REQ:") {
+				t.Errorf("%s:%d nolint rationale must include REQ:<ID>", rel, lineNo)
+				continue
+			}
+			if !reqIDRe.MatchString(trimmed) {
+				t.Errorf("%s:%d nolint rationale must include at least one requirement ID", rel, lineNo)
+			}
+		}
+		if err := sc.Err(); err != nil {
+			return fmt.Errorf("scan %s: %w", rel, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk source tree for nolint directives: %v", err)
+	}
+	if total == 0 {
+		t.Fatal("expected at least one nolint directive to validate")
+	}
 }
 
 // TestGovernanceDurabilityClausesPresent verifies governance durability clauses are documented.
@@ -2239,6 +2422,8 @@ func TestRequiredDocumentationPresent(t *testing.T) {
 
 // TestRequirementRegistryIndexCounts verifies REQ_REGISTRY.md count values
 // stay synchronized with split requirement registries.
+//
+//nolint:gosec // REQ:TRACE-LINK-001 registry count check reads repository documentation files by path.
 func TestRequirementRegistryIndexCounts(t *testing.T) {
 	h := testHarness(t)
 	normIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"))
@@ -2389,6 +2574,7 @@ func loadMatrixIDs(t *testing.T, path string) map[string]struct{} {
 	return ids
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 matrix loader reads repository-controlled traceability artifacts.
 func loadMatrixRows(t *testing.T, path string) []matrixRow {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -2450,16 +2636,17 @@ func loadMatrixRows(t *testing.T, path string) []matrixRow {
 	return rows
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 symbol loader parses repository source files by path.
 func loadGoTopLevelSymbols(path string) (map[string]symbolRange, int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("read go file %s: %w", path, err)
 	}
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, path, data, 0)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("parse go file %s: %w", path, err)
 	}
 
 	symbols := make(map[string]symbolRange)
@@ -2491,16 +2678,17 @@ func loadGoTopLevelSymbols(path string) (map[string]symbolRange, int, error) {
 	return symbols, lineCount, nil
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 function loader parses repository source files by path.
 func loadGoFunctionNames(path string) (map[string]struct{}, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read go file %s: %w", path, err)
 	}
 
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, path, data, 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse go file %s: %w", path, err)
 	}
 
 	funcs := make(map[string]struct{})
@@ -2512,6 +2700,7 @@ func loadGoFunctionNames(path string) (map[string]struct{}, error) {
 	return funcs, nil
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 citation loader reads repository citation index by path.
 func loadCitationIndexEntries(t *testing.T, path string) map[string]citationEntry {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -2559,6 +2748,7 @@ func splitMarkdownTableLine(line string) []string {
 	return raw
 }
 
+//nolint:gosec // REQ:TRACE-LINK-001 text helper intentionally reads repository files by path.
 func mustReadText(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -2589,6 +2779,7 @@ func extractIntByPattern(t *testing.T, text, pattern, label string) int {
 	return n
 }
 
+//nolint:gosec // REQ:ABI-PARITY-001 ABI manifest loader reads repository contract file by path.
 func loadABIManifest(t *testing.T, path string) abiManifest {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -2641,6 +2832,7 @@ func decodeManifestFlagSet(t *testing.T, flags map[string]json.RawMessage) map[s
 	return set
 }
 
+//nolint:gocognit // REQ:ABI-PARITY-001 CLI AST extraction keeps explicit switch/case traversal for stable ABI parity checks.
 func loadCLISurfaceFromSource(t *testing.T, path string) (map[string]struct{}, map[string]struct{}, map[string]struct{}) {
 	t.Helper()
 
@@ -2767,6 +2959,7 @@ func setDifference(a, b map[string]struct{}) []string {
 
 // --- Float oracle helpers ---
 
+//nolint:gosec // REQ:ECMA-VEC-001 oracle verifier reads repository oracle fixtures by path.
 func verifyFloatOracle(t *testing.T, path string, expectedRows int, expectedSHA256 string) {
 	t.Helper()
 

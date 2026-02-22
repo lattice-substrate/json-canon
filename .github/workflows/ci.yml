@@ -31,9 +31,24 @@ jobs:
             exit 1
           fi
 
+  lint:
+    name: Lint
+    needs: binary_hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24.x'
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
+        with:
+          version: v1.64.8
+          args: --config=golangci.yml
+
   test_matrix:
     name: Vet+Unit (${{ matrix.os }}, Go ${{ matrix.go }})
-    needs: [binary_hygiene]
+    needs: [binary_hygiene, lint]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

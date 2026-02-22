@@ -264,6 +264,7 @@ func TestBoundaryConstants(t *testing.T) {
 func verifyOracle(t *testing.T, path string, expectedRows int, expectedSHA256 string) {
 	t.Helper()
 
+	// #nosec G304 -- oracle fixture path is explicit test input.
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("open oracle: %v", err)

@@ -59,6 +59,8 @@ type Profile struct {
 }
 
 // LoadMatrix reads, decodes, and validates a replay matrix document.
+//
+//nolint:gosec // REQ:OFFLINE-MATRIX-001 matrix path is explicit operator input for release-gate validation.
 func LoadMatrix(path string) (*Matrix, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -80,6 +82,8 @@ func LoadMatrix(path string) (*Matrix, error) {
 }
 
 // LoadProfile reads, decodes, and validates a replay profile document.
+//
+//nolint:gosec // REQ:OFFLINE-COLD-001 profile path is explicit operator input for release-gate validation.
 func LoadProfile(path string) (*Profile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -113,7 +117,7 @@ func ensureSingleJSONDocument(dec *json.Decoder) error {
 
 // ValidateMatrix validates replay matrix semantics and release-policy requirements.
 //
-//nolint:gocyclo,cyclop // Matrix policy validation is explicit to keep release-gate failures actionable.
+//nolint:gocyclo,cyclop,gocognit // REQ:OFFLINE-MATRIX-001 matrix policy validation is explicit to keep release-gate failures actionable.
 func ValidateMatrix(m *Matrix) error {
 	if m == nil {
 		return fmt.Errorf("matrix is nil")
