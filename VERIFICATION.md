@@ -60,6 +60,21 @@ sha256sum jcs-canon
 Compare the resulting checksum against the `SHA256SUMS` file for your platform.
 Note: reproducibility requires the same Go version and OS/arch used in CI.
 
+## 5. Verify Offline Cold-Replay Evidence
+
+For release candidates that include offline matrix validation, verify the archived
+evidence bundle against repository contracts:
+
+```bash
+JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+```
+
+This check validates:
+- matrix/profile contract alignment,
+- per-node cold-replay completeness,
+- cross-node digest parity for canonical/verify/failure/exit outputs.
+
 ## Trust Model
 
 | Property | Mechanism |

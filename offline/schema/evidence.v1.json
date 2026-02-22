@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lattice-substrate.github.io/json-canon/offline/schema/evidence.v1.json",
+  "title": "json-canon offline replay evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_sha256",
+    "control_binary_sha256",
+    "matrix_sha256",
+    "profile_sha256",
+    "generated_at_utc",
+    "orchestrator",
+    "profile_name",
+    "architecture",
+    "required_suites",
+    "hard_release_gate",
+    "node_replays",
+    "aggregate_canonical_sha256",
+    "aggregate_verify_sha256",
+    "aggregate_failure_class_sha256",
+    "aggregate_exit_code_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "evidence.v1" },
+    "bundle_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "control_binary_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "matrix_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "profile_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "generated_at_utc": { "type": "string", "minLength": 1 },
+    "orchestrator": { "type": "string", "minLength": 1 },
+    "profile_name": { "type": "string", "minLength": 1 },
+    "architecture": { "type": "string", "enum": ["x86_64"] },
+    "required_suites": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "hard_release_gate": { "type": "boolean", "const": true },
+    "node_replays": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "node_id",
+          "mode",
+          "distro",
+          "kernel_family",
+          "replay_index",
+          "session_id",
+          "started_at_utc",
+          "completed_at_utc",
+          "case_count",
+          "passed",
+          "canonical_sha256",
+          "verify_sha256",
+          "failure_class_sha256",
+          "exit_code_sha256"
+        ],
+        "properties": {
+          "node_id": { "type": "string", "minLength": 1 },
+          "mode": { "type": "string", "enum": ["container", "vm"] },
+          "distro": { "type": "string", "minLength": 1 },
+          "kernel_family": { "type": "string", "minLength": 1 },
+          "replay_index": { "type": "integer", "minimum": 1 },
+          "session_id": { "type": "string", "minLength": 1 },
+          "started_at_utc": { "type": "string", "minLength": 1 },
+          "completed_at_utc": { "type": "string", "minLength": 1 },
+          "case_count": { "type": "integer", "minimum": 1 },
+          "passed": { "type": "boolean", "const": true },
+          "canonical_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "verify_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "failure_class_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+          "exit_code_sha256": { "type": "string", "minLength": 64, "maxLength": 64 }
+        }
+      }
+    },
+    "aggregate_canonical_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "aggregate_verify_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "aggregate_failure_class_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+    "aggregate_exit_code_sha256": { "type": "string", "minLength": 64, "maxLength": 64 }
+  }
+}

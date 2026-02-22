@@ -29,5 +29,6 @@ document in this directory or by normative registries in the repository root.
 ## Operational Docs
 
 - `VERIFICATION.md` - release verification (checksums + provenance)
+- `offline/README.md` - offline cold-replay matrix and evidence workflow
 - `BOUNDS.md` - resource bounds and memory behavior
 - `GOVERNANCE.md` - review, compatibility, and policy commitments

@@ -11,7 +11,7 @@ signature verification.
 
 ## Features
 
-- **Pure Go, zero dependencies** - standard library only
+- **Pure Go core runtime** - canonicalization engine remains standard-library only
 - **ECMA-262 Number::toString** - hand-written Burger-Dybvig algorithm validated
   against 286,362 V8 oracle vectors
 - **Strict input validation** - RFC 8259 grammar, RFC 7493 I-JSON constraints
@@ -57,6 +57,13 @@ go test ./... -count=1 -v
 
 ```bash
 go test ./conformance -count=1 -v -timeout=10m
+```
+
+Offline cold-replay evidence gate (release workflow):
+
+```bash
+JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
 Requirement registries are split for audit clarity:

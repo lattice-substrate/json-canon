@@ -22,6 +22,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   - `docs/VECTOR_FORMAT.md`
   - `docs/ALGORITHMIC_INVARIANTS.md`
 - ADR framework and accepted foundational decisions under `docs/adr/`.
+- Offline cold-replay framework under `offline/` with matrix/profile contracts, evidence schema, and offline conformance gate package.
+- New operator CLI `jcs-offline-replay` with `prepare`, `run`, `verify-evidence`, and `report` subcommands.
+- Runtime adapter scaffolding for container and libvirt execution lanes (`offline/runtime/container`, `offline/runtime/libvirt`).
 
 ### Changed
 - CI unit test timeout aligned to 20m (matching CONFORMANCE.md and release workflow).
@@ -47,6 +50,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - CLI stderr diagnostics now include stable failure class tokens for usage, parse/profile failures, and non-canonical verification failures.
 - Undocumented `--` end-of-options behavior was removed from subcommand flag parsing.
 - Conformance suite now enforces ABI manifest/source parity, workflow SHA pinning, release checksum/provenance steps, governance durability clauses, and behavior-test matrix linkage.
+- Release and verification documentation now include mandatory offline evidence gate validation (`go test ./offline/conformance` with `JCS_OFFLINE_EVIDENCE`).
+- Policy registry and traceability matrix expanded with OFFLINE requirement IDs for matrix coverage, cold replay policy, evidence schema contract, release-gate enforcement, and architecture scope.
 
 ### Fixed
 - Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.

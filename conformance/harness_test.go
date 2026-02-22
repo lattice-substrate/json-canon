@@ -30,6 +30,7 @@ import (
 	"github.com/lattice-substrate/json-canon/jcserr"
 	"github.com/lattice-substrate/json-canon/jcsfloat"
 	"github.com/lattice-substrate/json-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 type harness struct {
@@ -252,11 +253,16 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"CLI-IO-005":    checkVerifyOkEmission,
 		"CLI-CLASS-001": checkErrorDiagnosticsIncludeFailureClass,
 		// ABI/Supply/Governance/Traceability policy
-		"ABI-PARITY-001":  checkABIManifestBehaviorParity,
-		"SUPPLY-PIN-001":  checkGitHubActionsPinnedBySHA,
-		"SUPPLY-PROV-001": checkReleaseWorkflowVerificationArtifacts,
-		"GOV-DUR-001":     checkGovernanceDurabilityClausesPresent,
-		"TRACE-LINK-001":  checkBehaviorTestsLinkedToRequirements,
+		"ABI-PARITY-001":       checkABIManifestBehaviorParity,
+		"SUPPLY-PIN-001":       checkGitHubActionsPinnedBySHA,
+		"SUPPLY-PROV-001":      checkReleaseWorkflowVerificationArtifacts,
+		"GOV-DUR-001":          checkGovernanceDurabilityClausesPresent,
+		"TRACE-LINK-001":       checkBehaviorTestsLinkedToRequirements,
+		"OFFLINE-MATRIX-001":   checkOfflineMatrixManifestPresent,
+		"OFFLINE-COLD-001":     checkOfflineProfileColdReplayPolicy,
+		"OFFLINE-EVIDENCE-001": checkOfflineEvidenceSchemaAndVerifyCLI,
+		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
+		"OFFLINE-ARCH-001":     checkOfflineArchScopeX8664,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -1941,6 +1947,87 @@ func checkGovernanceDurabilityClausesPresent(t *testing.T, h *harness) {
 	assertContains(t, gov, "### Review Requirements", "governance review requirements")
 	assertContains(t, gov, "### Maintainer Succession", "governance succession policy")
 	assertContains(t, gov, "## Support Window Policy", "governance support window")
+}
+
+// TestOfflineMatrixManifestPresent verifies offline matrix contract files exist and parse.
+func TestOfflineMatrixManifestPresent(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineMatrixManifestPresent(t, h)
+}
+
+func checkOfflineMatrixManifestPresent(t *testing.T, h *harness) {
+	matrixPath := filepath.Join(h.root, "offline", "matrix.yaml")
+	matrix, err := replay.LoadMatrix(matrixPath)
+	if err != nil {
+		t.Fatalf("load offline matrix: %v", err)
+	}
+	if matrix.Architecture == "" {
+		t.Fatal("offline matrix architecture must be set")
+	}
+}
+
+// TestOfflineProfileColdReplayPolicy verifies maximal offline profile policy knobs.
+func TestOfflineProfileColdReplayPolicy(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineProfileColdReplayPolicy(t, h)
+}
+
+func checkOfflineProfileColdReplayPolicy(t *testing.T, h *harness) {
+	profilePath := filepath.Join(h.root, "offline", "profiles", "maximal.yaml")
+	profile, err := replay.LoadProfile(profilePath)
+	if err != nil {
+		t.Fatalf("load offline profile: %v", err)
+	}
+	if profile.MinColdReplays < 5 {
+		t.Fatalf("min_cold_replays=%d, want >=5", profile.MinColdReplays)
+	}
+	if !profile.HardReleaseGate {
+		t.Fatal("hard_release_gate must be true")
+	}
+}
+
+// TestOfflineEvidenceSchemaAndVerifyCLI verifies schema and CLI verifier command exist.
+func TestOfflineEvidenceSchemaAndVerifyCLI(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineEvidenceSchemaAndVerifyCLI(t, h)
+}
+
+func checkOfflineEvidenceSchemaAndVerifyCLI(t *testing.T, h *harness) {
+	schema := mustReadText(t, filepath.Join(h.root, "offline", "schema", "evidence.v1.json"))
+	assertContains(t, schema, "\"schema_version\"", "offline evidence schema")
+	assertContains(t, schema, "\"node_replays\"", "offline evidence schema")
+
+	cli := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
+	assertContains(t, cli, "verify-evidence", "offline replay verifier command")
+	assertContains(t, cli, "ValidateEvidenceBundle", "offline replay verifier implementation")
+}
+
+// TestOfflineReleaseGatePolicy verifies offline evidence gate is documented.
+func TestOfflineReleaseGatePolicy(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineReleaseGatePolicy(t, h)
+}
+
+func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
+	releaseDoc := mustReadText(t, filepath.Join(h.root, "RELEASE_PROCESS.md"))
+	assertContains(t, releaseDoc, "go test ./offline/conformance", "offline release gate command")
+	assertContains(t, releaseDoc, "JCS_OFFLINE_EVIDENCE", "offline release gate environment variable")
+}
+
+// TestOfflineArchScopeX8664 verifies phase-1 offline profile architecture scope.
+func TestOfflineArchScopeX8664(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineArchScopeX8664(t, h)
+}
+
+func checkOfflineArchScopeX8664(t *testing.T, h *harness) {
+	matrix, err := replay.LoadMatrix(filepath.Join(h.root, "offline", "matrix.yaml"))
+	if err != nil {
+		t.Fatalf("load offline matrix: %v", err)
+	}
+	if err := replay.ValidatePhaseOneArchitecture(matrix); err != nil {
+		t.Fatalf("offline matrix architecture scope check failed: %v", err)
+	}
 }
 
 // TestCitationIndexCoversNormativeRequirements verifies every normative
