@@ -22,6 +22,7 @@ type realRunner struct{}
 
 var requiredGateSteps = []gateStep{
 	{label: "go vet", args: []string{"vet", "./..."}},
+	{label: "golangci-lint", args: []string{"run", "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8", "run", "--config=golangci.yml"}},
 	{label: "unit tests", args: []string{"test", "./...", "-count=1", "-timeout=20m"}},
 	{label: "race tests", args: []string{"test", "./...", "-race", "-count=1", "-timeout=25m"}},
 	{label: "conformance", args: []string{"test", "./conformance", "-count=1", "-timeout=10m", "-v"}},
@@ -32,7 +33,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realRunner{}))
 }
 
-//nolint:gocyclo,cyclop // Gate orchestration dispatch is intentionally explicit and linear.
+//nolint:gocyclo,cyclop,gocognit // REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.
 func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	if len(args) > 0 {
 		switch args[0] {
@@ -86,7 +87,7 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "usage: go run ./cmd/jcs-gate [--help]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "runs: vet, tests, race, conformance, offline evidence gate"); err != nil {
+	if err := writeLine(w, "runs: vet, golangci-lint, tests, race, conformance, offline evidence gate"); err != nil {
 		return err
 	}
 	return writeLine(w, "offline gate uses current JCS_OFFLINE_* env vars (and may skip if unset)")

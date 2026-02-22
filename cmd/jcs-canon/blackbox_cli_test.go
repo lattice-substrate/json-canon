@@ -42,6 +42,7 @@ func blackboxBinary(t *testing.T) string {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
+		// #nosec G204 -- controlled test build invocation.
 		cmd := exec.CommandContext(
 			ctx,
 			"go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", blackboxBin, "./cmd/jcs-canon",
@@ -61,6 +62,7 @@ func runBlackbox(t *testing.T, args []string, stdin []byte) (int, []byte, []byte
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	// #nosec G204 -- controlled test execution of locally built binary.
 	cmd := exec.CommandContext(ctx, blackboxBinary(t), args...)
 	cmd.Stdin = bytes.NewReader(stdin)
 	var stdout bytes.Buffer

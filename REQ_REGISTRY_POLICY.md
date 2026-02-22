@@ -87,6 +87,15 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 |----|------|---------|-------|-------------|
 | TRACE-LINK-001 | docs/TRACEABILITY_MODEL.md | Required Mapping | MUST | Behavior tests in runtime packages MUST be linked from `REQ_ENFORCEMENT_MATRIX.md`. |
 
+## LINT — Lint Governance
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| LINT-CI-001 | .github/workflows/ci.yml | CI Gates | MUST | Pull-request and main-branch CI MUST execute golangci-lint via pinned action SHA, pinned linter version, and explicit `--config=golangci.yml`. |
+| LINT-GATE-001 | AGENTS.md + CONTRIBUTING.md + cmd/jcs-gate/main.go | Mandatory Validation Gates | MUST | Required local validation gates MUST include the same pinned golangci-lint command path used for repository lint governance. |
+| LINT-CONFIG-001 | golangci.yml | Lint Policy | MUST | Lint configuration MUST enforce strict suppression governance (`nolintlint` require-specific/explanation/used) and include determinism/supply-hardening linters (`forbidigo`, `depguard`, `bidichk`, `asciicheck`, `gocognit`, `copyloopvar`, `durationcheck`, `makezero`). |
+| LINT-NOLINT-001 | golangci.yml + source tree | Suppression Discipline | MUST | Every `//nolint` directive MUST be linter-specific, MUST NOT use blanket `all`, and MUST include an explicit requirement-ID rationale. |
+
 ## OFFLINE — Cold Replay Assurance
 
 | ID | Spec | Section | Level | Requirement |

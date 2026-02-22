@@ -287,7 +287,7 @@ func (p *parser) parseValue() (*Value, error) {
 	}
 }
 
-//nolint:gocyclo,cyclop // RFC grammar and duplicate-key enforcement keep this parser path branch-heavy by design.
+//nolint:gocyclo,cyclop,gocognit // REQ:IJSON-DUP-001 duplicate-key enforcement keeps this parser path branch-heavy by design.
 func (p *parser) parseObject() (*Value, error) {
 	if err := p.pushDepth(); err != nil {
 		return nil, err
@@ -364,7 +364,7 @@ func (p *parser) parseObject() (*Value, error) {
 	}
 }
 
-//nolint:gocyclo,cyclop // RFC grammar parser path is intentionally explicit for deterministic error offsets.
+//nolint:gocyclo,cyclop // REQ:PARSE-GRAM-005 array grammar parser path is explicit for deterministic error offsets.
 func (p *parser) parseArray() (*Value, error) {
 	if err := p.pushDepth(); err != nil {
 		return nil, err
@@ -423,7 +423,7 @@ func (p *parser) parseArray() (*Value, error) {
 // IJSON-NONC-001: Noncharacter rejection.
 // PARSE-GRAM-004: Unescaped control character rejection.
 //
-//nolint:gocyclo,cyclop // String decode/validation follows RFC and I-JSON rules with explicit branch points.
+//nolint:gocyclo,cyclop,gocognit // REQ:PARSE-GRAM-004 string decode/validation follows RFC and I-JSON rules with explicit branch points.
 func (p *parser) parseString() (*Value, error) {
 	if err := p.expect('"'); err != nil {
 		return nil, err
@@ -503,7 +503,7 @@ func (p *parser) parseEscape(sourceOffset int) (rune, *jcserr.Error) {
 
 // parseUnicodeEscape parses \uXXXX (and \uXXXX\uXXXX for surrogate pairs).
 //
-//nolint:gocyclo,cyclop // Surrogate validation paths are explicit to preserve failure-class semantics.
+//nolint:gocyclo,cyclop // REQ:IJSON-SUR-001 surrogate validation paths are explicit to preserve failure-class semantics.
 func (p *parser) parseUnicodeEscape(sourceOffset int) (rune, *jcserr.Error) {
 	r1, err := p.readHex4(sourceOffset)
 	if err != nil {
@@ -685,7 +685,7 @@ func (p *parser) scanFractionPart() *jcserr.Error {
 	return nil
 }
 
-//nolint:gocyclo,cyclop // Exponent scanner mirrors JSON grammar stages for precise diagnostics.
+//nolint:gocyclo,cyclop // REQ:PARSE-GRAM-009 exponent scanner mirrors JSON grammar stages for precise diagnostics.
 func (p *parser) scanExponentPart() *jcserr.Error {
 	if p.pos >= len(p.data) || (p.data[p.pos] != 'e' && p.data[p.pos] != 'E') {
 		return nil

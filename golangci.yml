@@ -43,15 +43,21 @@ linters:
     - maintidx # Maintainability index
     - nestif # Deep nesting detection
     - cyclop # Better cyclomatic complexity
+    - gocognit # Cognitive complexity limits
 
     # SECURITY HARDENING
     - forbidigo # Ban specific functions (time.Now!)
     - musttag # Enforce struct tags
+    - bidichk # Unicode bidi control detection
+    - asciicheck # Restrict non-ASCII identifier/control surprises
 
     # PERFORMANCE
     - prealloc # Slice preallocation
     - nolintlint # Lint nolint directives
     - wastedassign # Wasted assignments
+    - makezero # make([]T, n) zeroing misuse
+    - copyloopvar # Loop variable copy/capture safety
+    - durationcheck # Duration arithmetic/unit mistakes
 
     # TEST QUALITY
     - testpackage # Separate test packages
@@ -86,8 +92,6 @@ linters-settings:
       - errors.New(
       - errors.Unwrap(
       - errors.Join(
-    ignorePackageGlobs:
-      - github.com/lattice-substrate/* # Internal packages
 
   gocyclo:
     min-complexity: 10 # Stricter than 15
@@ -99,6 +103,9 @@ linters-settings:
   funlen:
     lines: 80
     statements: 50
+
+  gocognit:
+    min-complexity: 20
 
   nestif:
     min-complexity: 4
@@ -137,7 +144,6 @@ linters-settings:
     confidence: medium
     excludes:
       - G104 # Covered by errcheck
-      - G304 # File paths can be from user input in CLI
 
   goconst:
     min-len: 3
@@ -189,6 +195,11 @@ linters-settings:
         tag: json
         arg-pos: 1
 
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+    allow-unused: false
+
 issues:
   exclude-use-default: false
   max-issues-per-linter: 0
@@ -203,7 +214,6 @@ issues:
         - cyclop
         - funlen
         - maintidx
-        - gosec
         - dupl
 
     # Integration test helpers
@@ -215,12 +225,6 @@ issues:
     - path: \.pb\.go$
       linters:
         - all
-
-    # False positives on error wrapping in some cases
-    - text: "returned from external package is unwrapped"
-      linters:
-        - wrapcheck
-      path: _test\.go
 
 output:
   formats:

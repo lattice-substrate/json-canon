@@ -69,6 +69,7 @@ func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 func TestOfflineEvidenceSchemaPresent(t *testing.T) {
 	root := repoRoot(t)
 	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v1.json")
+	// #nosec G304 -- conformance test intentionally reads repository schema path.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		t.Fatalf("read schema: %v", err)
@@ -171,6 +172,7 @@ func lookupEnvTrimmed(name string) string {
 
 func mustReadText(t *testing.T, path string) string {
 	t.Helper()
+	// #nosec G304 -- conformance test intentionally reads repository documentation paths.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
@@ -180,6 +182,7 @@ func mustReadText(t *testing.T, path string) string {
 
 func mustFileSHA256(t *testing.T, path string) string {
 	t.Helper()
+	// #nosec G304 -- conformance test intentionally reads explicit artifact paths.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)

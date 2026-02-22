@@ -34,7 +34,7 @@ type RunOptions struct {
 
 // RunMatrix orchestrates replay execution across required nodes and replays.
 //
-//nolint:gocyclo,cyclop,funlen // Orchestration keeps per-stage checks explicit for reproducible replay diagnostics.
+//nolint:gocyclo,cyclop,funlen,gocognit // REQ:OFFLINE-EVIDENCE-001 orchestration keeps checks explicit for reproducible replay diagnostics.
 func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory AdapterFactory, opts RunOptions) (*EvidenceBundle, error) {
 	if matrix == nil || profile == nil {
 		return nil, fmt.Errorf("matrix and profile are required")
@@ -157,6 +157,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 }
 
 // LoadNodeRunEvidence loads one node replay evidence artifact from disk.
+//
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 node evidence path is explicit operator/runtime input.
 func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -169,7 +171,7 @@ func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	return &run, nil
 }
 
-//nolint:forbidigo // default runtime clock for evidence generation when no injected clock is provided.
+//nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 default runtime clock for evidence generation when no injected clock is provided.
 func wallClockNow() time.Time {
 	return time.Now()
 }

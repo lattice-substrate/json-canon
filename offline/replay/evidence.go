@@ -76,6 +76,8 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 }
 
 // LoadEvidence loads an evidence bundle from disk.
+//
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 evidence path is explicit operator input for release-gate validation.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -90,7 +92,7 @@ func LoadEvidence(path string) (*EvidenceBundle, error) {
 
 // ValidateEvidenceBundle validates replay evidence against matrix/profile policy expectations.
 //
-//nolint:gocyclo,cyclop,funlen,maintidx // Evidence gate checks encode many policy invariants with explicit failure attribution.
+//nolint:gocyclo,cyclop,funlen,maintidx,gocognit // REQ:OFFLINE-EVIDENCE-001 evidence gate checks encode many policy invariants with explicit failure attribution.
 func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts EvidenceValidationOptions) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")

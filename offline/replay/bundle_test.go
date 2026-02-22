@@ -15,7 +15,7 @@ func TestCreateAndVerifyBundle(t *testing.T) {
 	matrix := filepath.Join(dir, "matrix.yaml")
 	profile := filepath.Join(dir, "profile.yaml")
 	vectorsDir := filepath.Join(dir, "vectors")
-	if err := os.MkdirAll(vectorsDir, 0o755); err != nil {
+	if err := os.MkdirAll(vectorsDir, 0o750); err != nil {
 		t.Fatalf("mkdir vectors: %v", err)
 	}
 	mustWrite(t, bin, []byte("binary"), 0o755)
