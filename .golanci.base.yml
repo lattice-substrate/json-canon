@@ -1,0 +1,281 @@
+# .golangci.base.yml — lattice-substrate hub shared base
+# Posture: fail-closed, deterministic, correctness-first.
+# Repos may override ONLY with explicit, reviewed exceptions.
+
+run:
+  timeout: 10m
+  tests: true
+
+  # Make CI deterministic; don't "helpfully" download deps.
+  modules-download-mode: readonly
+
+  # Prefer explicit build tags per repo if needed; keep empty at base.
+  build-tags: []
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true
+
+issues:
+  # Fail-closed: do not cap, do not suppress.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  # We lint the whole repo, not only "new" code.
+  new: false
+
+  # Keep default excludes OFF so config is explicit.
+  exclude-use-default: false
+
+  uniq-by-line: true
+
+  # Avoid linting vendored / fixture trees.
+  exclude-dirs:
+    - vendor
+    - third_party
+    - testdata
+    - fixtures
+    - examples
+
+  # Common generated file patterns.
+  exclude-files:
+    - ".*\\.gen\\.go$"
+    - ".*_generated\\.go$"
+    - ".*\\.pb\\.go$"
+    - ".*\\.pb\\.gw\\.go$"
+    - ".*_mock\\.go$"
+
+  # If you want a baseline "accepted debt" file later, add it explicitly per repo.
+  exclude: []
+
+  # Carefully scoped exclusions: tests, cmd entrypoints, and intentionally noisy areas.
+  exclude-rules:
+    # Tests: allow higher complexity and looser style; keep correctness linters on.
+    - path: "_test\\.go$"
+      linters:
+        - gosec
+        - dupl
+        - funlen
+        - gocognit
+        - gocyclo
+        - cyclop
+        - forbidigo
+
+    # Cmd entrypoints: printing/logging can be acceptable for CLIs (still prefer structured).
+    - path: "^cmd/"
+      linters:
+        - forbidigo
+
+    # Generated files are already skipped; this is belt-and-suspenders if patterns differ.
+    - path: ".*\\.gen\\.go$|.*_generated\\.go$|.*\\.pb\\.go$|.*_mock\\.go$"
+      linters:
+        - all
+
+linters:
+  disable-all: true
+  enable:
+    ###########################################################################
+    # (A) Correctness + soundness (must-have)
+    ###########################################################################
+    - govet
+    - typecheck
+    - staticcheck
+    - gosimple
+    - unused
+    - ineffassign
+    - unconvert
+    - unparam
+    - errcheck
+
+    ###########################################################################
+    # (B) Error / API hygiene (infra-grade error discipline)
+    ###########################################################################
+    - errorlint # errors.Is/As correctness; fmt.Errorf("%w")
+    - nilerr # returning nil error with non-nil value patterns
+    - nilnil # avoid (nil, nil) returns where ambiguous
+    - makezero # accidental make([]T,0,n) misuse patterns
+    - copyloopvar # Go 1.22+ loop var capture correctness
+    - bodyclose # ensure http response bodies are closed
+    - contextcheck # context propagation (when used)
+    - durationcheck # duration mistakes (time.Second * x, etc.)
+
+    ###########################################################################
+    # (C) Security + hardening (fail-closed posture)
+    ###########################################################################
+    - gosec
+    - bidichk # Unicode bidi attacks
+    - asciicheck # weird unicode in identifiers/strings
+
+    ###########################################################################
+    # (D) Complexity + maintainability (your request)
+    ###########################################################################
+    - gocyclo # cyclomatic complexity
+    - cyclop # more consistent cyclomatic checks
+    - gocognit # cognitive complexity
+    - funlen # overly large functions
+    - dupl # duplicated code detector (selective)
+
+    ###########################################################################
+    # (E) Style/consistency (kept strict but not bikeshed-heavy)
+    ###########################################################################
+    - gofmt
+    - goimports
+    - misspell
+    - revive
+    - stylecheck
+    - prealloc
+    - whitespace
+    - nolintlint
+
+    ###########################################################################
+    # (F) Explicit policy linters (prevent “convenience creep”)
+    ###########################################################################
+    - forbidigo
+    - depguard
+
+linters-settings:
+  govet:
+    # Enable as much as possible; disable churn/noise analyzers only if justified.
+    enable-all: true
+    # These can create massive refactor churn without correctness gain.
+    disable:
+      - fieldalignment
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    # Do NOT broadly exclude Close(); infra tools often need to check it.
+    # Only exclude functions that are provably error-free and commonly ignored.
+    exclude-functions:
+      - (*strings.Builder).WriteString
+      - (*bytes.Buffer).Write
+      - (*bytes.Buffer).WriteString
+
+  errorlint:
+    # Ensure %w and errors.Is/As are used correctly.
+    errorf: true
+    asserts: true
+    comparison: true
+
+  nilnil:
+    # Treat (nil, nil) as a smell unless explicitly intended.
+    checked-types:
+      - chan
+      - func
+      - iface
+      - map
+      - ptr
+      - uintptr
+      - unsafeptr
+
+  gosec:
+    # Keep signal high. Adjust per repo with explicit exclusions if needed.
+    severity: medium
+    confidence: medium
+    excludes:
+      - G104 # covered by errcheck; keep single source of truth for unchecked errors
+
+  gocyclo:
+    # Tight enough to prevent rat-nests; loosen only with rationale.
+    min-complexity: 15
+
+  cyclop:
+    max-complexity: 15
+    package-average: 10.0
+    skip-tests: true
+
+  gocognit:
+    min-complexity: 20
+
+  funlen:
+    lines: 120
+    statements: 60
+
+  dupl:
+    threshold: 120
+
+  misspell:
+    locale: US
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+
+  nolintlint:
+    require-explanation: true
+    require-specific: true
+    allow-unused: false
+
+  revive:
+    # Revive is configurable and less arbitrary than legacy golint.
+    # Keep to correctness + clarity.
+    ignore-generated-header: true
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: early-return
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        arguments:
+          - "checkPrivateReceivers"
+          - "disableStutteringCheck"
+      - name: if-return
+      - name: increment-decrement
+      - name: range
+      - name: receiver-naming
+      - name: redundant-import-alias
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unnecessary-stmt
+      - name: var-naming
+
+  forbidigo:
+    # Prevent leaking ad-hoc output/logging into deterministic tools.
+    # Allow in cmd/ entrypoints via exclude rules below.
+    forbid:
+      - "^fmt\\.Print"
+      - "^fmt\\.Printf"
+      - "^fmt\\.Println"
+      - "^log\\.Print"
+      - "^log\\.Printf"
+      - "^log\\.Println"
+      - "^log\\.Fatal"
+      - "^log\\.Panic"
+      # Determinism enforcement (core invariant §6)
+      - p: ^time\.Now$
+        msg: "Use injected timestamp for determinism"
+      - p: ^rand\..*$
+        msg: "Use seeded random for determinism"
+        pkg: ^math/rand$
+      - p: ^os\.Getenv$
+        msg: "Ambient environment breaks reproducibility"
+      - p: ^filepath\.Walk$
+        msg: "Non-deterministic traversal order"
+    exclude-godoc-examples: true
+    analyze-types: true
+
+  depguard:
+    # Keep imports clean and avoid convenience packages that weaken determinism/traceability.
+    rules:
+      main:
+        # default allow
+        list-mode: lax
+        deny:
+          - pkg: "github.com/pkg/errors"
+            desc: "Use standard errors + fmt.Errorf(%w) + errors.Is/As."
+          - pkg: "log"
+            desc: "Use repo logging policy (structured), and keep deterministic outputs explicit."
+          - pkg: "io/ioutil"
+            desc: "Deprecated — use io or os."
+
+severity:
+  default-severity: error

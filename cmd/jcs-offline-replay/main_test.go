@@ -46,25 +46,34 @@ func TestParseKV(t *testing.T) {
 func TestInspectMatrix(t *testing.T) {
 	dir := t.TempDir()
 	matrix := filepath.Join(dir, "matrix.yaml")
-	data := []byte(`version: v1
-architecture: x86_64
-nodes:
-  - id: n1
-    mode: container
-    distro: debian
-    kernel_family: host
-    replays: 1
-    runner:
-      kind: container_command
-      replay: ["echo","ok"]
-  - id: n2
-    mode: vm
-    distro: ubuntu
-    kernel_family: ga
-    replays: 1
-    runner:
-      kind: libvirt_command
-      replay: ["echo","ok"]
+	data := []byte(`{
+  "version": "v1",
+  "architecture": "x86_64",
+  "nodes": [
+    {
+      "id": "n1",
+      "mode": "container",
+      "distro": "debian",
+      "kernel_family": "host",
+      "replays": 1,
+      "runner": {
+        "kind": "container_command",
+        "replay": ["echo", "ok"]
+      }
+    },
+    {
+      "id": "n2",
+      "mode": "vm",
+      "distro": "ubuntu",
+      "kernel_family": "ga",
+      "replays": 1,
+      "runner": {
+        "kind": "libvirt_command",
+        "replay": ["echo", "ok"]
+      }
+    }
+  ]
+}
 `)
 	if err := os.WriteFile(matrix, data, 0o600); err != nil {
 		t.Fatalf("write matrix fixture: %v", err)

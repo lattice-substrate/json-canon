@@ -1,14 +1,17 @@
-version: v1
-name: maximal-offline-linux-x86_64
-required_nodes: []
-required_suites:
-  - canonical-byte-stability
-  - verify-parity
-  - failure-class-parity
-  - bounds-limit-parity
-  - binary-identity
-  - env-independence
-  - evidence-completeness
-min_cold_replays: 5
-hard_release_gate: true
-evidence_required: true
+{
+  "evidence_required": true,
+  "hard_release_gate": true,
+  "min_cold_replays": 5,
+  "name": "maximal-offline-linux-x86_64",
+  "required_nodes": [],
+  "required_suites": [
+    "canonical-byte-stability",
+    "verify-parity",
+    "failure-class-parity",
+    "bounds-limit-parity",
+    "binary-identity",
+    "env-independence",
+    "evidence-completeness"
+  ],
+  "version": "v1"
+}
