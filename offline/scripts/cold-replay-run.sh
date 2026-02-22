@@ -6,8 +6,8 @@ usage() {
 usage: cold-replay-run.sh [options]
 
 Options:
-  --matrix <path>            Matrix YAML (default: offline/matrix.yaml)
-  --profile <path>           Profile YAML (default: offline/profiles/maximal.yaml)
+  --matrix <path>            Matrix config JSON (default: offline/matrix.yaml)
+  --profile <path>           Profile config JSON (default: offline/profiles/maximal.yaml)
   --output-dir <path>        Output directory (default: offline/runs/<timestamp>)
   --timeout <duration>       Replay timeout for jcs-offline-replay run (default: 12h)
   --version <string>         Version string for jcs-canon build (default: v0.0.0-dev)
