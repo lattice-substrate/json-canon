@@ -1,6 +1,8 @@
 package conformance_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -21,26 +23,45 @@ func repoRoot(t *testing.T) string {
 
 func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 	root := repoRoot(t)
-	matrixPath := filepath.Join(root, "offline", "matrix.yaml")
-	profilePath := filepath.Join(root, "offline", "profiles", "maximal.yaml")
+	tests := []struct {
+		matrixPath   string
+		profilePath  string
+		architecture string
+	}{
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.yaml"),
+			architecture: "x86_64",
+		},
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.arm64.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.arm64.yaml"),
+			architecture: "arm64",
+		},
+	}
 
-	m, err := replay.LoadMatrix(matrixPath)
-	if err != nil {
-		t.Fatalf("load matrix: %v", err)
-	}
-	if m.Architecture != "x86_64" {
-		t.Fatalf("expected x86_64 architecture, got %q", m.Architecture)
-	}
+	for _, tc := range tests {
+		m, err := replay.LoadMatrix(tc.matrixPath)
+		if err != nil {
+			t.Fatalf("load matrix %s: %v", tc.matrixPath, err)
+		}
+		if m.Architecture != tc.architecture {
+			t.Fatalf("expected architecture %q for %s, got %q", tc.architecture, tc.matrixPath, m.Architecture)
+		}
+		if err := replay.ValidateReleaseArchitecture(m); err != nil {
+			t.Fatalf("validate release architecture for %s: %v", tc.matrixPath, err)
+		}
 
-	p, err := replay.LoadProfile(profilePath)
-	if err != nil {
-		t.Fatalf("load profile: %v", err)
-	}
-	if p.MinColdReplays < 5 {
-		t.Fatalf("expected min cold replays >= 5, got %d", p.MinColdReplays)
-	}
-	if !p.HardReleaseGate {
-		t.Fatal("expected hard_release_gate=true")
+		p, err := replay.LoadProfile(tc.profilePath)
+		if err != nil {
+			t.Fatalf("load profile %s: %v", tc.profilePath, err)
+		}
+		if p.MinColdReplays < 5 {
+			t.Fatalf("expected min cold replays >= 5 for %s, got %d", tc.profilePath, p.MinColdReplays)
+		}
+		if !p.HardReleaseGate {
+			t.Fatalf("expected hard_release_gate=true for %s", tc.profilePath)
+		}
 	}
 }
 
@@ -67,6 +88,22 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if !strings.Contains(releaseDoc, "go test ./offline/conformance") {
 		t.Fatal("RELEASE_PROCESS.md missing offline conformance gate command")
 	}
+	releaseWorkflow := mustReadText(t, filepath.Join(root, ".github", "workflows", "release.yml"))
+	if !strings.Contains(releaseWorkflow, "TestOfflineReplayEvidenceReleaseGate") {
+		t.Fatal("release workflow missing explicit offline evidence gate test invocation")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_EVIDENCE") {
+		t.Fatal("release workflow missing JCS_OFFLINE_EVIDENCE for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_MATRIX") {
+		t.Fatal("release workflow missing JCS_OFFLINE_MATRIX for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_PROFILE") {
+		t.Fatal("release workflow missing JCS_OFFLINE_PROFILE for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "offline evidence gate arm64") {
+		t.Fatal("release workflow missing explicit arm64 offline evidence gate")
+	}
 }
 
 func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
@@ -75,11 +112,31 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 	if evidencePath == "" {
 		t.Skip("set JCS_OFFLINE_EVIDENCE to validate offline evidence bundle")
 	}
-	matrix, err := replay.LoadMatrix(filepath.Join(root, "offline", "matrix.yaml"))
+	bundlePath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_BUNDLE"))
+	controlBinaryPath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_CONTROL_BINARY"))
+	if bundlePath == "" || controlBinaryPath == "" {
+		defaultBundle, defaultControl := defaultEvidenceArtifactPaths(evidencePath)
+		if bundlePath == "" {
+			bundlePath = defaultBundle
+		}
+		if controlBinaryPath == "" {
+			controlBinaryPath = defaultControl
+		}
+	}
+
+	matrixPath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_MATRIX"))
+	if matrixPath == "" {
+		matrixPath = filepath.Join(root, "offline", "matrix.yaml")
+	}
+	profilePath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_PROFILE"))
+	if profilePath == "" {
+		profilePath = filepath.Join(root, "offline", "profiles", "maximal.yaml")
+	}
+	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
 		t.Fatalf("load matrix: %v", err)
 	}
-	profile, err := replay.LoadProfile(filepath.Join(root, "offline", "profiles", "maximal.yaml"))
+	profile, err := replay.LoadProfile(profilePath)
 	if err != nil {
 		t.Fatalf("load profile: %v", err)
 	}
@@ -87,9 +144,20 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load evidence: %v", err)
 	}
-	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile); err != nil {
+	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
+		ExpectedBundleSHA256:        mustFileSHA256(t, bundlePath),
+		ExpectedControlBinarySHA256: mustFileSHA256(t, controlBinaryPath),
+		ExpectedMatrixSHA256:        mustFileSHA256(t, matrixPath),
+		ExpectedProfileSHA256:       mustFileSHA256(t, profilePath),
+		ExpectedArchitecture:        matrix.Architecture,
+	}); err != nil {
 		t.Fatalf("offline evidence gate failed: %v", err)
 	}
+}
+
+func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
+	base := filepath.Dir(evidencePath)
+	return filepath.Join(base, "offline-bundle.tgz"), filepath.Join(base, "bin", "jcs-canon")
 }
 
 func mustReadText(t *testing.T, path string) string {
@@ -99,4 +167,14 @@ func mustReadText(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(data)
+}
+
+func mustFileSHA256(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

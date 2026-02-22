@@ -14,11 +14,24 @@ func TestLoadMatrix_OFFLINE_MATRIX_001(t *testing.T) {
 	if m.Architecture != "x86_64" {
 		t.Fatalf("unexpected architecture %q", m.Architecture)
 	}
-	if err := ValidatePhaseOneArchitecture(m); err != nil {
-		t.Fatalf("phase-1 architecture validation failed: %v", err)
+	if err := ValidateReleaseArchitecture(m); err != nil {
+		t.Fatalf("release architecture validation failed: %v", err)
 	}
 	if len(m.Nodes) < 10 {
 		t.Fatalf("expected maximal node coverage, got %d", len(m.Nodes))
+	}
+}
+
+func TestLoadArm64Matrix_OFFLINE_ARCH_001(t *testing.T) {
+	m, err := LoadMatrix(filepath.Join("..", "matrix.arm64.yaml"))
+	if err != nil {
+		t.Fatalf("load arm64 matrix: %v", err)
+	}
+	if m.Architecture != "arm64" {
+		t.Fatalf("unexpected architecture %q", m.Architecture)
+	}
+	if err := ValidateReleaseArchitecture(m); err != nil {
+		t.Fatalf("arm64 architecture validation failed: %v", err)
 	}
 }
 
@@ -49,13 +62,17 @@ func TestValidateMatrixRequiresContainerAndVM(t *testing.T) {
 	}
 }
 
-func TestValidatePhaseOneArchitecture_OFFLINE_ARCH_001(t *testing.T) {
+func TestValidateReleaseArchitecture_OFFLINE_ARCH_001(t *testing.T) {
 	m := &Matrix{Version: "v1", Architecture: "x86_64"}
-	if err := ValidatePhaseOneArchitecture(m); err != nil {
+	if err := ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("unexpected architecture validation failure: %v", err)
 	}
 	m.Architecture = "arm64"
-	if err := ValidatePhaseOneArchitecture(m); err == nil {
+	if err := ValidateReleaseArchitecture(m); err != nil {
+		t.Fatalf("unexpected arm64 architecture validation failure: %v", err)
+	}
+	m.Architecture = "ppc64"
+	if err := ValidateReleaseArchitecture(m); err == nil {
 		t.Fatal("expected architecture validation failure")
 	}
 }

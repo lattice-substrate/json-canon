@@ -262,7 +262,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-COLD-001":     checkOfflineProfileColdReplayPolicy,
 		"OFFLINE-EVIDENCE-001": checkOfflineEvidenceSchemaAndVerifyCLI,
 		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
-		"OFFLINE-ARCH-001":     checkOfflineArchScopeX8664,
+		"OFFLINE-ARCH-001":     checkOfflineArchScopeDualArch,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -1996,6 +1996,7 @@ func checkOfflineEvidenceSchemaAndVerifyCLI(t *testing.T, h *harness) {
 	schema := mustReadText(t, filepath.Join(h.root, "offline", "schema", "evidence.v1.json"))
 	assertContains(t, schema, "\"schema_version\"", "offline evidence schema")
 	assertContains(t, schema, "\"node_replays\"", "offline evidence schema")
+	assertContains(t, schema, "\"arm64\"", "offline evidence schema architecture enum")
 
 	cli := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
 	assertContains(t, cli, "verify-evidence", "offline replay verifier command")
@@ -2012,21 +2013,42 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	releaseDoc := mustReadText(t, filepath.Join(h.root, "RELEASE_PROCESS.md"))
 	assertContains(t, releaseDoc, "go test ./offline/conformance", "offline release gate command")
 	assertContains(t, releaseDoc, "JCS_OFFLINE_EVIDENCE", "offline release gate environment variable")
+	assertContains(t, releaseDoc, "JCS_OFFLINE_MATRIX", "offline release gate matrix override")
+	assertContains(t, releaseDoc, "JCS_OFFLINE_PROFILE", "offline release gate profile override")
+
+	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
+	assertContains(t, releaseWorkflow, "offline evidence gate x86_64", "release workflow x86_64 offline gate")
+	assertContains(t, releaseWorkflow, "offline evidence gate arm64", "release workflow arm64 offline gate")
+	assertContains(t, releaseWorkflow, "JCS_OFFLINE_MATRIX", "release workflow matrix override env")
+	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
 }
 
-// TestOfflineArchScopeX8664 verifies phase-1 offline profile architecture scope.
-func TestOfflineArchScopeX8664(t *testing.T) {
+// TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.
+func TestOfflineArchScopeDualArch(t *testing.T) {
 	h := testHarness(t)
-	checkOfflineArchScopeX8664(t, h)
+	checkOfflineArchScopeDualArch(t, h)
 }
 
-func checkOfflineArchScopeX8664(t *testing.T, h *harness) {
-	matrix, err := replay.LoadMatrix(filepath.Join(h.root, "offline", "matrix.yaml"))
-	if err != nil {
-		t.Fatalf("load offline matrix: %v", err)
+func checkOfflineArchScopeDualArch(t *testing.T, h *harness) {
+	tests := []struct {
+		path         string
+		architecture string
+	}{
+		{path: filepath.Join(h.root, "offline", "matrix.yaml"), architecture: "x86_64"},
+		{path: filepath.Join(h.root, "offline", "matrix.arm64.yaml"), architecture: "arm64"},
 	}
-	if err := replay.ValidatePhaseOneArchitecture(matrix); err != nil {
-		t.Fatalf("offline matrix architecture scope check failed: %v", err)
+
+	for _, tc := range tests {
+		matrix, err := replay.LoadMatrix(tc.path)
+		if err != nil {
+			t.Fatalf("load offline matrix %s: %v", tc.path, err)
+		}
+		if matrix.Architecture != tc.architecture {
+			t.Fatalf("offline matrix architecture mismatch for %s: got %q want %q", tc.path, matrix.Architecture, tc.architecture)
+		}
+		if err := replay.ValidateReleaseArchitecture(matrix); err != nil {
+			t.Fatalf("offline matrix architecture scope check failed for %s: %v", tc.path, err)
+		}
 	}
 }
 

@@ -87,7 +87,7 @@ if [[ "$SKIP_PREFLIGHT" -eq 1 ]]; then
   x86_args+=(--skip-preflight)
 fi
 
-arm_args=(--skip-release-gate)
+arm_args=()
 if [[ "$SKIP_PREFLIGHT" -eq 1 ]]; then
   arm_args+=(--skip-preflight)
 fi

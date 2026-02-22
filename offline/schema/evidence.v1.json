@@ -31,7 +31,7 @@
     "generated_at_utc": { "type": "string", "minLength": 1 },
     "orchestrator": { "type": "string", "minLength": 1 },
     "profile_name": { "type": "string", "minLength": 1 },
-    "architecture": { "type": "string", "enum": ["x86_64"] },
+    "architecture": { "type": "string", "enum": ["x86_64", "arm64"] },
     "required_suites": {
       "type": "array",
       "minItems": 1,

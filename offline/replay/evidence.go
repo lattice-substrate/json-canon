@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -48,6 +49,15 @@ type NodeRunEvidence struct {
 	ExitCodeSHA256     string `json:"exit_code_sha256"`
 }
 
+// EvidenceValidationOptions binds evidence metadata to expected immutable inputs.
+type EvidenceValidationOptions struct {
+	ExpectedBundleSHA256        string
+	ExpectedControlBinarySHA256 string
+	ExpectedMatrixSHA256        string
+	ExpectedProfileSHA256       string
+	ExpectedArchitecture        string
+}
+
 func WriteEvidence(path string, e *EvidenceBundle) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")
@@ -75,7 +85,7 @@ func LoadEvidence(path string) (*EvidenceBundle, error) {
 	return &e, nil
 }
 
-func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile) error {
+func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts EvidenceValidationOptions) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")
 	}
@@ -87,6 +97,38 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile) error {
 	}
 	if e.ProfileName != p.Name {
 		return fmt.Errorf("profile mismatch: evidence=%q profile=%q", e.ProfileName, p.Name)
+	}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{name: "bundle_sha256", value: e.BundleSHA256},
+		{name: "control_binary_sha256", value: e.ControlBinarySHA},
+		{name: "matrix_sha256", value: e.MatrixSHA256},
+		{name: "profile_sha256", value: e.ProfileSHA256},
+	} {
+		if err := validateSHA256Token(field.name, field.value); err != nil {
+			return err
+		}
+	}
+	expectedArch := m.Architecture
+	if strings.TrimSpace(opts.ExpectedArchitecture) != "" {
+		expectedArch = strings.TrimSpace(opts.ExpectedArchitecture)
+	}
+	if e.Architecture != expectedArch {
+		return fmt.Errorf("architecture mismatch: evidence=%q expected=%q", e.Architecture, expectedArch)
+	}
+	if opts.ExpectedBundleSHA256 != "" && e.BundleSHA256 != opts.ExpectedBundleSHA256 {
+		return fmt.Errorf("bundle_sha256 mismatch: evidence=%q expected=%q", e.BundleSHA256, opts.ExpectedBundleSHA256)
+	}
+	if opts.ExpectedControlBinarySHA256 != "" && e.ControlBinarySHA != opts.ExpectedControlBinarySHA256 {
+		return fmt.Errorf("control_binary_sha256 mismatch: evidence=%q expected=%q", e.ControlBinarySHA, opts.ExpectedControlBinarySHA256)
+	}
+	if opts.ExpectedMatrixSHA256 != "" && e.MatrixSHA256 != opts.ExpectedMatrixSHA256 {
+		return fmt.Errorf("matrix_sha256 mismatch: evidence=%q expected=%q", e.MatrixSHA256, opts.ExpectedMatrixSHA256)
+	}
+	if opts.ExpectedProfileSHA256 != "" && e.ProfileSHA256 != opts.ExpectedProfileSHA256 {
+		return fmt.Errorf("profile_sha256 mismatch: evidence=%q expected=%q", e.ProfileSHA256, opts.ExpectedProfileSHA256)
 	}
 	if !e.HardReleaseGate {
 		return fmt.Errorf("evidence must record hard_release_gate=true")
@@ -209,5 +251,16 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile) error {
 		return fmt.Errorf("required_suites mismatch")
 	}
 
+	return nil
+}
+
+func validateSHA256Token(name, value string) error {
+	token := strings.TrimSpace(value)
+	if len(token) != 64 {
+		return fmt.Errorf("%s must be 64 hex characters", name)
+	}
+	if _, err := hex.DecodeString(token); err != nil {
+		return fmt.Errorf("%s must be valid hex: %w", name, err)
+	}
 	return nil
 }

@@ -1,6 +1,6 @@
 # json-canon
 
-RFC 8785 JSON Canonicalization Scheme - pure Go, zero dependencies.
+RFC 8785 JSON Canonicalization Scheme - pure Go core runtime with zero external dependencies.
 
 ## Overview
 
@@ -62,7 +62,12 @@ go test ./conformance -count=1 -v -timeout=10m
 Offline cold-replay evidence gate (release workflow):
 
 ```bash
-JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run>/offline-evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run-arm64>/offline-evidence.json \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
@@ -79,6 +84,7 @@ Requirement registries are split for audit clarity:
 
 Official engineering docs are indexed in `docs/README.md`.
 Key references:
+- `docs/BOOK.md`
 - `ARCHITECTURE.md`
 - `ABI.md`
 - `NORMATIVE_REFERENCES.md`

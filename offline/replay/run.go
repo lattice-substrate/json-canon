@@ -137,7 +137,13 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	bundle.AggregateClass = base.FailureClassSHA256
 	bundle.AggregateExitCode = base.ExitCodeSHA256
 
-	if err := ValidateEvidenceBundle(bundle, matrix, profile); err != nil {
+	if err := ValidateEvidenceBundle(bundle, matrix, profile, EvidenceValidationOptions{
+		ExpectedBundleSHA256:        opts.BundleSHA256,
+		ExpectedControlBinarySHA256: opts.ControlBinarySHA256,
+		ExpectedMatrixSHA256:        opts.MatrixSHA256,
+		ExpectedProfileSHA256:       opts.ProfileSHA256,
+		ExpectedArchitecture:        matrix.Architecture,
+	}); err != nil {
 		return nil, err
 	}
 	return bundle, nil

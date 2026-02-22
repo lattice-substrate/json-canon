@@ -27,6 +27,22 @@ jobs:
         run: go test ./... -race -count=1 -timeout=25m
       - name: conformance
         run: go test ./conformance -count=1 -timeout=10m -v
+      - name: offline evidence gate x86_64
+        env:
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/20260222T023623Z/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/20260222T023623Z/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/20260222T023623Z/bin/jcs-canon
+          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.yaml
+          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.yaml
+        run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
+      - name: offline evidence gate arm64
+        env:
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/bin/jcs-canon
+          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.local-no-rocky.arm64.yaml
+          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.arm64.yaml
+        run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
         with:

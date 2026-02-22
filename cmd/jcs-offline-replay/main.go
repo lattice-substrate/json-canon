@@ -191,6 +191,18 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	if matrixPath == "" || profilePath == "" || evidencePath == "" {
 		return fmt.Errorf("verify-evidence requires --matrix, --profile, --evidence")
 	}
+	bundlePath := requireFlag(flags, "--bundle")
+	controlBinaryPath := requireFlag(flags, "--control-binary")
+	if bundlePath == "" || controlBinaryPath == "" {
+		defaultBundlePath, defaultControlPath := defaultEvidenceArtifactPaths(evidencePath)
+		if bundlePath == "" {
+			bundlePath = defaultBundlePath
+		}
+		if controlBinaryPath == "" {
+			controlBinaryPath = defaultControlPath
+		}
+	}
+
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
 		return err
@@ -203,7 +215,29 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile); err != nil {
+	bundleSHA, err := fileSHA256(bundlePath)
+	if err != nil {
+		return fmt.Errorf("resolve bundle sha256: %w", err)
+	}
+	controlBinarySHA, err := fileSHA256(controlBinaryPath)
+	if err != nil {
+		return fmt.Errorf("resolve control binary sha256: %w", err)
+	}
+	matrixSHA, err := fileSHA256(matrixPath)
+	if err != nil {
+		return err
+	}
+	profileSHA, err := fileSHA256(profilePath)
+	if err != nil {
+		return err
+	}
+	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
+		ExpectedBundleSHA256:        bundleSHA,
+		ExpectedControlBinarySHA256: controlBinarySHA,
+		ExpectedMatrixSHA256:        matrixSHA,
+		ExpectedProfileSHA256:       profileSHA,
+		ExpectedArchitecture:        matrix.Architecture,
+	}); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, "ok")
@@ -306,6 +340,11 @@ func requireFlag(flags map[string]string, name string) string {
 	return strings.TrimSpace(flags[name])
 }
 
+func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
+	base := filepath.Dir(evidencePath)
+	return filepath.Join(base, "offline-bundle.tgz"), filepath.Join(base, "bin", "jcs-canon")
+}
+
 func fileSHA256(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -319,7 +358,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report|inspect-matrix> [flags]")
 	fmt.Fprintln(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]")
 	fmt.Fprintln(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]")
-	fmt.Fprintln(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path>")
+	fmt.Fprintln(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>]")
 	fmt.Fprintln(w, "  report --evidence <path>")
 	fmt.Fprintln(w, "  inspect-matrix --matrix <path>")
 }

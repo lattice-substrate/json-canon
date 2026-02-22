@@ -16,7 +16,7 @@ Conformance is defined by the union of:
 - `abi_manifest.json`
 - conformance tests in `conformance/harness_test.go`
 - vector corpus in `conformance/vectors/*.jsonl`
-- offline replay contracts in `offline/matrix.yaml`, `offline/profiles/maximal.yaml`, and `offline/schema/evidence.v1.json`
+- offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, and `offline/schema/evidence.v1.json`
 
 A release is non-conformant if any artifact is inconsistent with the others.
 
@@ -49,10 +49,15 @@ CGO_ENABLED=0 go build -trimpath -buildvcs=false \
   -o ./jcs-canon ./cmd/jcs-canon
 ```
 
-When offline evidence is available for a release candidate, this gate is also REQUIRED:
+When offline evidence is available for a release candidate, these gates are also REQUIRED:
 
 ```bash
-JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run>/offline-evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run-arm64>/offline-evidence.json \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 

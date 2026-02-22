@@ -170,15 +170,22 @@ func ValidateProfile(p *Profile) error {
 	return nil
 }
 
-// ValidatePhaseOneArchitecture enforces the current architecture scope policy.
-func ValidatePhaseOneArchitecture(m *Matrix) error {
+// ValidateReleaseArchitecture enforces the release architecture scope policy.
+func ValidateReleaseArchitecture(m *Matrix) error {
 	if m == nil {
 		return fmt.Errorf("matrix is nil")
 	}
-	if m.Architecture != "x86_64" {
-		return fmt.Errorf("phase-1 architecture must be x86_64, got %q", m.Architecture)
+	switch m.Architecture {
+	case "x86_64", "arm64":
+		return nil
+	default:
+		return fmt.Errorf("release architecture must be one of x86_64, arm64, got %q", m.Architecture)
 	}
-	return nil
+}
+
+// ValidatePhaseOneArchitecture is retained as a compatibility wrapper.
+func ValidatePhaseOneArchitecture(m *Matrix) error {
+	return ValidateReleaseArchitecture(m)
 }
 
 func requiredNodeIDs(m *Matrix, p *Profile) ([]string, error) {

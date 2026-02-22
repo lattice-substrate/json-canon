@@ -60,6 +60,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Conformance suite now enforces ABI manifest/source parity, workflow SHA pinning, release checksum/provenance steps, governance durability clauses, and behavior-test matrix linkage.
 - Release and verification documentation now include mandatory offline evidence gate validation (`go test ./offline/conformance` with `JCS_OFFLINE_EVIDENCE`).
 - Policy registry and traceability matrix expanded with OFFLINE requirement IDs for matrix coverage, cold replay policy, evidence schema contract, release-gate enforcement, and architecture scope.
+- Offline evidence verification now binds metadata digests (`bundle_sha256`, `control_binary_sha256`, `matrix_sha256`, `profile_sha256`) and `architecture` to expected artifacts, and fails on tamper.
+- Release workflow now executes `TestOfflineReplayEvidenceReleaseGate` with an explicit archived evidence path before publish jobs.
+- README dependency claim now states the precise scope: core runtime has zero external dependencies.
+- Offline release gating now requires both `x86_64` and `arm64` evidence validation paths in release workflow and documentation.
+- Offline release architecture policy now explicitly supports `x86_64` and `arm64` (including evidence schema enum and architecture contract checks).
+- Added `docs/BOOK.md` as a book-style operator/developer guide for architecture, usage, offline replay, and troubleshooting.
 
 ### Fixed
 - Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.
