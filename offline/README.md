@@ -9,7 +9,7 @@ Full runbook: `docs/OFFLINE_REPLAY_HARNESS.md`
 ### 1) Preflight
 
 ```bash
-./offline/scripts/cold-replay-preflight.sh --matrix offline/matrix.yaml
+jcs-offline-replay preflight --matrix offline/matrix.yaml
 ```
 
 ### Matrix introspection (machine-readable)
@@ -21,13 +21,21 @@ jcs-offline-replay inspect-matrix --matrix offline/matrix.yaml
 ### 2) Single-architecture full proof run
 
 ```bash
-./offline/scripts/cold-replay-run.sh
+jcs-offline-replay run-suite --matrix offline/matrix.yaml --profile offline/profiles/maximal.yaml
 ```
 
 ### 3) Cross-architecture full proof run
 
 ```bash
-./offline/scripts/cold-replay-cross-arch.sh
+jcs-offline-replay cross-arch
+```
+
+### 4) Cross-architecture + full offline official vectors (including ES6 100M)
+
+```bash
+jcs-offline-replay cross-arch \
+  --run-official-vectors \
+  --run-official-es6-100m
 ```
 
 ## Key Contracts

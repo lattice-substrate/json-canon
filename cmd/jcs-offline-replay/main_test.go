@@ -30,6 +30,17 @@ func TestRunUnknownSubcommand(t *testing.T) {
 	}
 }
 
+func TestRunSubcommandHelp(t *testing.T) {
+	var out, err bytes.Buffer
+	code := run([]string{"cross-arch", "--help"}, &out, &err)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, err.String())
+	}
+	if !strings.Contains(out.String(), "usage: jcs-offline-replay") {
+		t.Fatalf("unexpected usage output: %q", out.String())
+	}
+}
+
 func TestParseKV(t *testing.T) {
 	flags, err := parseKV([]string{"--matrix", "a.yaml", "--profile=b.yaml"})
 	if err != nil {

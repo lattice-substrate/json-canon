@@ -70,6 +70,14 @@ JCS_OFFICIAL_ES6_ENABLE_100M=1 \
 go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
+For full local offline proof (outside GitHub workflows), operators SHOULD use:
+
+```bash
+jcs-offline-replay cross-arch \
+  --run-official-vectors \
+  --run-official-es6-100m
+```
+
 ## CI Contract
 
 CI configuration MUST enforce at least:

@@ -23,6 +23,8 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
 )
 
+const boolTrue = "true"
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -47,12 +49,24 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return code
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 explicit subcommand branching keeps CLI behavior deterministic and auditable.
 func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, stderr io.Writer) (int, error) {
+	if helpRequested(flags) {
+		return 0, writeUsage(stdout)
+	}
 	switch sub {
 	case "prepare":
 		return 0, cmdPrepare(flags, stdout)
 	case "run":
 		return 0, cmdRun(flags, stdout)
+	case "preflight":
+		return 0, cmdPreflight(flags, stdout)
+	case "audit-summary":
+		return 0, cmdAuditSummary(flags, stdout)
+	case "run-suite":
+		return 0, cmdRunSuite(flags, stdout)
+	case "cross-arch":
+		return 0, cmdCrossArch(flags, stdout)
 	case "verify-evidence":
 		return 0, cmdVerifyEvidence(flags, stdout)
 	case "report":
@@ -68,6 +82,11 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		}
 		return 2, nil
 	}
+}
+
+func helpRequested(flags map[string]string) bool {
+	return strings.EqualFold(strings.TrimSpace(flags["--help"]), boolTrue) ||
+		strings.EqualFold(strings.TrimSpace(flags["-h"]), boolTrue)
 }
 
 func cmdPrepare(flags map[string]string, stdout io.Writer) error {
@@ -392,10 +411,19 @@ func adapterFactory() replay.AdapterFactory {
 
 func parseKV(args []string) (map[string]string, error) {
 	flags := make(map[string]string)
+	boolFlags := map[string]struct{}{
+		"--local-no-rocky":        {},
+		"--skip-preflight":        {},
+		"--skip-release-gate":     {},
+		"--run-official-vectors":  {},
+		"--run-official-es6-100m": {},
+		"--strict":                {},
+		"--no-strict":             {},
+	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--help" || arg == "-h" {
-			flags[arg] = "true"
+			flags[arg] = boolTrue
 			continue
 		}
 		if !strings.HasPrefix(arg, "--") {
@@ -405,6 +433,12 @@ func parseKV(args []string) (map[string]string, error) {
 			parts := strings.SplitN(arg, "=", 2)
 			flags[parts[0]] = parts[1]
 			continue
+		}
+		if _, ok := boolFlags[arg]; ok {
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "--") {
+				flags[arg] = boolTrue
+				continue
+			}
 		}
 		if i+1 >= len(args) {
 			return nil, fmt.Errorf("flag %s requires value", arg)
@@ -435,13 +469,25 @@ func fileSHA256(path string) (string, error) {
 }
 
 func writeUsage(w io.Writer) error {
-	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
+	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  preflight --matrix <path> [--strict] [--no-strict]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  audit-summary --matrix <path> --profile <path> --evidence <path> [--output-dir <path>]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>]"); err != nil {

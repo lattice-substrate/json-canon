@@ -1,0 +1,44 @@
+[preflight] repo: /home/lenny/json-canon
+[preflight] matrix: offline/matrix.yaml
+[preflight] checking base toolchain
+[PASS] command available: go
+[PASS] command available: tar
+[FAIL] container engine not reachable: docker (Client: Docker Engine - Community
+ Version:    27.4.0
+ Context:    default
+ Debug Mode: false
+ Plugins:
+  buildx: Docker Buildx (Docker Inc.)
+    Version:  v0.19.2
+    Path:     /usr/libexec/docker/cli-plugins/docker-buildx
+  compose: Docker Compose (Docker Inc.)
+    Version:  v2.31.0
+    Path:     /usr/libexec/docker/cli-plugins/docker-compose
+
+Server:
+ERROR: permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.47/info": dial unix /var/run/docker.sock: connect: permission denied
+errors pretty printing info)
+[preflight] checking vm/libvirt dependencies
+[PASS] command available: virsh
+[PASS] command available: ssh
+[PASS] command available: scp
+[PASS] libvirt domain exists: debian12-vm -> debian12-vm
+[PASS] snapshot exists: debian12-vm/snapshot-cold
+[PASS] vm ssh reachable: debian12-vm -> root@debian12-vm
+[PASS] libvirt domain exists: ubuntu2204-vm-ga -> ubuntu2204-vm-ga
+[PASS] snapshot exists: ubuntu2204-vm-ga/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-ga -> root@ubuntu2204-vm-ga
+[PASS] libvirt domain exists: ubuntu2204-vm-hwe -> ubuntu2204-vm-hwe
+[PASS] snapshot exists: ubuntu2204-vm-hwe/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-hwe -> root@ubuntu2204-vm-hwe
+[PASS] libvirt domain exists: fedora40-vm -> fedora40-vm
+[PASS] snapshot exists: fedora40-vm/snapshot-cold
+[PASS] vm ssh reachable: fedora40-vm -> root@fedora40-vm
+[PASS] libvirt domain exists: rocky9-vm -> rocky9-vm
+[PASS] snapshot exists: rocky9-vm/snapshot-cold
+[PASS] vm ssh reachable: rocky9-vm -> root@rocky9-vm
+[PASS] libvirt domain exists: lts-legacy-kernel-vm -> lts-legacy-kernel-vm
+[PASS] snapshot exists: lts-legacy-kernel-vm/snapshot-cold
+[PASS] vm ssh reachable: lts-legacy-kernel-vm -> root@lts-legacy-kernel-vm
+[preflight] failures=1 warnings=0
+[preflight] RESULT=FAIL
