@@ -29,6 +29,12 @@ Base image defaults (override via env vars):
   fedora40-vm            -> $JCS_VM_IMAGE_FEDORA40 or <image-dir>/fedora40.qcow2
   rocky9-vm              -> $JCS_VM_IMAGE_ROCKY9 or <image-dir>/rocky9.qcow2
   lts-legacy-kernel-vm   -> $JCS_VM_IMAGE_UBUNTU2204_LEGACY or <image-dir>/ubuntu2204-legacy.qcow2 or <image-dir>/ubuntu2204.qcow2
+  debian12-vm-arm64      -> $JCS_VM_IMAGE_DEBIAN12_ARM64 or <image-dir>/debian12-arm64.qcow2 or <image-dir>/debian12.qcow2
+  ubuntu2204-vm-ga-arm64 -> $JCS_VM_IMAGE_UBUNTU2204_GA_ARM64 or <image-dir>/ubuntu2204-ga-arm64.qcow2 or <image-dir>/ubuntu2204-arm64.qcow2 or <image-dir>/ubuntu2204.qcow2
+  ubuntu2204-vm-hwe-arm64-> $JCS_VM_IMAGE_UBUNTU2204_HWE_ARM64 or <image-dir>/ubuntu2204-hwe-arm64.qcow2 or <image-dir>/ubuntu2204-arm64.qcow2 or <image-dir>/ubuntu2204.qcow2
+  fedora40-vm-arm64      -> $JCS_VM_IMAGE_FEDORA40_ARM64 or <image-dir>/fedora40-arm64.qcow2 or <image-dir>/fedora40.qcow2
+  rocky9-vm-arm64        -> $JCS_VM_IMAGE_ROCKY9_ARM64 or <image-dir>/rocky9-arm64.qcow2 or <image-dir>/rocky9.qcow2
+  lts-legacy-kernel-vm-arm64 -> $JCS_VM_IMAGE_UBUNTU2204_LEGACY_ARM64 or <image-dir>/ubuntu2204-legacy-arm64.qcow2 or <image-dir>/ubuntu2204-arm64.qcow2 or <image-dir>/ubuntu2204.qcow2
 
 Notes:
   - This script never downloads guest images; provide them locally first.
@@ -156,6 +162,17 @@ resolve_base_image() {
   local distro="$2"
   local image=""
 
+  first_existing() {
+    local candidate=""
+    for candidate in "$@"; do
+      if [[ -n "$candidate" && -f "$candidate" ]]; then
+        printf '%s\n' "$candidate"
+        return 0
+      fi
+    done
+    return 1
+  }
+
   case "$node_id" in
     debian12-vm)
       image="${JCS_VM_IMAGE_DEBIAN12:-${IMAGE_DIR}/debian12.qcow2}"
@@ -195,6 +212,45 @@ resolve_base_image() {
           image="${IMAGE_DIR}/ubuntu2204.qcow2"
         fi
       fi
+      ;;
+    debian12-vm-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_DEBIAN12_ARM64:-}" \
+        "${IMAGE_DIR}/debian12-arm64.qcow2" \
+        "${IMAGE_DIR}/debian12.qcow2" || true)"
+      ;;
+    ubuntu2204-vm-ga-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_UBUNTU2204_GA_ARM64:-}" \
+        "${IMAGE_DIR}/ubuntu2204-ga-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204.qcow2" || true)"
+      ;;
+    ubuntu2204-vm-hwe-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_UBUNTU2204_HWE_ARM64:-}" \
+        "${IMAGE_DIR}/ubuntu2204-hwe-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204.qcow2" || true)"
+      ;;
+    fedora40-vm-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_FEDORA40_ARM64:-}" \
+        "${IMAGE_DIR}/fedora40-arm64.qcow2" \
+        "${IMAGE_DIR}/fedora40.qcow2" || true)"
+      ;;
+    rocky9-vm-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_ROCKY9_ARM64:-}" \
+        "${IMAGE_DIR}/rocky9-arm64.qcow2" \
+        "${IMAGE_DIR}/rocky9.qcow2" || true)"
+      ;;
+    lts-legacy-kernel-vm-arm64)
+      image="$(first_existing \
+        "${JCS_VM_IMAGE_UBUNTU2204_LEGACY_ARM64:-}" \
+        "${IMAGE_DIR}/ubuntu2204-legacy-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204-arm64.qcow2" \
+        "${IMAGE_DIR}/ubuntu2204.qcow2" || true)"
       ;;
     *)
       case "$distro" in
