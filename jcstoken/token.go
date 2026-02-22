@@ -8,6 +8,7 @@
 package jcstoken
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -43,11 +44,17 @@ type Value struct {
 type Kind int
 
 const (
+	// KindNull represents JSON null.
 	KindNull Kind = iota
+	// KindBool represents JSON true/false.
 	KindBool
+	// KindNumber represents JSON numbers.
 	KindNumber
+	// KindString represents JSON strings.
 	KindString
+	// KindArray represents JSON arrays.
 	KindArray
+	// KindObject represents JSON objects.
 	KindObject
 )
 
@@ -174,13 +181,13 @@ func ParseWithOptions(data []byte, opts *Options) (*Value, error) {
 	p.skipWhitespace()
 	// PARSE-GRAM-008
 	if p.pos != len(p.data) {
-		return nil, p.newError(jcserr.InvalidGrammar, "trailing content after JSON value")
+		return nil, p.newError("trailing content after JSON value")
 	}
 	return v, nil
 }
 
-func (p *parser) newError(class jcserr.FailureClass, msg string) *jcserr.Error {
-	return jcserr.New(class, p.pos, msg)
+func (p *parser) newError(msg string) *jcserr.Error {
+	return jcserr.New(jcserr.InvalidGrammar, p.pos, msg)
 }
 
 func (p *parser) newErrorf(class jcserr.FailureClass, format string, args ...any) *jcserr.Error {
@@ -237,7 +244,7 @@ func (p *parser) skipWhitespace() {
 	}
 }
 
-// BOUND-DEPTH-001
+// BOUND-DEPTH-001.
 func (p *parser) pushDepth() *jcserr.Error {
 	p.depth++
 	if p.depth > p.maxDepth {
@@ -261,7 +268,7 @@ func (p *parser) parseValue() (*Value, error) {
 
 	c, ok := p.peek()
 	if !ok {
-		return nil, p.newError(jcserr.InvalidGrammar, "unexpected end of input")
+		return nil, p.newError("unexpected end of input")
 	}
 
 	switch c {
@@ -280,6 +287,7 @@ func (p *parser) parseValue() (*Value, error) {
 	}
 }
 
+//nolint:gocyclo,cyclop // RFC grammar and duplicate-key enforcement keep this parser path branch-heavy by design.
 func (p *parser) parseObject() (*Value, error) {
 	if err := p.pushDepth(); err != nil {
 		return nil, err
@@ -296,7 +304,7 @@ func (p *parser) parseObject() (*Value, error) {
 
 	c, ok := p.peek()
 	if !ok {
-		return nil, p.newError(jcserr.InvalidGrammar, "unexpected end of input in object")
+		return nil, p.newError("unexpected end of input in object")
 	}
 	if c == '}' {
 		p.pos++
@@ -341,7 +349,7 @@ func (p *parser) parseObject() (*Value, error) {
 		p.skipWhitespace()
 		c, ok := p.peek()
 		if !ok {
-			return nil, p.newError(jcserr.InvalidGrammar, "unexpected end of input in object")
+			return nil, p.newError("unexpected end of input in object")
 		}
 		if c == '}' {
 			p.pos++
@@ -356,6 +364,7 @@ func (p *parser) parseObject() (*Value, error) {
 	}
 }
 
+//nolint:gocyclo,cyclop // RFC grammar parser path is intentionally explicit for deterministic error offsets.
 func (p *parser) parseArray() (*Value, error) {
 	if err := p.pushDepth(); err != nil {
 		return nil, err
@@ -371,7 +380,7 @@ func (p *parser) parseArray() (*Value, error) {
 
 	c, ok := p.peek()
 	if !ok {
-		return nil, p.newError(jcserr.InvalidGrammar, "unexpected end of input in array")
+		return nil, p.newError("unexpected end of input in array")
 	}
 	if c == ']' {
 		p.pos++
@@ -394,7 +403,7 @@ func (p *parser) parseArray() (*Value, error) {
 		p.skipWhitespace()
 		c, ok := p.peek()
 		if !ok {
-			return nil, p.newError(jcserr.InvalidGrammar, "unexpected end of input in array")
+			return nil, p.newError("unexpected end of input in array")
 		}
 		if c == ']' {
 			p.pos++
@@ -413,6 +422,8 @@ func (p *parser) parseArray() (*Value, error) {
 // IJSON-SUR-001..003: Surrogate handling.
 // IJSON-NONC-001: Noncharacter rejection.
 // PARSE-GRAM-004: Unescaped control character rejection.
+//
+//nolint:gocyclo,cyclop // String decode/validation follows RFC and I-JSON rules with explicit branch points.
 func (p *parser) parseString() (*Value, error) {
 	if err := p.expect('"'); err != nil {
 		return nil, err
@@ -421,7 +432,7 @@ func (p *parser) parseString() (*Value, error) {
 	var buf []byte
 	for {
 		if p.pos >= len(p.data) {
-			return nil, p.newError(jcserr.InvalidGrammar, "unterminated string")
+			return nil, p.newError("unterminated string")
 		}
 		b := p.data[p.pos]
 		if b == '"' {
@@ -491,6 +502,8 @@ func (p *parser) parseEscape(sourceOffset int) (rune, *jcserr.Error) {
 }
 
 // parseUnicodeEscape parses \uXXXX (and \uXXXX\uXXXX for surrogate pairs).
+//
+//nolint:gocyclo,cyclop // Surrogate validation paths are explicit to preserve failure-class semantics.
 func (p *parser) parseUnicodeEscape(sourceOffset int) (rune, *jcserr.Error) {
 	r1, err := p.readHex4(sourceOffset)
 	if err != nil {
@@ -634,16 +647,16 @@ func (p *parser) parseNumber() (*Value, error) {
 	return p.buildNumberValue(start, raw)
 }
 
-// PARSE-GRAM-001: leading zeros
+// PARSE-GRAM-001: leading zeros.
 func (p *parser) scanIntegerPart() *jcserr.Error {
 	if p.pos >= len(p.data) {
-		return p.newError(jcserr.InvalidGrammar, "unexpected end of input in number")
+		return p.newError("unexpected end of input in number")
 	}
 
 	if p.data[p.pos] == '0' {
 		p.pos++
 		if p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			return p.newError(jcserr.InvalidGrammar, "leading zero in number")
+			return p.newError("leading zero in number")
 		}
 		return nil
 	}
@@ -664,7 +677,7 @@ func (p *parser) scanFractionPart() *jcserr.Error {
 	p.pos++
 
 	if p.pos >= len(p.data) || !isDigit(p.data[p.pos]) {
-		return p.newError(jcserr.InvalidGrammar, "expected digit after decimal point")
+		return p.newError("expected digit after decimal point")
 	}
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
@@ -672,6 +685,7 @@ func (p *parser) scanFractionPart() *jcserr.Error {
 	return nil
 }
 
+//nolint:gocyclo,cyclop // Exponent scanner mirrors JSON grammar stages for precise diagnostics.
 func (p *parser) scanExponentPart() *jcserr.Error {
 	if p.pos >= len(p.data) || (p.data[p.pos] != 'e' && p.data[p.pos] != 'E') {
 		return nil
@@ -682,7 +696,7 @@ func (p *parser) scanExponentPart() *jcserr.Error {
 		p.pos++
 	}
 	if p.pos >= len(p.data) || !isDigit(p.data[p.pos]) {
-		return p.newError(jcserr.InvalidGrammar, "expected digit in exponent")
+		return p.newError("expected digit in exponent")
 	}
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
@@ -738,18 +752,19 @@ func errorsIsRange(err error) bool {
 	if err == nil {
 		return false
 	}
-	numErr, ok := err.(*strconv.NumError)
+	var numErr *strconv.NumError
+	ok := errors.As(err, &numErr)
 	if !ok {
 		return false
 	}
-	return numErr.Err == strconv.ErrRange
+	return errors.Is(numErr.Err, strconv.ErrRange)
 }
 
 func isDigit(b byte) bool {
 	return b >= '0' && b <= '9'
 }
 
-// PARSE-GRAM-007: invalid literals rejected
+// PARSE-GRAM-007: invalid literals rejected.
 func (p *parser) parseBool() (*Value, error) {
 	if p.pos+4 <= len(p.data) && string(p.data[p.pos:p.pos+4]) == "true" {
 		p.pos += 4
@@ -759,7 +774,7 @@ func (p *parser) parseBool() (*Value, error) {
 		p.pos += 5
 		return &Value{Kind: KindBool, Str: "false"}, nil
 	}
-	return nil, p.newError(jcserr.InvalidGrammar, "invalid literal")
+	return nil, p.newError("invalid literal")
 }
 
 func (p *parser) parseNull() (*Value, error) {
@@ -767,5 +782,5 @@ func (p *parser) parseNull() (*Value, error) {
 		p.pos += 4
 		return &Value{Kind: KindNull}, nil
 	}
-	return nil, p.newError(jcserr.InvalidGrammar, "invalid literal")
+	return nil, p.newError("invalid literal")
 }

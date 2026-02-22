@@ -237,16 +237,16 @@ func TestBoundaryConstants(t *testing.T) {
 		bits uint64
 		want string
 	}{
-		{0x0000000000000000, "0"},                       // +0
-		{0x8000000000000000, "0"},                       // -0
-		{0x0000000000000001, "5e-324"},                  // MIN_VALUE
-		{0x7fefffffffffffff, "1.7976931348623157e+308"}, // MAX_VALUE
-		{0x3eb0c6f7a0b5ed8d, "0.000001"},               // 1e-6 boundary
-		{0x3eb0c6f7a0b5ed8c, "9.999999999999997e-7"},   // just below
+		{0x0000000000000000, "0"},                        // +0
+		{0x8000000000000000, "0"},                        // -0
+		{0x0000000000000001, "5e-324"},                   // MIN_VALUE
+		{0x7fefffffffffffff, "1.7976931348623157e+308"},  // MAX_VALUE
+		{0x3eb0c6f7a0b5ed8d, "0.000001"},                 // 1e-6 boundary
+		{0x3eb0c6f7a0b5ed8c, "9.999999999999997e-7"},     // just below
 		{0x3eb0c6f7a0b5ed8e, "0.0000010000000000000002"}, // just above
-		{0x444b1ae4d6e2ef50, "1e+21"},                   // 1e21 boundary
-		{0x444b1ae4d6e2ef4f, "999999999999999900000"},   // just below
-		{0x444b1ae4d6e2ef51, "1.0000000000000001e+21"},  // just above
+		{0x444b1ae4d6e2ef50, "1e+21"},                    // 1e21 boundary
+		{0x444b1ae4d6e2ef4f, "999999999999999900000"},    // just below
+		{0x444b1ae4d6e2ef51, "1.0000000000000001e+21"},   // just above
 	}
 	for _, tc := range cases {
 		got, err := jcsfloat.FormatDouble(math.Float64frombits(tc.bits))
@@ -268,7 +268,11 @@ func verifyOracle(t *testing.T, path string, expectedRows int, expectedSHA256 st
 	if err != nil {
 		t.Fatalf("open oracle: %v", err)
 	}
-	t.Cleanup(func() { _ = f.Close() })
+	t.Cleanup(func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Errorf("close oracle %s: %v", path, closeErr)
+		}
+	})
 
 	h := sha256.New()
 	tee := io.TeeReader(f, h)

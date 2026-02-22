@@ -20,6 +20,12 @@ go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
 ```
 
+Single-command Go harness (includes offline evidence gate):
+
+```bash
+go run ./cmd/jcs-gate
+```
+
 ## Lint Readiness
 
 When ready to begin lint remediation, run lint explicitly against repository

@@ -1,3 +1,4 @@
+// Package replay implements offline replay orchestration contracts and artifacts.
 package replay
 
 import (
@@ -6,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -51,6 +53,9 @@ type bundleEntry struct {
 	mode int64
 }
 
+// CreateBundle packages immutable replay inputs and their digests into a bundle.
+//
+//nolint:gocyclo,cyclop,funlen // Bundle assembly is intentionally explicit for deterministic artifact provenance.
 func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	if opts.OutputPath == "" {
 		return nil, fmt.Errorf("bundle output path is required")
@@ -92,7 +97,7 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 
 	manifest := &BundleManifest{
 		Version:       opts.Version,
-		CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
+		CreatedAtUTC:  wallClockNowUTC().Format(time.RFC3339Nano),
 		BinaryPath:    "bundle/jcs-canon",
 		BinarySHA256:  sha256Hex(binaryBytes),
 		WorkerPath:    "bundle/jcs-offline-worker",
@@ -111,17 +116,17 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 		{path: manifest.ProfilePath, data: profileBytes, mode: 0o644},
 	}
 	vectorDigestInput := make([]string, 0, len(vectorFiles))
-	for _, path := range vectorFiles {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read vector %s: %w", path, err)
+	for _, vectorPath := range vectorFiles {
+		vectorData, readErr := os.ReadFile(vectorPath)
+		if readErr != nil {
+			return nil, fmt.Errorf("read vector %s: %w", vectorPath, readErr)
 		}
-		base := filepath.ToSlash(filepath.Base(path))
+		base := filepath.ToSlash(filepath.Base(vectorPath))
 		rel := "bundle/vectors/" + base
 		manifest.VectorFiles = append(manifest.VectorFiles, rel)
-		manifest.VectorSHA256[rel] = sha256Hex(data)
+		manifest.VectorSHA256[rel] = sha256Hex(vectorData)
 		vectorDigestInput = append(vectorDigestInput, rel+":"+manifest.VectorSHA256[rel])
-		entries = append(entries, bundleEntry{path: rel, data: data, mode: 0o644})
+		entries = append(entries, bundleEntry{path: rel, data: vectorData, mode: 0o644})
 	}
 	sort.Strings(manifest.VectorFiles)
 	sort.Strings(vectorDigestInput)
@@ -142,23 +147,34 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	return manifest, nil
 }
 
+// ReadBundleManifest loads the embedded bundle manifest from a bundle archive.
+//
+//nolint:gocyclo,cyclop // Tar stream traversal stays explicit to keep audit and error context straightforward.
 func ReadBundleManifest(bundlePath string) (*BundleManifest, error) {
 	f, err := os.Open(bundlePath)
 	if err != nil {
 		return nil, fmt.Errorf("open bundle: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, fmt.Errorf("open bundle gzip stream: %w", err)
 	}
-	defer func() { _ = gz.Close() }()
+	defer func() {
+		if closeErr := gz.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	tr := tar.NewReader(gz)
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -180,6 +196,7 @@ func ReadBundleManifest(bundlePath string) (*BundleManifest, error) {
 	return nil, fmt.Errorf("bundle manifest entry %q not found", bundleManifestPath)
 }
 
+// VerifyBundle validates required manifest fields and returns the bundle digest.
 func VerifyBundle(bundlePath string) (*BundleManifest, string, error) {
 	manifest, err := ReadBundleManifest(bundlePath)
 	if err != nil {
@@ -209,13 +226,25 @@ func writeBundleTarGz(path string, entries []bundleEntry) error {
 	if err != nil {
 		return fmt.Errorf("create bundle: %w", err)
 	}
-	defer func() { _ = out.Close() }()
+	defer func() {
+		if closeErr := out.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	gz := gzip.NewWriter(out)
-	defer func() { _ = gz.Close() }()
+	defer func() {
+		if closeErr := gz.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	tw := tar.NewWriter(gz)
-	defer func() { _ = tw.Close() }()
+	defer func() {
+		if closeErr := tw.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	fixed := time.Unix(0, 0).UTC()
 	for _, e := range entries {
@@ -242,4 +271,9 @@ func writeBundleTarGz(path string, entries []bundleEntry) error {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+//nolint:forbidigo // bundle creation records an actual creation timestamp in manifest metadata.
+func wallClockNowUTC() time.Time {
+	return time.Now().UTC()
 }

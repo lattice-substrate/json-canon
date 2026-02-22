@@ -70,19 +70,19 @@ func serializeNumber(buf []byte, f float64) ([]byte, error) {
 	return append(buf, s...), nil
 }
 
-// serializeString applies JCS string escaping rules (RFC 8785 §3.2.2.2):
+// serializeString applies JCS string escaping rules (RFC 8785 §3.2.2.2).
 //
-// CANON-STR-001: U+0008 → \b
-// CANON-STR-002: U+0009 → \t
-// CANON-STR-003: U+000A → \n
-// CANON-STR-004: U+000C → \f
-// CANON-STR-005: U+000D → \r
-// CANON-STR-006: Other controls U+0000..U+001F → \u00xx lowercase
-// CANON-STR-007: U+0022 → \"
-// CANON-STR-008: U+005C → \\
-// CANON-STR-009: U+002F (solidus) NOT escaped
-// CANON-STR-010: Characters above U+001F (except " and \) → raw UTF-8
-// CANON-STR-011: No Unicode normalization
+// CANON-STR-001: U+0008 -> \b.
+// CANON-STR-002: U+0009 -> \t.
+// CANON-STR-003: U+000A -> \n.
+// CANON-STR-004: U+000C -> \f.
+// CANON-STR-005: U+000D -> \r.
+// CANON-STR-006: Other controls U+0000..U+001F -> \u00xx lowercase.
+// CANON-STR-007: U+0022 -> \".
+// CANON-STR-008: U+005C -> \\.
+// CANON-STR-009: U+002F (solidus) is not escaped.
+// CANON-STR-010: Characters above U+001F (except " and \) remain raw UTF-8.
+// CANON-STR-011: No Unicode normalization.
 func serializeString(buf []byte, s string) []byte {
 	buf = append(buf, '"')
 	for i := 0; i < len(s); {
@@ -237,6 +237,7 @@ type serializeValidationState struct {
 	values int
 }
 
+//nolint:gocyclo,cyclop // Spec-bound validation logic is intentionally explicit for requirement traceability.
 func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState) error {
 	state.values++
 	if state.values > jcstoken.DefaultMaxValues {
@@ -323,4 +324,3 @@ func validateString(s string) *jcserr.Error {
 	}
 	return nil
 }
-

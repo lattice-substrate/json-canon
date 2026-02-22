@@ -1,10 +1,11 @@
-package libvirt
+package libvirt_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
 )
 
 type fakeRunner struct {
@@ -23,7 +24,7 @@ func (f *fakeRunner) Run(_ context.Context, argv []string, env map[string]string
 
 func TestAdapterRunReplaySetsEnv(t *testing.T) {
 	fr := &fakeRunner{}
-	a := NewAdapter(fr)
+	a := libvirt.NewAdapter(fr)
 	n := replay.NodeSpec{
 		ID:           "n1",
 		Mode:         replay.NodeModeVM,

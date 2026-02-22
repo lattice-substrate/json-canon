@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 var (
 	buildBlackboxOnce sync.Once
 	blackboxBin       string
-	blackboxErr       error
+	errBlackboxBuild  error
 )
 
 func repoRoot(t *testing.T) string {
@@ -33,7 +34,7 @@ func blackboxBinary(t *testing.T) string {
 	buildBlackboxOnce.Do(func() {
 		dir, err := os.MkdirTemp("", "jcs-canon-blackbox-*")
 		if err != nil {
-			blackboxErr = err
+			errBlackboxBuild = err
 			return
 		}
 		blackboxBin = filepath.Join(dir, "jcs-canon")
@@ -47,10 +48,10 @@ func blackboxBinary(t *testing.T) string {
 		)
 		cmd.Dir = root
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-		blackboxErr = cmd.Run()
+		errBlackboxBuild = cmd.Run()
 	})
-	if blackboxErr != nil {
-		t.Fatalf("build blackbox binary: %v", blackboxErr)
+	if errBlackboxBuild != nil {
+		t.Fatalf("build blackbox binary: %v", errBlackboxBuild)
 	}
 	return blackboxBin
 }
@@ -70,7 +71,8 @@ func runBlackbox(t *testing.T, args []string, stdin []byte) (int, []byte, []byte
 	if err == nil {
 		return 0, stdout.Bytes(), stderr.Bytes()
 	}
-	if ee, ok := err.(*exec.ExitError); ok {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
 		return ee.ExitCode(), stdout.Bytes(), stderr.Bytes()
 	}
 	t.Fatalf("run blackbox: %v", err)

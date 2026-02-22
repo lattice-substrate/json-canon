@@ -445,6 +445,9 @@ func exponentBits(bits uint64) uint16 {
 }
 
 func lshByInt(z *big.Int, n int) {
+	if n <= 0 {
+		return
+	}
 	z.Lsh(z, uint(n))
 }
 

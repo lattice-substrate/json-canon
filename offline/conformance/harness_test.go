@@ -48,8 +48,9 @@ func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 		if m.Architecture != tc.architecture {
 			t.Fatalf("expected architecture %q for %s, got %q", tc.architecture, tc.matrixPath, m.Architecture)
 		}
-		if err := replay.ValidateReleaseArchitecture(m); err != nil {
-			t.Fatalf("validate release architecture for %s: %v", tc.matrixPath, err)
+		archErr := replay.ValidateReleaseArchitecture(m)
+		if archErr != nil {
+			t.Fatalf("validate release architecture for %s: %v", tc.matrixPath, archErr)
 		}
 
 		p, err := replay.LoadProfile(tc.profilePath)
@@ -108,12 +109,12 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 
 func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 	root := repoRoot(t)
-	evidencePath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_EVIDENCE"))
+	evidencePath := lookupEnvTrimmed("JCS_OFFLINE_EVIDENCE")
 	if evidencePath == "" {
 		t.Skip("set JCS_OFFLINE_EVIDENCE to validate offline evidence bundle")
 	}
-	bundlePath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_BUNDLE"))
-	controlBinaryPath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_CONTROL_BINARY"))
+	bundlePath := lookupEnvTrimmed("JCS_OFFLINE_BUNDLE")
+	controlBinaryPath := lookupEnvTrimmed("JCS_OFFLINE_CONTROL_BINARY")
 	if bundlePath == "" || controlBinaryPath == "" {
 		defaultBundle, defaultControl := defaultEvidenceArtifactPaths(evidencePath)
 		if bundlePath == "" {
@@ -124,11 +125,11 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		}
 	}
 
-	matrixPath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_MATRIX"))
+	matrixPath := lookupEnvTrimmed("JCS_OFFLINE_MATRIX")
 	if matrixPath == "" {
 		matrixPath = filepath.Join(root, "offline", "matrix.yaml")
 	}
-	profilePath := strings.TrimSpace(os.Getenv("JCS_OFFLINE_PROFILE"))
+	profilePath := lookupEnvTrimmed("JCS_OFFLINE_PROFILE")
 	if profilePath == "" {
 		profilePath = filepath.Join(root, "offline", "profiles", "maximal.yaml")
 	}
@@ -158,6 +159,14 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
 	base := filepath.Dir(evidencePath)
 	return filepath.Join(base, "offline-bundle.tgz"), filepath.Join(base, "bin", "jcs-canon")
+}
+
+func lookupEnvTrimmed(name string) string {
+	value, ok := os.LookupEnv(name)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 func mustReadText(t *testing.T, path string) string {

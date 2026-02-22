@@ -1,3 +1,4 @@
+// Package libvirt provides node adapters for VM/libvirt-backed replay lanes.
 package libvirt
 
 import (
@@ -14,6 +15,7 @@ type Adapter struct {
 	runner executil.CommandRunner
 }
 
+// NewAdapter constructs a libvirt adapter with the provided command runner.
 func NewAdapter(r executil.CommandRunner) *Adapter {
 	if r == nil {
 		r = executil.OSRunner{}
@@ -21,6 +23,7 @@ func NewAdapter(r executil.CommandRunner) *Adapter {
 	return &Adapter{runner: r}
 }
 
+// Prepare runs pre-replay setup commands for a VM node.
 func (a *Adapter) Prepare(ctx context.Context, node replay.NodeSpec, bundlePath string, replayIndex int) error {
 	if len(node.Runner.Prepare) == 0 {
 		return nil
@@ -32,6 +35,7 @@ func (a *Adapter) Prepare(ctx context.Context, node replay.NodeSpec, bundlePath 
 	return nil
 }
 
+// RunReplay executes one replay command for a VM node.
 func (a *Adapter) RunReplay(ctx context.Context, node replay.NodeSpec, bundlePath string, evidencePath string, replayIndex int) error {
 	if len(node.Runner.Replay) == 0 {
 		return fmt.Errorf("libvirt replay command is required")
@@ -43,6 +47,7 @@ func (a *Adapter) RunReplay(ctx context.Context, node replay.NodeSpec, bundlePat
 	return nil
 }
 
+// Cleanup runs post-replay cleanup commands for a VM node.
 func (a *Adapter) Cleanup(ctx context.Context, node replay.NodeSpec, replayIndex int) error {
 	if len(node.Runner.Cleanup) == 0 {
 		return nil

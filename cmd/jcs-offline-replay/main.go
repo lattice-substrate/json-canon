@@ -1,3 +1,4 @@
+// Command jcs-offline-replay prepares, runs, and verifies offline replay evidence.
 package main
 
 import (
@@ -6,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,82 +29,64 @@ func main() {
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		writeUsage(stdout)
+		if err := writeUsage(stdout); err != nil {
+			return 2
+		}
 		return 0
 	}
 
-	sub := args[0]
 	flags, err := parseKV(args[1:])
 	if err != nil {
-		fmt.Fprintf(stderr, "error: %v\n", err)
-		return 2
+		return writeErrorLine(stderr, err)
 	}
 
+	code, subErr := dispatchSubcommand(args[0], flags, stdout, stderr)
+	if subErr != nil {
+		return writeErrorLine(stderr, subErr)
+	}
+	return code
+}
+
+func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, stderr io.Writer) (int, error) {
 	switch sub {
 	case "prepare":
-		if err := cmdPrepare(flags, stdout); err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
-			return 2
-		}
-		return 0
+		return 0, cmdPrepare(flags, stdout)
 	case "run":
-		if err := cmdRun(flags, stdout); err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
-			return 2
-		}
-		return 0
+		return 0, cmdRun(flags, stdout)
 	case "verify-evidence":
-		if err := cmdVerifyEvidence(flags, stdout); err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
-			return 2
-		}
-		return 0
+		return 0, cmdVerifyEvidence(flags, stdout)
 	case "report":
-		if err := cmdReport(flags, stdout); err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
-			return 2
-		}
-		return 0
+		return 0, cmdReport(flags, stdout)
 	case "inspect-matrix":
-		if err := cmdInspectMatrix(flags, stdout); err != nil {
-			fmt.Fprintf(stderr, "error: %v\n", err)
-			return 2
-		}
-		return 0
+		return 0, cmdInspectMatrix(flags, stdout)
 	default:
-		fmt.Fprintf(stderr, "error: unknown subcommand %q\n", sub)
-		writeUsage(stderr)
-		return 2
+		if err := writef(stderr, "error: unknown subcommand %q\n", sub); err != nil {
+			return 2, err
+		}
+		if err := writeUsage(stderr); err != nil {
+			return 2, err
+		}
+		return 2, nil
 	}
 }
 
 func cmdPrepare(flags map[string]string, stdout io.Writer) error {
-	matrixPath := requireFlag(flags, "--matrix")
-	profilePath := requireFlag(flags, "--profile")
-	bundlePath := requireFlag(flags, "--bundle")
-	binaryPath := requireFlag(flags, "--binary")
-	if matrixPath == "" || profilePath == "" || bundlePath == "" || binaryPath == "" {
-		return fmt.Errorf("prepare requires --matrix, --profile, --binary, --bundle")
-	}
-	if _, err := replay.LoadMatrix(matrixPath); err != nil {
+	matrixPath, profilePath, bundlePath, binaryPath, err := requirePrepareFlags(flags)
+	if err != nil {
 		return err
 	}
-	if _, err := replay.LoadProfile(profilePath); err != nil {
+	if _, loadErr := replay.LoadMatrix(matrixPath); loadErr != nil {
+		return loadErr
+	}
+	if _, loadErr := replay.LoadProfile(profilePath); loadErr != nil {
+		return loadErr
+	}
+
+	workerPath, cleanupWorker, err := resolveWorkerPath(flags)
+	if err != nil {
 		return err
 	}
-	workerPath := requireFlag(flags, "--worker")
-	tempWorker := ""
-	if workerPath == "" {
-		var err error
-		workerPath, err = buildWorkerBinary()
-		if err != nil {
-			return err
-		}
-		tempWorker = workerPath
-	}
-	if tempWorker != "" {
-		defer func() { _ = os.Remove(tempWorker) }()
-	}
+	defer cleanupWorker()
 
 	manifest, err := replay.CreateBundle(replay.BundleOptions{
 		OutputPath:  bundlePath,
@@ -116,11 +100,31 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "bundle: %s\n", bundlePath)
-	fmt.Fprintf(stdout, "binary_sha256: %s\n", manifest.BinarySHA256)
-	fmt.Fprintf(stdout, "worker_sha256: %s\n", manifest.WorkerSHA256)
-	fmt.Fprintf(stdout, "vector_set_sha256: %s\n", manifest.VectorSetSHA256)
-	return nil
+	return writePrepareSummary(stdout, bundlePath, manifest)
+}
+
+func requirePrepareFlags(flags map[string]string) (string, string, string, string, error) {
+	matrixPath := requireFlag(flags, "--matrix")
+	profilePath := requireFlag(flags, "--profile")
+	bundlePath := requireFlag(flags, "--bundle")
+	binaryPath := requireFlag(flags, "--binary")
+	if matrixPath == "" || profilePath == "" || bundlePath == "" || binaryPath == "" {
+		return "", "", "", "", fmt.Errorf("prepare requires --matrix, --profile, --binary, --bundle")
+	}
+	return matrixPath, profilePath, bundlePath, binaryPath, nil
+}
+
+func writePrepareSummary(stdout io.Writer, bundlePath string, manifest *replay.BundleManifest) error {
+	if err := writef(stdout, "bundle: %s\n", bundlePath); err != nil {
+		return err
+	}
+	if err := writef(stdout, "binary_sha256: %s\n", manifest.BinarySHA256); err != nil {
+		return err
+	}
+	if err := writef(stdout, "worker_sha256: %s\n", manifest.WorkerSHA256); err != nil {
+		return err
+	}
+	return writef(stdout, "vector_set_sha256: %s\n", manifest.VectorSetSHA256)
 }
 
 func cmdRun(flags map[string]string, stdout io.Writer) error {
@@ -131,34 +135,13 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	if matrixPath == "" || profilePath == "" || bundlePath == "" || evidencePath == "" {
 		return fmt.Errorf("run requires --matrix, --profile, --bundle, --evidence")
 	}
-	matrix, err := replay.LoadMatrix(matrixPath)
+	matrix, profile, manifest, bundleSHA, matrixSHA, profileSHA, err := loadRunInputs(matrixPath, profilePath, bundlePath)
 	if err != nil {
 		return err
 	}
-	profile, err := replay.LoadProfile(profilePath)
+	timeout, err := parseTimeout(flags)
 	if err != nil {
 		return err
-	}
-	manifest, bundleSHA, err := replay.VerifyBundle(bundlePath)
-	if err != nil {
-		return err
-	}
-	matrixSHA, err := fileSHA256(matrixPath)
-	if err != nil {
-		return err
-	}
-	profileSHA, err := fileSHA256(profilePath)
-	if err != nil {
-		return err
-	}
-
-	timeout := 12 * time.Hour
-	if raw := strings.TrimSpace(flags["--timeout"]); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil || parsed <= 0 {
-			return fmt.Errorf("invalid --timeout value %q", raw)
-		}
-		timeout = parsed
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -178,10 +161,71 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	if err := replay.WriteEvidence(evidencePath, evidence); err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "evidence: %s\n", evidencePath)
-	fmt.Fprintf(stdout, "runs: %d\n", len(evidence.NodeReplays))
-	fmt.Fprintf(stdout, "aggregate_canonical_sha256: %s\n", evidence.AggregateCanonical)
-	return nil
+	return writeRunSummary(stdout, evidencePath, evidence)
+}
+
+func resolveWorkerPath(flags map[string]string) (string, func(), error) {
+	workerPath := requireFlag(flags, "--worker")
+	if workerPath != "" {
+		return workerPath, func() {}, nil
+	}
+	workerPath, err := buildWorkerBinary()
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup := func() {
+		if removeErr := os.Remove(workerPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			_ = removeErr
+		}
+	}
+	return workerPath, cleanup, nil
+}
+
+func writeRunSummary(stdout io.Writer, evidencePath string, evidence *replay.EvidenceBundle) error {
+	if err := writef(stdout, "evidence: %s\n", evidencePath); err != nil {
+		return err
+	}
+	if err := writef(stdout, "runs: %d\n", len(evidence.NodeReplays)); err != nil {
+		return err
+	}
+	return writef(stdout, "aggregate_canonical_sha256: %s\n", evidence.AggregateCanonical)
+}
+
+func loadRunInputs(matrixPath, profilePath, bundlePath string) (*replay.Matrix, *replay.Profile, *replay.BundleManifest, string, string, string, error) {
+	matrix, err := replay.LoadMatrix(matrixPath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", err
+	}
+	profile, err := replay.LoadProfile(profilePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", err
+	}
+	manifest, bundleSHA, err := replay.VerifyBundle(bundlePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", err
+	}
+	matrixSHA, err := fileSHA256(matrixPath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", err
+	}
+	profileSHA, err := fileSHA256(profilePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", err
+	}
+	return matrix, profile, manifest, bundleSHA, matrixSHA, profileSHA, nil
+}
+
+func parseTimeout(flags map[string]string) (time.Duration, error) {
+	timeout := 12 * time.Hour
+	raw := strings.TrimSpace(flags["--timeout"])
+	if raw == "" {
+		return timeout, nil
+	}
+	parsed, parseErr := time.ParseDuration(raw)
+	if parseErr != nil || parsed <= 0 {
+		return 0, fmt.Errorf("invalid --timeout value %q", raw)
+	}
+	return parsed, nil
 }
 
 func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
@@ -191,18 +235,8 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	if matrixPath == "" || profilePath == "" || evidencePath == "" {
 		return fmt.Errorf("verify-evidence requires --matrix, --profile, --evidence")
 	}
-	bundlePath := requireFlag(flags, "--bundle")
-	controlBinaryPath := requireFlag(flags, "--control-binary")
-	if bundlePath == "" || controlBinaryPath == "" {
-		defaultBundlePath, defaultControlPath := defaultEvidenceArtifactPaths(evidencePath)
-		if bundlePath == "" {
-			bundlePath = defaultBundlePath
-		}
-		if controlBinaryPath == "" {
-			controlBinaryPath = defaultControlPath
-		}
-	}
 
+	bundlePath, controlBinaryPath := resolveVerifyPaths(flags, evidencePath)
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
 		return err
@@ -215,22 +249,11 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	bundleSHA, err := fileSHA256(bundlePath)
-	if err != nil {
-		return fmt.Errorf("resolve bundle sha256: %w", err)
-	}
-	controlBinarySHA, err := fileSHA256(controlBinaryPath)
-	if err != nil {
-		return fmt.Errorf("resolve control binary sha256: %w", err)
-	}
-	matrixSHA, err := fileSHA256(matrixPath)
+	bundleSHA, controlBinarySHA, matrixSHA, profileSHA, err := loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profilePath)
 	if err != nil {
 		return err
 	}
-	profileSHA, err := fileSHA256(profilePath)
-	if err != nil {
-		return err
-	}
+
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        bundleSHA,
 		ExpectedControlBinarySHA256: controlBinarySHA,
@@ -240,8 +263,42 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	}); err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, "ok")
-	return nil
+	return writeLine(stdout, "ok")
+}
+
+func resolveVerifyPaths(flags map[string]string, evidencePath string) (string, string) {
+	bundlePath := requireFlag(flags, "--bundle")
+	controlBinaryPath := requireFlag(flags, "--control-binary")
+	if bundlePath == "" || controlBinaryPath == "" {
+		defaultBundlePath, defaultControlPath := defaultEvidenceArtifactPaths(evidencePath)
+		if bundlePath == "" {
+			bundlePath = defaultBundlePath
+		}
+		if controlBinaryPath == "" {
+			controlBinaryPath = defaultControlPath
+		}
+	}
+	return bundlePath, controlBinaryPath
+}
+
+func loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profilePath string) (string, string, string, string, error) {
+	bundleSHA, err := fileSHA256(bundlePath)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("resolve bundle sha256: %w", err)
+	}
+	controlBinarySHA, err := fileSHA256(controlBinaryPath)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("resolve control binary sha256: %w", err)
+	}
+	matrixSHA, err := fileSHA256(matrixPath)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	profileSHA, err := fileSHA256(profilePath)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return bundleSHA, controlBinarySHA, matrixSHA, profileSHA, nil
 }
 
 func cmdReport(flags map[string]string, stdout io.Writer) error {
@@ -253,12 +310,29 @@ func cmdReport(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "schema: %s\n", evidence.SchemaVersion)
-	fmt.Fprintf(stdout, "profile: %s\n", evidence.ProfileName)
-	fmt.Fprintf(stdout, "architecture: %s\n", evidence.Architecture)
-	fmt.Fprintf(stdout, "runs: %d\n", len(evidence.NodeReplays))
-	fmt.Fprintf(stdout, "aggregate canonical: %s\n", evidence.AggregateCanonical)
+	if err := writeReportHeader(stdout, evidence); err != nil {
+		return err
+	}
+	return writeReportNodeBreakdown(stdout, evidence)
+}
 
+func writeReportHeader(stdout io.Writer, evidence *replay.EvidenceBundle) error {
+	if err := writef(stdout, "schema: %s\n", evidence.SchemaVersion); err != nil {
+		return err
+	}
+	if err := writef(stdout, "profile: %s\n", evidence.ProfileName); err != nil {
+		return err
+	}
+	if err := writef(stdout, "architecture: %s\n", evidence.Architecture); err != nil {
+		return err
+	}
+	if err := writef(stdout, "runs: %d\n", len(evidence.NodeReplays)); err != nil {
+		return err
+	}
+	return writef(stdout, "aggregate canonical: %s\n", evidence.AggregateCanonical)
+}
+
+func writeReportNodeBreakdown(stdout io.Writer, evidence *replay.EvidenceBundle) error {
 	byNode := make(map[string]int)
 	for _, r := range evidence.NodeReplays {
 		byNode[r.NodeID]++
@@ -269,7 +343,9 @@ func cmdReport(flags map[string]string, stdout io.Writer) error {
 	}
 	sort.Strings(nodes)
 	for _, id := range nodes {
-		fmt.Fprintf(stdout, "node %s: %d replays\n", id, byNode[id])
+		if err := writef(stdout, "node %s: %d replays\n", id, byNode[id]); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -285,7 +361,10 @@ func cmdInspectMatrix(flags map[string]string, stdout io.Writer) error {
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
-	return enc.Encode(matrix)
+	if err := enc.Encode(matrix); err != nil {
+		return fmt.Errorf("encode matrix: %w", err)
+	}
+	return nil
 }
 
 func adapterFactory() replay.AdapterFactory {
@@ -354,13 +433,41 @@ func fileSHA256(path string) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func writeUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report|inspect-matrix> [flags]")
-	fmt.Fprintln(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]")
-	fmt.Fprintln(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]")
-	fmt.Fprintln(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>]")
-	fmt.Fprintln(w, "  report --evidence <path>")
-	fmt.Fprintln(w, "  inspect-matrix --matrix <path>")
+func writeUsage(w io.Writer) error {
+	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  report --evidence <path>"); err != nil {
+		return err
+	}
+	return writeLine(w, "  inspect-matrix --matrix <path>")
+}
+
+func writeLine(w io.Writer, msg string) error {
+	return writef(w, "%s\n", msg)
+}
+
+func writef(w io.Writer, format string, args ...any) error {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		return fmt.Errorf("write stream: %w", err)
+	}
+	return nil
+}
+
+func writeErrorLine(stderr io.Writer, err error) int {
+	if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+		return 2
+	}
+	return 2
 }
 
 func buildWorkerBinary() (string, error) {
@@ -369,13 +476,14 @@ func buildWorkerBinary() (string, error) {
 		return "", fmt.Errorf("create worker temp dir: %w", err)
 	}
 	out := filepath.Join(tmpDir, "jcs-offline-worker")
+	// #nosec G204 -- fixed go tool invocation with controlled arguments.
 	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", out, "./cmd/jcs-offline-worker")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("build worker binary: %v: %s", err, strings.TrimSpace(buf.String()))
+		return "", fmt.Errorf("build worker binary: %w: %s", err, strings.TrimSpace(buf.String()))
 	}
 	return out, nil
 }
