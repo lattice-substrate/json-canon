@@ -58,15 +58,24 @@ JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
+Release validation MUST also include the official ES6 deterministic number
+corpus checksum gate at 100,000,000 lines:
+
+```bash
+JCS_OFFICIAL_ES6_ENABLE_100M=1 \
+go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
+```
+
 ## Release Checklist
 
 1. Confirm CI status for target commit/tag.
 2. Confirm ABI-impact classification for this version.
 3. Confirm changelog accuracy and migration guidance (if applicable).
 4. Validate offline replay evidence gates for both `x86_64` and `arm64` release matrices.
-5. Publish tag and release.
-6. Verify checksums and attestation on published artifacts.
-7. Announce release with compatibility notes.
+5. Validate official ES6 100,000,000-line checksum gate.
+6. Publish tag and release.
+7. Verify checksums and attestation on published artifacts.
+8. Announce release with compatibility notes.
 
 ## Rollback/Revocation
 

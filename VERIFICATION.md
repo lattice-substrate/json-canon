@@ -82,6 +82,18 @@ This check validates:
 - per-node cold-replay completeness,
 - cross-node digest parity for canonical/verify/failure/exit outputs.
 
+## 6. Verify Official ES6 100M Checksum Gate
+
+Release candidates must pass the official deterministic ES6 number corpus
+checksum gate at 100,000,000 lines:
+
+```bash
+JCS_OFFICIAL_ES6_ENABLE_100M=1 \
+go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
+```
+
+Expected checksum: `0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272`.
+
 ## Trust Model
 
 | Property | Mechanism |

@@ -21,6 +21,15 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | ECMA-VEC-002 | V8 Oracle | — | MUST | All 231,917 stress golden oracle vectors MUST produce byte-identical output. SHA-256: `287d21a...`. |
 | ECMA-VEC-003 | ECMA-262 | §6.1.6.1.20 | MUST | Boundary constants (0, -0, MIN_VALUE, MAX_VALUE, 1e-6 boundary, 1e21 boundary) MUST match expected strings. |
 
+## OFFICIAL-VEC — Official External Reference Suites
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | Vendored official Cyberphone canonicalization fixtures MUST pass byte-identical canonicalization checks. |
+| OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | Vendored RFC 8785 example fixtures (sorting example and finite Appendix B number mappings) MUST match canonical output/format results. |
+| OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | CI conformance gates MUST validate the official deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
+| OFFICIAL-VEC-004 | RELEASE_PROCESS.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
+
 ## PROF-NUM — Number Profile Restrictions
 
 | ID | Spec | Section | Level | Requirement |
