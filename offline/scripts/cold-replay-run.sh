@@ -76,6 +76,8 @@ fi
 
 mkdir -p "$OUTDIR/bin" "$OUTDIR/logs" "$OUTDIR/audit"
 OUTDIR_ABS="$(cd "$OUTDIR" && pwd)"
+MATRIX_ABS="$(realpath "$MATRIX")"
+PROFILE_ABS="$(realpath "$PROFILE")"
 
 CANON_BIN="$OUTDIR_ABS/bin/jcs-canon"
 CTL_BIN="$OUTDIR_ABS/bin/jcs-offline-replay"
@@ -140,14 +142,12 @@ echo "[run] audit summary"
   --output-dir "$OUTDIR_ABS/audit" 2>&1 | tee "$OUTDIR_ABS/logs/audit.log"
 
 if [[ "$SKIP_RELEASE_GATE" -eq 0 ]]; then
-  if [[ "$MATRIX" == "offline/matrix.yaml" && "$PROFILE" == "offline/profiles/maximal.yaml" ]]; then
-    echo "[run] release gate test"
-    JCS_OFFLINE_EVIDENCE="$EVIDENCE" \
-      go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v \
-      2>&1 | tee "$OUTDIR_ABS/logs/release-gate.log"
-  else
-    echo "[run] release gate skipped: matrix/profile differ from canonical release-gate paths" | tee "$OUTDIR_ABS/logs/release-gate.log"
-  fi
+  echo "[run] release gate test"
+  JCS_OFFLINE_EVIDENCE="$EVIDENCE" \
+    JCS_OFFLINE_MATRIX="$MATRIX_ABS" \
+    JCS_OFFLINE_PROFILE="$PROFILE_ABS" \
+    go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v \
+    2>&1 | tee "$OUTDIR_ABS/logs/release-gate.log"
 else
   echo "[run] release gate skipped by flag" | tee "$OUTDIR_ABS/logs/release-gate.log"
 fi

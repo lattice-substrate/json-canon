@@ -62,11 +62,18 @@ Note: reproducibility requires the same Go version and OS/arch used in CI.
 
 ## 5. Verify Offline Cold-Replay Evidence
 
-For release candidates that include offline matrix validation, verify the archived
-evidence bundle against repository contracts:
+For release candidates that include offline matrix validation, verify archived
+evidence bundles for both release architectures against repository contracts:
 
 ```bash
-JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+JCS_OFFLINE_EVIDENCE=/path/to/x86_64/offline-evidence.json \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.yaml \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+JCS_OFFLINE_EVIDENCE=/path/to/arm64/offline-evidence.json \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 

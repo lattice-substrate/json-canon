@@ -37,7 +37,7 @@ This performs:
 4. full matrix cold replay run,
 5. evidence verification,
 6. audit summary generation,
-7. release-gate test (for canonical x86_64 matrix/profile).
+7. release-gate test (for the selected matrix/profile architecture).
 
 ### Cross-architecture replay comparison
 
@@ -156,11 +156,15 @@ change control.
 
 ## 9. Release Gate Integration
 
-For canonical release matrix/profile (`offline/matrix.yaml` +
-`offline/profiles/maximal.yaml`):
+For release gate validation:
 
 ```bash
-JCS_OFFLINE_EVIDENCE=offline/runs/<run>/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run>/offline-evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run-arm64>/offline-evidence.json \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 

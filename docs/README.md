@@ -14,6 +14,7 @@ document in this directory or by normative registries in the repository root.
 
 ## Engineering Specs
 
+- `docs/BOOK.md` - book-style project and operations guide
 - `ARCHITECTURE.md` - package boundaries, runtime model, and invariants
 - `ABI.md` - stable CLI ABI contract (human-readable)
 - `NORMATIVE_REFERENCES.md` - external/internal normative source and interpretation rules

@@ -1,0 +1,40 @@
+[preflight] repo: /home/lenny/json-canon
+[preflight] matrix: offline/matrix.arm64.yaml
+architecture=arm64
+nodes_total=12
+container_nodes=6
+vm_nodes=6
+[preflight] checking base toolchain
+[PASS] command available: go
+[PASS] command available: tar
+[PASS] command available: python3
+[PASS] container engine reachable: docker
+[preflight] checking offline container images
+[PASS] container image present: debian12-container-arm64 -> debian:12-slim
+[PASS] container image present: ubuntu2204-container-arm64 -> ubuntu:22.04
+[PASS] container image present: fedora40-container-arm64 -> fedora:40
+[PASS] container image present: rocky9-container-arm64 -> rockylinux:9
+[PASS] container image present: alpine320-container-arm64 -> alpine:3.20
+[PASS] container image present: opensuse-container-arm64 -> opensuse/leap:15
+[preflight] checking vm/libvirt dependencies
+[PASS] command available: virsh
+[PASS] command available: ssh
+[PASS] command available: scp
+[PASS] libvirt domain exists: debian12-vm-arm64 -> debian12-vm-arm64
+[PASS] snapshot exists: debian12-vm-arm64/snapshot-cold
+[PASS] vm ssh reachable: debian12-vm-arm64 -> root@debian12-vm-arm64
+[PASS] libvirt domain exists: ubuntu2204-vm-ga-arm64 -> ubuntu2204-vm-ga-arm64
+[PASS] snapshot exists: ubuntu2204-vm-ga-arm64/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-ga-arm64 -> root@ubuntu2204-vm-ga-arm64
+[PASS] libvirt domain exists: ubuntu2204-vm-hwe-arm64 -> ubuntu2204-vm-hwe-arm64
+[PASS] snapshot exists: ubuntu2204-vm-hwe-arm64/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-hwe-arm64 -> root@ubuntu2204-vm-hwe-arm64
+[PASS] libvirt domain exists: fedora40-vm-arm64 -> fedora40-vm-arm64
+[PASS] snapshot exists: fedora40-vm-arm64/snapshot-cold
+[PASS] vm ssh reachable: fedora40-vm-arm64 -> root@fedora40-vm-arm64
+[FAIL] libvirt domain missing/unreachable: rocky9-vm-arm64 -> rocky9-vm-arm64
+[PASS] libvirt domain exists: lts-legacy-kernel-vm-arm64 -> lts-legacy-kernel-vm-arm64
+[PASS] snapshot exists: lts-legacy-kernel-vm-arm64/snapshot-cold
+[PASS] vm ssh reachable: lts-legacy-kernel-vm-arm64 -> root@lts-legacy-kernel-vm-arm64
+[preflight] failures=1 warnings=0
+[preflight] RESULT=FAIL

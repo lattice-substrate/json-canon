@@ -44,16 +44,18 @@ Maintainers and consumers verify integrity and provenance using `VERIFICATION.md
 
 A release is incomplete if verification steps are missing or invalid.
 
-For offline cold-replay assurance, release validation MUST include:
+For offline cold-replay assurance, release validation MUST include both architecture gates:
 
 ```bash
+JCS_OFFLINE_EVIDENCE=/path/to/x86_64/offline-evidence.json \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
-```
 
-This gate consumes an archived evidence bundle via:
-
-```bash
-JCS_OFFLINE_EVIDENCE=/path/to/evidence.json
+JCS_OFFLINE_EVIDENCE=/path/to/arm64/offline-evidence.json \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
 ## Release Checklist
@@ -61,7 +63,7 @@ JCS_OFFLINE_EVIDENCE=/path/to/evidence.json
 1. Confirm CI status for target commit/tag.
 2. Confirm ABI-impact classification for this version.
 3. Confirm changelog accuracy and migration guidance (if applicable).
-4. Validate offline replay evidence gate for the release candidate.
+4. Validate offline replay evidence gates for both `x86_64` and `arm64` release matrices.
 5. Publish tag and release.
 6. Verify checksums and attestation on published artifacts.
 7. Announce release with compatibility notes.

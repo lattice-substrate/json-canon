@@ -60,10 +60,10 @@ func TestRunMatrix(t *testing.T) {
 		return fakeAdapter{}, nil
 	}, RunOptions{
 		BundlePath:          "bundle.tgz",
-		BundleSHA256:        "b",
-		ControlBinarySHA256: "c",
-		MatrixSHA256:        "m",
-		ProfileSHA256:       "p",
+		BundleSHA256:        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		ControlBinarySHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		MatrixSHA256:        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		ProfileSHA256:       "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 		Now: func() time.Time {
 			return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 		},

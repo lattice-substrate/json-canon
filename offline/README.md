@@ -51,9 +51,14 @@ Each full run emits an `offline/runs/...` directory containing:
 
 ## Release Gate
 
-For canonical release matrix/profile:
+For release gate validation (x86_64 and arm64):
 
 ```bash
-JCS_OFFLINE_EVIDENCE=offline/runs/<run>/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run>/offline-evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run-arm64>/offline-evidence.json \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
