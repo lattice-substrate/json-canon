@@ -1,33 +1,59 @@
 # Offline Cold Replay Suite
 
-This directory defines the offline cold-replay matrix for Linux distro and kernel variance.
+Operator-focused entrypoint for offline replay proof runs.
 
-## Contracts
+Full runbook: `docs/OFFLINE_REPLAY_HARNESS.md`
 
-- Matrix lanes: `offline/matrix.yaml`
-- Maximal profile: `offline/profiles/maximal.yaml`
-- Evidence schema: `offline/schema/evidence.v1.json`
+## Quick Start
 
-## Operator CLI
-
-`cmd/jcs-offline-replay` provides four subcommands:
-
-- `prepare` builds an immutable replay bundle (binary + vectors + manifests).
-- `run` executes the configured matrix and emits evidence JSON.
-- `verify-evidence` validates evidence against matrix/profile policy.
-- `report` prints a compact node/replay summary.
-
-## Environment-Specific Runners
-
-`offline/scripts/replay-container.sh` and `offline/scripts/replay-libvirt.sh` are fail-closed placeholders.
-They must be implemented for your lab runtime (container engine and libvirt topology).
-
-## Hard Release Gate
-
-When release evidence exists, validate it with:
+### 1) Preflight
 
 ```bash
-go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+./offline/scripts/cold-replay-preflight.sh --matrix offline/matrix.yaml
 ```
 
-Set `JCS_OFFLINE_EVIDENCE=/path/to/evidence.json` for that gate.
+### Matrix introspection (machine-readable)
+
+```bash
+jcs-offline-replay inspect-matrix --matrix offline/matrix.yaml
+```
+
+### 2) Single-architecture full proof run
+
+```bash
+./offline/scripts/cold-replay-run.sh
+```
+
+### 3) Cross-architecture full proof run
+
+```bash
+./offline/scripts/cold-replay-cross-arch.sh
+```
+
+## Key Contracts
+
+- x86_64 matrix: `offline/matrix.yaml`
+- arm64 matrix: `offline/matrix.arm64.yaml`
+- x86_64 profile: `offline/profiles/maximal.yaml`
+- arm64 profile: `offline/profiles/maximal.arm64.yaml`
+- evidence schema: `offline/schema/evidence.v1.json`
+
+## Outputs to Audit
+
+Each full run emits an `offline/runs/...` directory containing:
+
+- immutable bundle (`offline-bundle.tgz`)
+- replay evidence (`offline-evidence.json`)
+- controller logs (`logs/*.log`)
+- audit summaries (`audit/audit-summary.md`, `audit/audit-summary.json`)
+- checksums (`audit/bundle.sha256`, `audit/evidence.sha256`)
+- run index (`RUN_INDEX.txt`)
+
+## Release Gate
+
+For canonical release matrix/profile:
+
+```bash
+JCS_OFFLINE_EVIDENCE=offline/runs/<run>/offline-evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+```

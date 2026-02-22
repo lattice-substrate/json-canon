@@ -9,6 +9,7 @@ import (
 func TestCreateAndVerifyBundle(t *testing.T) {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "jcs-canon")
+	worker := filepath.Join(dir, "jcs-offline-worker")
 	matrix := filepath.Join(dir, "matrix.yaml")
 	profile := filepath.Join(dir, "profile.yaml")
 	vectorsDir := filepath.Join(dir, "vectors")
@@ -16,6 +17,7 @@ func TestCreateAndVerifyBundle(t *testing.T) {
 		t.Fatalf("mkdir vectors: %v", err)
 	}
 	mustWrite(t, bin, []byte("binary"), 0o755)
+	mustWrite(t, worker, []byte("worker"), 0o755)
 	mustWrite(t, matrix, []byte("version: v1\narchitecture: x86_64\nnodes: []\n"), 0o644)
 	mustWrite(t, profile, []byte("version: v1\nname: p\nrequired_suites: [a]\nmin_cold_replays: 1\nhard_release_gate: true\nevidence_required: true\n"), 0o644)
 	mustWrite(t, filepath.Join(vectorsDir, "core.jsonl"), []byte("{}\n"), 0o644)
@@ -24,6 +26,7 @@ func TestCreateAndVerifyBundle(t *testing.T) {
 	manifest, err := CreateBundle(BundleOptions{
 		OutputPath:  bundlePath,
 		BinaryPath:  bin,
+		WorkerPath:  worker,
 		MatrixPath:  matrix,
 		ProfilePath: profile,
 		VectorsGlob: filepath.Join(vectorsDir, "*.jsonl"),

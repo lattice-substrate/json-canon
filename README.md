@@ -66,6 +66,11 @@ JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
+Operator harness docs and one-command scripts:
+- `docs/OFFLINE_REPLAY_HARNESS.md`
+- `offline/scripts/cold-replay-run.sh`
+- `offline/scripts/cold-replay-cross-arch.sh`
+
 Requirement registries are split for audit clarity:
 - `REQ_REGISTRY_NORMATIVE.md` (RFC/ECMA obligations)
 - `REQ_REGISTRY_POLICY.md` (profile/ABI/process policy)

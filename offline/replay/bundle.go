@@ -21,6 +21,7 @@ const bundleManifestPath = "manifest.json"
 type BundleOptions struct {
 	OutputPath  string
 	BinaryPath  string
+	WorkerPath  string
 	MatrixPath  string
 	ProfilePath string
 	VectorsGlob string
@@ -33,6 +34,8 @@ type BundleManifest struct {
 	CreatedAtUTC    string            `json:"created_at_utc"`
 	BinaryPath      string            `json:"binary_path"`
 	BinarySHA256    string            `json:"binary_sha256"`
+	WorkerPath      string            `json:"worker_path,omitempty"`
+	WorkerSHA256    string            `json:"worker_sha256,omitempty"`
 	MatrixPath      string            `json:"matrix_path"`
 	MatrixSHA256    string            `json:"matrix_sha256"`
 	ProfilePath     string            `json:"profile_path"`
@@ -52,8 +55,8 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	if opts.OutputPath == "" {
 		return nil, fmt.Errorf("bundle output path is required")
 	}
-	if opts.BinaryPath == "" || opts.MatrixPath == "" || opts.ProfilePath == "" {
-		return nil, fmt.Errorf("binary, matrix, and profile paths are required")
+	if opts.BinaryPath == "" || opts.WorkerPath == "" || opts.MatrixPath == "" || opts.ProfilePath == "" {
+		return nil, fmt.Errorf("binary, worker, matrix, and profile paths are required")
 	}
 	if opts.VectorsGlob == "" {
 		opts.VectorsGlob = filepath.Join("conformance", "vectors", "*.jsonl")
@@ -65,6 +68,10 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	binaryBytes, err := os.ReadFile(opts.BinaryPath)
 	if err != nil {
 		return nil, fmt.Errorf("read binary: %w", err)
+	}
+	workerBytes, err := os.ReadFile(opts.WorkerPath)
+	if err != nil {
+		return nil, fmt.Errorf("read worker: %w", err)
 	}
 	matrixBytes, err := os.ReadFile(opts.MatrixPath)
 	if err != nil {
@@ -88,6 +95,8 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 		CreatedAtUTC:  time.Now().UTC().Format(time.RFC3339Nano),
 		BinaryPath:    "bundle/jcs-canon",
 		BinarySHA256:  sha256Hex(binaryBytes),
+		WorkerPath:    "bundle/jcs-offline-worker",
+		WorkerSHA256:  sha256Hex(workerBytes),
 		MatrixPath:    "bundle/matrix.yaml",
 		MatrixSHA256:  sha256Hex(matrixBytes),
 		ProfilePath:   "bundle/profile.yaml",
@@ -97,6 +106,7 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 
 	entries := []bundleEntry{
 		{path: manifest.BinaryPath, data: binaryBytes, mode: 0o755},
+		{path: manifest.WorkerPath, data: workerBytes, mode: 0o755},
 		{path: manifest.MatrixPath, data: matrixBytes, mode: 0o644},
 		{path: manifest.ProfilePath, data: profileBytes, mode: 0o644},
 	}
@@ -180,7 +190,7 @@ func VerifyBundle(bundlePath string) (*BundleManifest, string, error) {
 		return nil, "", fmt.Errorf("read bundle for sha256: %w", err)
 	}
 	bundleSHA := sha256Hex(b)
-	if manifest.BinarySHA256 == "" || manifest.MatrixSHA256 == "" || manifest.ProfileSHA256 == "" {
+	if manifest.BinarySHA256 == "" || manifest.WorkerSHA256 == "" || manifest.MatrixSHA256 == "" || manifest.ProfileSHA256 == "" {
 		return nil, "", fmt.Errorf("bundle manifest missing required checksums")
 	}
 	if len(manifest.VectorFiles) == 0 {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"sort"
+	"strings"
 )
 
 // CommandRunner abstracts command execution for runtime adapters.
@@ -37,6 +38,10 @@ func (OSRunner) Run(ctx context.Context, argv []string, env map[string]string) (
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(out.String())
+		if msg != "" {
+			return out.String(), fmt.Errorf("run %q failed: %w: %s", argv, err, msg)
+		}
 		return out.String(), fmt.Errorf("run %q failed: %w", argv, err)
 	}
 	return out.String(), nil

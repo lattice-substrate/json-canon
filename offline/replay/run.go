@@ -28,6 +28,7 @@ type RunOptions struct {
 	MatrixSHA256        string
 	ProfileSHA256       string
 	Orchestrator        string
+	GlobalEnv           map[string]string
 	Now                 func() time.Time
 }
 
@@ -83,6 +84,16 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 
 	for _, nodeID := range requiredNodes {
 		node := nodeIndex[nodeID]
+		if len(opts.GlobalEnv) != 0 {
+			merged := make(map[string]string, len(node.Runner.Env)+len(opts.GlobalEnv))
+			for k, v := range node.Runner.Env {
+				merged[k] = v
+			}
+			for k, v := range opts.GlobalEnv {
+				merged[k] = v
+			}
+			node.Runner.Env = merged
+		}
 		adapter, err := factory(node)
 		if err != nil {
 			return nil, fmt.Errorf("node %s adapter: %w", node.ID, err)
