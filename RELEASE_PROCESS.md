@@ -66,6 +66,14 @@ JCS_OFFICIAL_ES6_ENABLE_100M=1 \
 go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
+Maintainers can execute the full offline local proof path (cross-arch + official vectors + 100M gate) with:
+
+```bash
+jcs-offline-replay cross-arch \
+  --run-official-vectors \
+  --run-official-es6-100m
+```
+
 ## Release Checklist
 
 1. Confirm CI status for target commit/tag.

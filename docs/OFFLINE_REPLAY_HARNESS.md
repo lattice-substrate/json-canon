@@ -26,7 +26,9 @@ Core artifacts:
 ### Single architecture full cold replay (recommended first)
 
 ```bash
-./offline/scripts/cold-replay-run.sh
+jcs-offline-replay run-suite \
+  --matrix offline/matrix.yaml \
+  --profile offline/profiles/maximal.yaml
 ```
 
 This performs:
@@ -42,7 +44,7 @@ This performs:
 ### Cross-architecture replay comparison
 
 ```bash
-./offline/scripts/cold-replay-cross-arch.sh
+jcs-offline-replay cross-arch
 ```
 
 This executes the full run once for x86_64 and once for arm64, then compares
@@ -53,12 +55,12 @@ aggregate digests across architectures.
 ### Preflight only
 
 ```bash
-./offline/scripts/cold-replay-preflight.sh --matrix offline/matrix.yaml
+jcs-offline-replay preflight --matrix offline/matrix.yaml
 ```
 
 ### Required commands
 
-- `go`, `tar`, `python3`
+- `go`, `tar`
 - container lanes: `docker` or `podman`
 - VM lanes: `virsh`, `ssh`, `scp`
 
@@ -105,7 +107,7 @@ Use these to audit and archive proof.
 ### Run full x86_64 harness to explicit directory
 
 ```bash
-./offline/scripts/cold-replay-run.sh \
+jcs-offline-replay run-suite \
   --matrix offline/matrix.yaml \
   --profile offline/profiles/maximal.yaml \
   --output-dir offline/runs/proof-x86_64-$(date -u +%Y%m%dT%H%M%SZ)
@@ -114,7 +116,7 @@ Use these to audit and archive proof.
 ### Run full arm64 harness to explicit directory
 
 ```bash
-./offline/scripts/cold-replay-run.sh \
+jcs-offline-replay run-suite \
   --matrix offline/matrix.arm64.yaml \
   --profile offline/profiles/maximal.arm64.yaml \
   --output-dir offline/runs/proof-arm64-$(date -u +%Y%m%dT%H%M%SZ) \
@@ -124,11 +126,19 @@ Use these to audit and archive proof.
 ### Standalone audit summary from existing evidence
 
 ```bash
-./offline/scripts/cold-replay-audit-report.sh \
+jcs-offline-replay audit-summary \
   --matrix offline/matrix.yaml \
   --profile offline/profiles/maximal.yaml \
   --evidence offline/runs/<run>/offline-evidence.json \
   --output-dir offline/runs/<run>/audit
+```
+
+### Cross-arch full local vector proof (includes official ES6 100M gate)
+
+```bash
+jcs-offline-replay cross-arch \
+  --run-official-vectors \
+  --run-official-es6-100m
 ```
 
 ## 7. Cross-Arch Proof Procedure
@@ -137,7 +147,7 @@ Use this exact sequence for formal parity proof:
 
 1. Run full x86_64 harness and save output directory.
 2. Run full arm64 harness and save output directory.
-3. Run cross-arch compare script (or compare evidence files directly).
+3. Run cross-arch compare command (or compare evidence files directly).
 4. Archive:
    - both run directories,
    - cross-arch compare report,

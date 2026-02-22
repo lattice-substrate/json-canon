@@ -71,10 +71,10 @@ JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
-Operator harness docs and one-command scripts:
+Operator harness docs and Go-native one-command workflows:
 - `docs/OFFLINE_REPLAY_HARNESS.md`
-- `offline/scripts/cold-replay-run.sh`
-- `offline/scripts/cold-replay-cross-arch.sh`
+- `jcs-offline-replay run-suite --matrix offline/matrix.yaml --profile offline/profiles/maximal.yaml`
+- `jcs-offline-replay cross-arch --run-official-vectors --run-official-es6-100m`
 
 Requirement registries are split for audit clarity:
 - `REQ_REGISTRY_NORMATIVE.md` (RFC/ECMA obligations)

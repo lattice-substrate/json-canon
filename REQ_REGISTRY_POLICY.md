@@ -114,6 +114,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFLINE-EVIDENCE-001 | offline/README.md | Contracts | MUST | Offline evidence schema (`offline/schema/evidence.v1.json`) and `verify-evidence` validation path MUST exist and remain executable. |
 | OFFLINE-GATE-001 | RELEASE_PROCESS.md | Verification Requirements | MUST | Release process MUST include explicit offline replay evidence gate execution via `go test ./offline/conformance` for both `x86_64` and `arm64` matrix/profile contracts. |
 | OFFLINE-ARCH-001 | offline/matrix.yaml + offline/matrix.arm64.yaml | Profile | MUST | Release architecture scope MUST be explicit and constrained to the supported set: `x86_64` and `arm64`. |
+| OFFLINE-LOCAL-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Local operators MUST have a Go-native `jcs-offline-replay cross-arch` workflow that can execute offline vector gates, including the optional official ES6 100,000,000-line gate. |
 
 ## DET — Determinism
 

@@ -280,6 +280,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-EVIDENCE-001": checkOfflineEvidenceSchemaAndVerifyCLI,
 		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
 		"OFFLINE-ARCH-001":     checkOfflineArchScopeDualArch,
+		"OFFLINE-LOCAL-001":    checkOfflineLocalProofCLI,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -2349,6 +2350,29 @@ func checkOfflineArchScopeDualArch(t *testing.T, h *harness) {
 			t.Fatalf("offline matrix architecture scope check failed for %s: %v", tc.path, err)
 		}
 	}
+}
+
+// TestOfflineLocalProofCLI verifies local Go-native cross-arch/offline vector proof path exists.
+func TestOfflineLocalProofCLI(t *testing.T) {
+	h := testHarness(t)
+	checkOfflineLocalProofCLI(t, h)
+}
+
+func checkOfflineLocalProofCLI(t *testing.T, h *harness) {
+	t.Helper()
+	offlineReadme := mustReadText(t, filepath.Join(h.root, "offline", "README.md"))
+	assertContains(t, offlineReadme, "jcs-offline-replay run-suite", "offline readme local single-arch go command")
+	assertContains(t, offlineReadme, "jcs-offline-replay cross-arch", "offline readme local cross-arch go command")
+	assertContains(t, offlineReadme, "--run-official-es6-100m", "offline readme local 100m gate command")
+
+	offlineRunbook := mustReadText(t, filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"))
+	assertContains(t, offlineRunbook, "jcs-offline-replay cross-arch", "offline runbook go-native cross-arch command")
+	assertContains(t, offlineRunbook, "--run-official-vectors", "offline runbook official vector gate command")
+	assertContains(t, offlineRunbook, "--run-official-es6-100m", "offline runbook official 100m gate command")
+
+	cli := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
+	assertContains(t, cli, "cross-arch", "offline replay cli cross-arch subcommand")
+	assertContains(t, cli, "run-suite", "offline replay cli run-suite subcommand")
 }
 
 // TestCitationIndexCoversNormativeRequirements verifies every normative
