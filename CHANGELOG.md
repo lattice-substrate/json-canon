@@ -14,7 +14,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - `VERIFICATION.md` with release artifact verification instructions.
 - `abi_manifest.json` machine-readable ABI contract.
 - `standards/CITATION_INDEX.md` mapping all 54 normative requirements to authoritative spec clauses.
-- Conformance vector corpus expanded from 4 to 73 vectors across 4 categorized files.
+- Conformance vector corpus expanded from 4 to 74 vectors across 4 categorized files.
 - Traceability gate tests: registry/matrix parity, impl/test symbol existence, ID format validation, vector schema validation, ABI manifest validation, citation index coverage.
 - Build provenance attestation in release workflow (SLSA via `actions/attest-build-provenance`).
 - Official engineering documentation index and specs under `docs/`:
@@ -44,6 +44,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - CI and release workflow platform matrices reduced to Linux-only.
 - Stale planning artifacts moved to `PLANNING/archive/` and active planning state reset.
 - Conformance gates now enforce fully static Linux binaries and prohibit outbound network/subprocess imports in core runtime packages.
+- CLI stderr diagnostics now include stable failure class tokens for usage, parse/profile failures, and non-canonical verification failures.
+- Undocumented `--` end-of-options behavior was removed from subcommand flag parsing.
+- Conformance suite now enforces ABI manifest/source parity, workflow SHA pinning, release checksum/provenance steps, governance durability clauses, and behavior-test matrix linkage.
 
 ### Fixed
 - Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.
@@ -51,3 +54,4 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Deduplicated `isNoncharacter`; canonical definition exported as `jcstoken.IsNoncharacter`.
 - Map-iterated test tables in `jcsfloat_test.go` and `conformance/harness_test.go` converted to deterministic slices.
 - Digit buffer safety invariant documented in `jcsfloat.go`.
+- CLI now returns exit `10` for write failures in top-level/subcommand help, version output, and verify success status writes.

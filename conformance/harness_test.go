@@ -235,21 +235,28 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"BOUND-STRBYTES-001": checkStringByteLimitEnforced,
 		"BOUND-NUMCHARS-001": checkNumberTokenLengthLimitEnforced,
 		// CLI
-		"CLI-CMD-001":  checkCanonicalizeFunctional,
-		"CLI-CMD-002":  checkVerifyFunctional,
-		"CLI-EXIT-001": checkNoCommandExitCode,
-		"CLI-EXIT-002": checkUnknownCommandExitCode,
-		"CLI-EXIT-003": checkInputViolationExitCode,
-		"CLI-EXIT-004": checkInternalWriteFailureExitCode,
-		"CLI-FLAG-001": checkUnknownOptionRejected,
-		"CLI-FLAG-002": checkVerifyQuietSuppressesOk,
-		"CLI-FLAG-003": checkHelpExitsZero,
-		"CLI-FLAG-004": checkVersionExitsZero,
-		"CLI-IO-001":   checkStdinReading,
-		"CLI-IO-002":   checkMultipleInputRejected,
-		"CLI-IO-003":   checkFileAndStdinParity,
-		"CLI-IO-004":   checkCanonicalizeStdoutOnly,
-		"CLI-IO-005":   checkVerifyOkEmission,
+		"CLI-CMD-001":   checkCanonicalizeFunctional,
+		"CLI-CMD-002":   checkVerifyFunctional,
+		"CLI-EXIT-001":  checkNoCommandExitCode,
+		"CLI-EXIT-002":  checkUnknownCommandExitCode,
+		"CLI-EXIT-003":  checkInputViolationExitCode,
+		"CLI-EXIT-004":  checkInternalWriteFailureExitCode,
+		"CLI-FLAG-001":  checkUnknownOptionRejected,
+		"CLI-FLAG-002":  checkVerifyQuietSuppressesOk,
+		"CLI-FLAG-003":  checkHelpExitsZero,
+		"CLI-FLAG-004":  checkVersionExitsZero,
+		"CLI-IO-001":    checkStdinReading,
+		"CLI-IO-002":    checkMultipleInputRejected,
+		"CLI-IO-003":    checkFileAndStdinParity,
+		"CLI-IO-004":    checkCanonicalizeStdoutOnly,
+		"CLI-IO-005":    checkVerifyOkEmission,
+		"CLI-CLASS-001": checkErrorDiagnosticsIncludeFailureClass,
+		// ABI/Supply/Governance/Traceability policy
+		"ABI-PARITY-001":  checkABIManifestBehaviorParity,
+		"SUPPLY-PIN-001":  checkGitHubActionsPinnedBySHA,
+		"SUPPLY-PROV-001": checkReleaseWorkflowVerificationArtifacts,
+		"GOV-DUR-001":     checkGovernanceDurabilityClausesPresent,
+		"TRACE-LINK-001":  checkBehaviorTestsLinkedToRequirements,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -978,12 +985,23 @@ func checkUnderflowNonZeroRejected(t *testing.T, h *harness) {
 // ==================== BOUND ====================
 
 func checkDepthLimitEnforced(t *testing.T, h *harness) {
+	exact := strings.Repeat("[", jcstoken.DefaultMaxDepth) + strings.Repeat("]", jcstoken.DefaultMaxDepth)
+	okRes := runCLI(t, h, []string{"canonicalize", "-"}, []byte(exact))
+	if okRes.exitCode != 0 || okRes.stdout != exact {
+		t.Fatalf("expected exact depth limit to pass, got %+v", okRes)
+	}
+
 	input := strings.Repeat("[", 1001) + strings.Repeat("]", 1001)
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(input)), "nesting depth")
 }
 
 func checkInputSizeLimitEnforced(t *testing.T, _ *harness) {
-	_, err := jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxInputSize: 2})
+	_, err := jcstoken.ParseWithOptions([]byte(`[]`), &jcstoken.Options{MaxInputSize: 2})
+	if err != nil {
+		t.Fatalf("expected exact input-size limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxInputSize: 2})
 	if err == nil {
 		t.Fatal("expected input size error")
 	}
@@ -994,40 +1012,88 @@ func checkInputSizeLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkValueCountLimitEnforced(t *testing.T, _ *harness) {
-	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 2})
-	if err == nil || !strings.Contains(err.Error(), "value count") {
-		t.Fatalf("expected value count error, got %v", err)
+	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 3})
+	if err != nil {
+		t.Fatalf("expected exact value-count limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 2})
+	if err == nil {
+		t.Fatal("expected value count error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded || !strings.Contains(je.Message, "value count") {
+		t.Fatalf("expected BOUND_EXCEEDED value count error, got %v", err)
 	}
 }
 
 func checkObjectMemberLimitEnforced(t *testing.T, _ *harness) {
 	_, err := jcstoken.ParseWithOptions(
 		[]byte(`{"a":1,"b":2}`),
+		&jcstoken.Options{MaxObjectMembers: 2},
+	)
+	if err != nil {
+		t.Fatalf("expected exact member-count limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions(
+		[]byte(`{"a":1,"b":2}`),
 		&jcstoken.Options{MaxObjectMembers: 1},
 	)
-	if err == nil || !strings.Contains(err.Error(), "object member count exceeds maximum") {
-		t.Fatalf("expected object member limit error, got %v", err)
+	if err == nil {
+		t.Fatal("expected object member limit error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded || !strings.Contains(je.Message, "object member count exceeds maximum") {
+		t.Fatalf("expected BOUND_EXCEEDED object member limit error, got %v", err)
 	}
 }
 
 func checkArrayElementLimitEnforced(t *testing.T, _ *harness) {
-	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxArrayElements: 1})
-	if err == nil || !strings.Contains(err.Error(), "array element count exceeds maximum") {
-		t.Fatalf("expected array limit error, got %v", err)
+	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxArrayElements: 2})
+	if err != nil {
+		t.Fatalf("expected exact array-element limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxArrayElements: 1})
+	if err == nil {
+		t.Fatal("expected array limit error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded || !strings.Contains(je.Message, "array element count exceeds maximum") {
+		t.Fatalf("expected BOUND_EXCEEDED array limit error, got %v", err)
 	}
 }
 
 func checkStringByteLimitEnforced(t *testing.T, _ *harness) {
-	_, err := jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxStringBytes: 1})
-	if err == nil || !strings.Contains(err.Error(), "string decoded length exceeds maximum") {
-		t.Fatalf("expected string limit error, got %v", err)
+	_, err := jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxStringBytes: 2})
+	if err != nil {
+		t.Fatalf("expected exact string-byte limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxStringBytes: 1})
+	if err == nil {
+		t.Fatal("expected string limit error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded || !strings.Contains(je.Message, "string decoded length exceeds maximum") {
+		t.Fatalf("expected BOUND_EXCEEDED string limit error, got %v", err)
 	}
 }
 
 func checkNumberTokenLengthLimitEnforced(t *testing.T, _ *harness) {
-	_, err := jcstoken.ParseWithOptions([]byte(`12345`), &jcstoken.Options{MaxNumberChars: 4})
-	if err == nil || !strings.Contains(err.Error(), "number token length") {
-		t.Fatalf("expected number length error, got %v", err)
+	_, err := jcstoken.ParseWithOptions([]byte(`12345`), &jcstoken.Options{MaxNumberChars: 5})
+	if err != nil {
+		t.Fatalf("expected exact number-token length limit to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`12345`), &jcstoken.Options{MaxNumberChars: 4})
+	if err == nil {
+		t.Fatal("expected number length error")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded || !strings.Contains(je.Message, "number token length") {
+		t.Fatalf("expected BOUND_EXCEEDED number length error, got %v", err)
 	}
 }
 
@@ -1049,21 +1115,21 @@ func checkVerifyFunctional(t *testing.T, h *harness) {
 
 func checkNoCommandExitCode(t *testing.T, h *harness) {
 	res := runCLI(t, h, nil, nil)
-	if res.exitCode != 2 || !strings.Contains(res.stderr, "usage:") {
+	if res.exitCode != 2 || !strings.Contains(res.stderr, "usage:") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
 func checkUnknownCommandExitCode(t *testing.T, h *harness) {
 	res := runCLI(t, h, []string{"bogus"}, nil)
-	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown command") {
+	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown command") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
 func checkInputViolationExitCode(t *testing.T, h *harness) {
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`01`))
-	if res.exitCode != 2 {
+	if res.exitCode != 2 || !strings.Contains(res.stderr, string(jcserr.InvalidGrammar)) {
 		t.Fatalf("expected exit 2, got %d: %+v", res.exitCode, res)
 	}
 
@@ -1099,7 +1165,11 @@ func checkInternalWriteFailureExitCode(t *testing.T, h *harness) {
 
 func checkUnknownOptionRejected(t *testing.T, h *harness) {
 	res := runCLI(t, h, []string{"verify", "--nope"}, nil)
-	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown option") {
+	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown option") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
+		t.Fatalf("unexpected result: %+v", res)
+	}
+	res = runCLI(t, h, []string{"verify", "--"}, nil)
+	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown option") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
@@ -1168,7 +1238,7 @@ func checkStdinReading(t *testing.T, h *harness) {
 
 func checkMultipleInputRejected(t *testing.T, h *harness) {
 	res := runCLI(t, h, []string{"canonicalize", "a.json", "b.json"}, nil)
-	if res.exitCode != 2 || !strings.Contains(res.stderr, "multiple input files") {
+	if res.exitCode != 2 || !strings.Contains(res.stderr, "multiple input files") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
@@ -1201,14 +1271,39 @@ func checkVerifyOkEmission(t *testing.T, h *harness) {
 	}
 }
 
+func checkErrorDiagnosticsIncludeFailureClass(t *testing.T, h *harness) {
+	parseErr := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`01`))
+	if parseErr.exitCode != 2 || !strings.Contains(parseErr.stderr, string(jcserr.InvalidGrammar)) {
+		t.Fatalf("expected INVALID_GRAMMAR class token, got %+v", parseErr)
+	}
+
+	usageErr := runCLI(t, h, []string{"verify", "--nope"}, nil)
+	if usageErr.exitCode != 2 || !strings.Contains(usageErr.stderr, string(jcserr.CLIUsage)) {
+		t.Fatalf("expected CLI_USAGE class token, got %+v", usageErr)
+	}
+
+	notCanonical := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"b":1,"a":2}`))
+	if notCanonical.exitCode != 2 || !strings.Contains(notCanonical.stderr, string(jcserr.NotCanonical)) {
+		t.Fatalf("expected NOT_CANONICAL class token, got %+v", notCanonical)
+	}
+}
+
 // ==================== VERIFY ====================
 
 func checkVerifyRejectsNonCanonicalOrder(t *testing.T, h *harness) {
-	assertInvalid(t, runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"b":1,"a":2}`)), "not canonical")
+	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"b":1,"a":2}`))
+	assertInvalid(t, res, "not canonical")
+	if !strings.Contains(res.stderr, string(jcserr.NotCanonical)) {
+		t.Fatalf("expected NOT_CANONICAL class token, got %+v", res)
+	}
 }
 
 func checkVerifyRejectsNonCanonicalWhitespace(t *testing.T, h *harness) {
-	assertInvalid(t, runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte("{\"a\":1}\n")), "not canonical")
+	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte("{\"a\":1}\n"))
+	assertInvalid(t, res, "not canonical")
+	if !strings.Contains(res.stderr, string(jcserr.NotCanonical)) {
+		t.Fatalf("expected NOT_CANONICAL class token, got %+v", res)
+	}
 }
 
 // ==================== DET ====================
@@ -1456,7 +1551,7 @@ func TestMatrixImplSymbolsExist(t *testing.T) {
 	h := testHarness(t)
 	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
 
-	symbolsCache := make(map[string]map[string]struct{})
+	symbolsCache := make(map[string]map[string]symbolRange)
 	lineCountCache := make(map[string]int)
 	checked := 0
 	for _, row := range rows {
@@ -1476,8 +1571,10 @@ func TestMatrixImplSymbolsExist(t *testing.T) {
 			symbolsCache[path] = symbols
 		}
 
-		if _, ok := symbols[row.implSymbol]; !ok {
+		loc, ok := symbols[row.implSymbol]
+		if !ok {
 			t.Errorf("%s: impl_symbol %q not found in %s", row.reqID, row.implSymbol, row.implFile)
+			continue
 		}
 
 		if row.implLine != "" {
@@ -1486,6 +1583,9 @@ func TestMatrixImplSymbolsExist(t *testing.T) {
 				t.Errorf("%s: invalid impl_line %q in matrix", row.reqID, row.implLine)
 			} else if maxLine := lineCountCache[path]; lineNo > maxLine {
 				t.Errorf("%s: impl_line %d out of range for %s (max %d)", row.reqID, lineNo, row.implFile, maxLine)
+			} else if lineNo < loc.start || lineNo > loc.end {
+				t.Errorf("%s: impl_line %d does not point into impl_symbol %s (range %d-%d) in %s",
+					row.reqID, lineNo, row.implSymbol, loc.start, loc.end, row.implFile)
 			}
 		}
 		checked++
@@ -1534,6 +1634,56 @@ func TestMatrixTestSymbolsExist(t *testing.T) {
 		t.Fatal("no matrix test symbols checked")
 	}
 	t.Logf("checked %d test symbol references", checked)
+}
+
+// TestBehaviorTestsLinkedToRequirements verifies that behavior test symbols in
+// runtime packages are linked in the enforcement matrix.
+func TestBehaviorTestsLinkedToRequirements(t *testing.T) {
+	h := testHarness(t)
+	checkBehaviorTestsLinkedToRequirements(t, h)
+}
+
+func checkBehaviorTestsLinkedToRequirements(t *testing.T, h *harness) {
+	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+
+	mapped := make(map[string]map[string]struct{})
+	for _, row := range rows {
+		if row.testFile == "" || row.testFunc == "" {
+			continue
+		}
+		base := row.testFunc
+		if idx := strings.IndexByte(base, '/'); idx >= 0 {
+			base = base[:idx]
+		}
+		if mapped[row.testFile] == nil {
+			mapped[row.testFile] = make(map[string]struct{})
+		}
+		mapped[row.testFile][base] = struct{}{}
+	}
+
+	behaviorTestFiles := []string{
+		"cmd/jcs-canon/main_test.go",
+		"cmd/jcs-canon/blackbox_cli_test.go",
+		"jcs/serialize_test.go",
+		"jcserr/errors_test.go",
+		"jcsfloat/jcsfloat_test.go",
+		"jcstoken/token_test.go",
+	}
+
+	for _, rel := range behaviorTestFiles {
+		funcs, err := loadGoFunctionNames(filepath.Join(h.root, rel))
+		if err != nil {
+			t.Fatalf("load test functions %s: %v", rel, err)
+		}
+		for fn := range funcs {
+			if !strings.HasPrefix(fn, "Test") {
+				continue
+			}
+			if _, ok := mapped[rel][fn]; !ok {
+				t.Errorf("behavior test %s::%s is not linked in REQ_ENFORCEMENT_MATRIX.md", rel, fn)
+			}
+		}
+	}
 }
 
 // TestRegistryIDFormat verifies all requirement IDs conform to the
@@ -1690,6 +1840,109 @@ func TestABIManifestValid(t *testing.T) {
 	}
 }
 
+// TestABIManifestBehaviorParity verifies that the runtime CLI surface encoded in
+// source matches abi_manifest.json for commands and flags.
+func TestABIManifestBehaviorParity(t *testing.T) {
+	h := testHarness(t)
+	checkABIManifestBehaviorParity(t, h)
+}
+
+func checkABIManifestBehaviorParity(t *testing.T, h *harness) {
+	manifest := loadABIManifest(t, filepath.Join(h.root, "abi_manifest.json"))
+
+	srcCommands, srcGlobalFlags, srcCommandFlags := loadCLISurfaceFromSource(
+		t,
+		filepath.Join(h.root, "cmd", "jcs-canon", "main.go"),
+	)
+	assertSetEqual(t, "ABI commands", srcCommands, mapKeys(manifest.Commands))
+
+	wantGlobalFlags := decodeManifestFlagSet(t, manifest.GlobalFlags)
+	assertSetEqual(t, "ABI global flags", srcGlobalFlags, wantGlobalFlags)
+
+	for cmdName, cmd := range manifest.Commands {
+		wantCmdFlags := decodeManifestFlagSet(t, cmd.Flags)
+		assertSetEqual(t, "ABI command flags "+cmdName, srcCommandFlags, wantCmdFlags)
+	}
+	for cmdName := range manifest.Commands {
+		res := runCLI(t, h, []string{cmdName, "--help"}, nil)
+		if res.exitCode != 0 {
+			t.Fatalf("manifested command %q --help failed: %+v", cmdName, res)
+		}
+	}
+}
+
+// TestGitHubActionsPinnedBySHA verifies all workflow actions are pinned to full commit SHA.
+func TestGitHubActionsPinnedBySHA(t *testing.T) {
+	h := testHarness(t)
+	checkGitHubActionsPinnedBySHA(t, h)
+}
+
+func checkGitHubActionsPinnedBySHA(t *testing.T, h *harness) {
+	workflowFiles, err := filepath.Glob(filepath.Join(h.root, ".github", "workflows", "*.yml"))
+	if err != nil {
+		t.Fatalf("glob workflow files: %v", err)
+	}
+	if len(workflowFiles) == 0 {
+		t.Fatal("no workflow files found")
+	}
+
+	usesRe := regexp.MustCompile(`(?m)^\s*-?\s*uses:\s*([^\s@]+)@([^\s#]+)`)
+	shaRe := regexp.MustCompile(`(?i)^[0-9a-f]{40}$`)
+	for _, path := range workflowFiles {
+		text := mustReadText(t, path)
+		matches := usesRe.FindAllStringSubmatch(text, -1)
+		for _, m := range matches {
+			actionRef := m[1]
+			ref := m[2]
+			if strings.HasPrefix(actionRef, "./") {
+				continue
+			}
+			if !shaRe.MatchString(ref) {
+				t.Errorf("%s has unpinned or non-SHA action ref: %s@%s", filepath.Base(path), actionRef, ref)
+			}
+		}
+	}
+}
+
+// TestReleaseWorkflowVerificationArtifacts verifies checksum and provenance steps are present.
+func TestReleaseWorkflowVerificationArtifacts(t *testing.T) {
+	h := testHarness(t)
+	checkReleaseWorkflowVerificationArtifacts(t, h)
+}
+
+func checkReleaseWorkflowVerificationArtifacts(t *testing.T, h *harness) {
+	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
+
+	assertContains(t, releaseWorkflow, "SHA256SUMS", "release workflow checksums")
+	assertContains(t, releaseWorkflow, "sha256sum", "release workflow checksums")
+	assertContains(t, releaseWorkflow, "actions/attest-build-provenance@", "release workflow provenance")
+	assertContains(t, releaseWorkflow, "attestations: write", "release workflow permissions")
+	assertContains(t, releaseWorkflow, "id-token: write", "release workflow permissions")
+}
+
+// TestCIReproducibleBuildCheckPresent verifies CI includes deterministic-build validation.
+func TestCIReproducibleBuildCheckPresent(t *testing.T) {
+	h := testHarness(t)
+	ciWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "ci.yml"))
+	assertContains(t, ciWorkflow, "build twice and compare sha256", "ci reproducible build gate")
+	assertContains(t, ciWorkflow, "-buildid=", "ci deterministic build flags")
+	assertContains(t, ciWorkflow, "CGO_ENABLED=0 go build", "ci static build gate")
+}
+
+// TestGovernanceDurabilityClausesPresent verifies governance durability clauses are documented.
+func TestGovernanceDurabilityClausesPresent(t *testing.T) {
+	h := testHarness(t)
+	checkGovernanceDurabilityClausesPresent(t, h)
+}
+
+func checkGovernanceDurabilityClausesPresent(t *testing.T, h *harness) {
+	gov := mustReadText(t, filepath.Join(h.root, "GOVERNANCE.md"))
+	assertContains(t, gov, "## Maintainer Policy", "governance maintainer policy")
+	assertContains(t, gov, "### Review Requirements", "governance review requirements")
+	assertContains(t, gov, "### Maintainer Succession", "governance succession policy")
+	assertContains(t, gov, "## Support Window Policy", "governance support window")
+}
+
 // TestCitationIndexCoversNormativeRequirements verifies every normative
 // requirement ID appears in the standards citation index.
 func TestCitationIndexCoversNormativeRequirements(t *testing.T) {
@@ -1730,6 +1983,7 @@ func TestRequiredDocumentationPresent(t *testing.T) {
 		"README.md",
 		"AGENTS.md",
 		"CLAUDE.md",
+		"GOVERNANCE.md",
 		"ARCHITECTURE.md",
 		"ABI.md",
 		"NORMATIVE_REFERENCES.md",
@@ -1900,6 +2154,11 @@ type abiFailureClass struct {
 	ExitCode int    `json:"exit_code"`
 }
 
+type symbolRange struct {
+	start int
+	end   int
+}
+
 func loadMatrixIDs(t *testing.T, path string) map[string]struct{} {
 	t.Helper()
 	rows := loadMatrixRows(t, path)
@@ -1971,7 +2230,7 @@ func loadMatrixRows(t *testing.T, path string) []matrixRow {
 	return rows
 }
 
-func loadGoTopLevelSymbols(path string) (map[string]struct{}, int, error) {
+func loadGoTopLevelSymbols(path string) (map[string]symbolRange, int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, 0, err
@@ -1983,19 +2242,25 @@ func loadGoTopLevelSymbols(path string) (map[string]struct{}, int, error) {
 		return nil, 0, err
 	}
 
-	symbols := make(map[string]struct{})
+	symbols := make(map[string]symbolRange)
+	declRange := func(n ast.Node) symbolRange {
+		return symbolRange{
+			start: fset.Position(n.Pos()).Line,
+			end:   fset.Position(n.End()).Line,
+		}
+	}
 	for _, decl := range f.Decls {
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
-			symbols[d.Name.Name] = struct{}{}
+			symbols[d.Name.Name] = declRange(d)
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {
 				case *ast.TypeSpec:
-					symbols[s.Name.Name] = struct{}{}
+					symbols[s.Name.Name] = declRange(s)
 				case *ast.ValueSpec:
 					for _, name := range s.Names {
-						symbols[name.Name] = struct{}{}
+						symbols[name.Name] = declRange(s)
 					}
 				}
 			}
@@ -2127,6 +2392,157 @@ func loadABIManifest(t *testing.T, path string) abiManifest {
 		t.Fatal("abi manifest has no failure_classes")
 	}
 	return m
+}
+
+func mapKeys[T any](m map[string]T) map[string]struct{} {
+	keys := make(map[string]struct{}, len(m))
+	for k := range m {
+		keys[k] = struct{}{}
+	}
+	return keys
+}
+
+func decodeManifestFlagSet(t *testing.T, flags map[string]json.RawMessage) map[string]struct{} {
+	t.Helper()
+	type manifestFlag struct {
+		Short string `json:"short"`
+	}
+	set := make(map[string]struct{}, len(flags))
+	for longName, raw := range flags {
+		set[longName] = struct{}{}
+		var mf manifestFlag
+		if err := json.Unmarshal(raw, &mf); err != nil {
+			t.Fatalf("decode manifest flag %s: %v", longName, err)
+		}
+		if mf.Short != "" {
+			set[mf.Short] = struct{}{}
+		}
+	}
+	return set
+}
+
+func loadCLISurfaceFromSource(t *testing.T, path string) (map[string]struct{}, map[string]struct{}, map[string]struct{}) {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse CLI source %s: %v", path, err)
+	}
+
+	commands := make(map[string]struct{})
+	globalFlags := make(map[string]struct{})
+	commandFlags := make(map[string]struct{})
+
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+
+		switch fn.Name.Name {
+		case "run":
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				sw, ok := n.(*ast.SwitchStmt)
+				if !ok || !isIndexZeroExpr(sw.Tag, "args") {
+					return true
+				}
+				for _, stmt := range sw.Body.List {
+					cc, ok := stmt.(*ast.CaseClause)
+					if !ok {
+						continue
+					}
+					for _, expr := range cc.List {
+						value, ok := stringLiteralValue(expr)
+						if !ok {
+							continue
+						}
+						if strings.HasPrefix(value, "-") {
+							globalFlags[value] = struct{}{}
+						} else {
+							commands[value] = struct{}{}
+						}
+					}
+				}
+				return true
+			})
+		case "parseFlags":
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				sw, ok := n.(*ast.SwitchStmt)
+				if !ok {
+					return true
+				}
+				ident, ok := sw.Tag.(*ast.Ident)
+				if !ok || ident.Name != "arg" {
+					return true
+				}
+				for _, stmt := range sw.Body.List {
+					cc, ok := stmt.(*ast.CaseClause)
+					if !ok {
+						continue
+					}
+					for _, expr := range cc.List {
+						value, ok := stringLiteralValue(expr)
+						if !ok {
+							continue
+						}
+						if strings.HasPrefix(value, "-") && value != "-" {
+							commandFlags[value] = struct{}{}
+						}
+					}
+				}
+				return true
+			})
+		}
+	}
+
+	return commands, globalFlags, commandFlags
+}
+
+func isIndexZeroExpr(expr ast.Expr, identName string) bool {
+	idx, ok := expr.(*ast.IndexExpr)
+	if !ok {
+		return false
+	}
+	base, ok := idx.X.(*ast.Ident)
+	if !ok || base.Name != identName {
+		return false
+	}
+	lit, ok := idx.Index.(*ast.BasicLit)
+	return ok && lit.Kind == token.INT && lit.Value == "0"
+}
+
+func stringLiteralValue(expr ast.Expr) (string, bool) {
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return "", false
+	}
+	value, err := strconv.Unquote(lit.Value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
+}
+
+func assertSetEqual(t *testing.T, label string, got, want map[string]struct{}) {
+	t.Helper()
+	missing := setDifference(want, got)
+	extra := setDifference(got, want)
+	if len(missing) == 0 && len(extra) == 0 {
+		return
+	}
+	t.Fatalf("%s mismatch missing=%v extra=%v", label, missing, extra)
+}
+
+func setDifference(a, b map[string]struct{}) []string {
+	var diff []string
+	for k := range a {
+		if _, ok := b[k]; !ok {
+			diff = append(diff, k)
+		}
+	}
+	sort.Strings(diff)
+	return diff
 }
 
 // --- Float oracle helpers ---

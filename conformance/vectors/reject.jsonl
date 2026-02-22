@@ -19,3 +19,4 @@
 {"id":"VEC-REJ-0019","mode":"canonicalize","input":"{\"a\":1,\"a\":2}","want_stderr_contains":"DUPLICATE_KEY","want_exit":2}
 {"id":"VEC-REJ-0020","mode":"canonicalize","input":"1e999","want_stderr_contains":"NUMBER_OVERFLOW","want_exit":2}
 {"id":"VEC-REJ-0021","mode":"canonicalize","input":"1e-400","want_stderr_contains":"NUMBER_UNDERFLOW","want_exit":2}
+{"id":"VEC-REJ-0022","args":["verify","--"],"input":"{\"a\":1}","want_stderr_contains":"CLI_USAGE","want_exit":2}

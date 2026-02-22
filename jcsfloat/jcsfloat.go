@@ -3,8 +3,8 @@
 //
 // The algorithm is specified in ECMA-262 §6.1.6.1.20 (Number::toString).
 // This is a pure-Go, zero-dependency (standard library only) implementation.
-// The output of FormatDouble is byte-identical to ECMAScript's String(number)
-// for all finite doubles.
+// FormatDouble is validated against large pinned ECMAScript oracle datasets and
+// round-trip fuzzing for finite doubles.
 //
 // The implementation uses math/big.Int for exact multiprecision arithmetic in
 // digit generation, following the Burger-Dybvig algorithm with correct ECMA-262

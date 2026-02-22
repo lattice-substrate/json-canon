@@ -60,6 +60,32 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | CLI-IO-003 | ABI | — | MUST | File and stdin MUST produce identical output for identical content. |
 | CLI-IO-004 | ABI | — | MUST | `canonicalize` output goes to stdout only; stderr MUST be empty on success. |
 | CLI-IO-005 | ABI | — | MUST | `verify` success MUST emit "ok\n" on stderr (unless --quiet). |
+| CLI-CLASS-001 | ABI | — | MUST | CLI failure diagnostics MUST include a stable failure class token (`INVALID_*`, `CLI_USAGE`, `NOT_CANONICAL`, etc.) in stderr output. |
+
+## ABI-PARITY — Manifest/Runtime Parity
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| ABI-PARITY-001 | ABI | — | MUST | `abi_manifest.json` command/flag surface MUST match the implemented CLI source and runtime behavior. |
+
+## SUPPLY — Supply Chain Verification
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| SUPPLY-PIN-001 | CLAUDE | Security and Supply-Chain Requirements | MUST | All GitHub Actions workflow dependencies MUST be pinned to immutable full commit SHA references. |
+| SUPPLY-PROV-001 | CLAUDE | Security and Supply-Chain Requirements | MUST | Release workflow MUST publish checksums and build provenance attestation steps. |
+
+## GOV — Governance Durability
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| GOV-DUR-001 | CLAUDE | Infrastructure-Grade Definition | MUST | Governance durability clauses (review policy, succession policy, support policy) MUST be present in `GOVERNANCE.md` and validated by tests. |
+
+## TRACE — Traceability Integrity
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| TRACE-LINK-001 | docs/TRACEABILITY_MODEL.md | Required Mapping | MUST | Behavior tests in runtime packages MUST be linked from `REQ_ENFORCEMENT_MATRIX.md`. |
 
 ## DET — Determinism
 
