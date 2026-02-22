@@ -27,6 +27,10 @@ jobs:
         run: go test ./... -race -count=1 -timeout=25m
       - name: conformance
         run: go test ./conformance -count=1 -timeout=10m -v
+      - name: official ES6 100M checksum gate
+        env:
+          JCS_OFFICIAL_ES6_ENABLE_100M: "1"
+        run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
       - name: offline evidence gate x86_64
         env:
           JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/20260222T023623Z/offline-evidence.json

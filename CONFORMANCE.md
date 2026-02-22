@@ -16,6 +16,7 @@ Conformance is defined by the union of:
 - `abi_manifest.json`
 - conformance tests in `conformance/harness_test.go`
 - vector corpus in `conformance/vectors/*.jsonl`
+- official external fixtures in `conformance/official/`
 - offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, and `offline/schema/evidence.v1.json`
 
 A release is non-conformant if any artifact is inconsistent with the others.
@@ -59,6 +60,14 @@ JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/<run-arm64>/offline-evidence.json \
 JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
 JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+```
+
+Release validation MUST also execute the official deterministic ES6 checksum
+gate at 100,000,000 lines:
+
+```bash
+JCS_OFFICIAL_ES6_ENABLE_100M=1 \
+go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
 ## CI Contract

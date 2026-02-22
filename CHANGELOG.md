@@ -7,6 +7,15 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Official external conformance fixture packs under `conformance/official/`:
+  - Cyberphone `testdata/{input,output,outhex}` vectors with pinned provenance metadata.
+  - RFC 8785-derived fixtures for §3.2.3 key sorting and Appendix B finite number mappings.
+- New conformance tests for official suites:
+  - `TestOfficialCyberphoneCanonicalPairs`
+  - `TestOfficialRFC8785Vectors`
+  - `TestOfficialES6CorpusChecksums10K`
+  - release-only `TestOfficialES6CorpusChecksums100M`
+- New policy requirements `OFFICIAL-VEC-001..004` with matrix mappings and conformance requirement coverage.
 - Publication-readiness governance files (`LICENSE`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`).
 - Stable top-level CLI flags: `--help`/`-h` and `--version`.
 - `GOVERNANCE.md` with maintainer policy, support window, and deprecation policy.
@@ -35,6 +44,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
+- CI conformance workflow step now explicitly documents that it includes the official ES6 10k checksum gate.
+- Release workflow now includes an explicit `official ES6 100M checksum gate` step prior to publish jobs.
+- Release/conformance/verification docs now include the required command for the 100M official ES6 checksum gate.
 - CI unit test timeout aligned to 20m (matching CONFORMANCE.md and release workflow).
 - Release workflow expanded with pre-release validation job.
 - `GOVERNANCE.md` updated for single-maintainer review and succession policy.

@@ -231,6 +231,11 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"ECMA-VEC-001": checkBaseGoldenOracle,
 		"ECMA-VEC-002": checkStressGoldenOracle,
 		"ECMA-VEC-003": checkECMABoundaryConstants,
+		// OFFICIAL-VEC
+		"OFFICIAL-VEC-001": checkOfficialCyberphoneVectors,
+		"OFFICIAL-VEC-002": checkOfficialRFC8785Vectors,
+		"OFFICIAL-VEC-003": checkOfficialES6Corpus10K,
+		"OFFICIAL-VEC-004": checkOfficialES6100MReleaseGatePolicy,
 		// PROF-NUM
 		"PROF-NEGZ-001":  checkNegativeZeroRejected,
 		"PROF-OFLOW-001": checkNumberOverflowRejected,
