@@ -6,7 +6,7 @@ usage() {
 usage: cold-replay-preflight.sh [options]
 
 Options:
-  --matrix <path>       Matrix YAML path (default: offline/matrix.yaml)
+  --matrix <path>       Matrix config JSON path (default: offline/matrix.yaml)
   --controller <path>   jcs-offline-replay binary (auto-build if omitted)
   --report <path>       Write full report log to this file
   --strict              Fail on any warning (default)

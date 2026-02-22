@@ -8,7 +8,7 @@ usage: setup-libvirt-matrix-vms.sh [options]
 Provision libvirt VM lanes required by an offline replay matrix.
 
 Options:
-  --matrix <path>            Matrix YAML path (default: offline/matrix.yaml)
+  --matrix <path>            Matrix config JSON path (default: offline/matrix.yaml)
   --controller <path>        jcs-offline-replay binary (auto-build if omitted)
   --image-dir <dir>          Base image directory (default: $HOME/vm-images)
   --pool-dir <dir>           VM disk/seed directory (default: /var/lib/libvirt/images/jcs-offline)

@@ -6,8 +6,8 @@ usage() {
 usage: cold-replay-audit-report.sh [options]
 
 Options:
-  --matrix <path>        Matrix YAML (required)
-  --profile <path>       Profile YAML (required)
+  --matrix <path>        Matrix config JSON (required)
+  --profile <path>       Profile config JSON (required)
   --evidence <path>      Evidence JSON (required)
   --controller <path>    jcs-offline-replay binary (auto-build if omitted)
   --output-dir <path>    Output directory for markdown/json summaries

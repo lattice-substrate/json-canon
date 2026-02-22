@@ -20,6 +20,15 @@ go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
 ```
 
+## Lint Readiness
+
+When ready to begin lint remediation, run lint explicitly against repository
+rules:
+
+```bash
+golangci-lint run --config golangci.yml
+```
+
 ## Tooling Policy (Infrastructure/ABI)
 
 - Required validation and release-critical automation must be Go-native (`go test`, Go code, or Go tools).

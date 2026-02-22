@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+**NEVER CHANGE LINTING RULES OR LINT CONFIGURATION FILES**
+
 ## Document Status
 
 This document defines the infrastructure-grade engineering constitution for
