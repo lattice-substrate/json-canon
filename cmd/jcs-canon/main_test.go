@@ -217,8 +217,8 @@ func TestReadInputOversizeClassBoundExceededForStdinAndFile(t *testing.T) {
 
 	dir := t.TempDir()
 	p := filepath.Join(dir, "oversized.json")
-	if err := os.WriteFile(p, []byte(oversized), 0o600); err != nil {
-		t.Fatalf("write oversized fixture: %v", err)
+	if writeErr := os.WriteFile(p, []byte(oversized), 0o600); writeErr != nil {
+		t.Fatalf("write oversized fixture: %v", writeErr)
 	}
 
 	_, err = readInput([]string{p}, strings.NewReader(""), maxInput)

@@ -1,20 +1,24 @@
-package replay
+package replay_test
 
 import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+const archArm64 = "arm64"
+
 func TestLoadMatrix_OFFLINE_MATRIX_001(t *testing.T) {
-	m, err := LoadMatrix(filepath.Join("..", "matrix.yaml"))
+	m, err := replay.LoadMatrix(filepath.Join("..", "matrix.yaml"))
 	if err != nil {
 		t.Fatalf("load matrix: %v", err)
 	}
 	if m.Architecture != "x86_64" {
 		t.Fatalf("unexpected architecture %q", m.Architecture)
 	}
-	if err := ValidateReleaseArchitecture(m); err != nil {
+	if err := replay.ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("release architecture validation failed: %v", err)
 	}
 	if len(m.Nodes) < 10 {
@@ -23,20 +27,20 @@ func TestLoadMatrix_OFFLINE_MATRIX_001(t *testing.T) {
 }
 
 func TestLoadArm64Matrix_OFFLINE_ARCH_001(t *testing.T) {
-	m, err := LoadMatrix(filepath.Join("..", "matrix.arm64.yaml"))
+	m, err := replay.LoadMatrix(filepath.Join("..", "matrix.arm64.yaml"))
 	if err != nil {
 		t.Fatalf("load arm64 matrix: %v", err)
 	}
-	if m.Architecture != "arm64" {
+	if m.Architecture != archArm64 {
 		t.Fatalf("unexpected architecture %q", m.Architecture)
 	}
-	if err := ValidateReleaseArchitecture(m); err != nil {
+	if err := replay.ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("arm64 architecture validation failed: %v", err)
 	}
 }
 
 func TestLoadProfile_OFFLINE_COLD_001(t *testing.T) {
-	p, err := LoadProfile(filepath.Join("..", "profiles", "maximal.yaml"))
+	p, err := replay.LoadProfile(filepath.Join("..", "profiles", "maximal.yaml"))
 	if err != nil {
 		t.Fatalf("load profile: %v", err)
 	}
@@ -49,30 +53,30 @@ func TestLoadProfile_OFFLINE_COLD_001(t *testing.T) {
 }
 
 func TestValidateMatrixRequiresContainerAndVM(t *testing.T) {
-	m := &Matrix{
+	m := &replay.Matrix{
 		Version:      "v1",
 		Architecture: "x86_64",
-		Nodes: []NodeSpec{
-			{ID: "a", Mode: NodeModeContainer, Distro: "debian", KernelFamily: "host", Runner: RunnerConfig{Kind: "container_command", Replay: []string{"true"}}},
+		Nodes: []replay.NodeSpec{
+			{ID: "a", Mode: replay.NodeModeContainer, Distro: "debian", KernelFamily: "host", Runner: replay.RunnerConfig{Kind: "container_command", Replay: []string{"true"}}},
 		},
 	}
-	err := ValidateMatrix(m)
+	err := replay.ValidateMatrix(m)
 	if err == nil || !strings.Contains(err.Error(), "vm") {
 		t.Fatalf("expected vm validation error, got %v", err)
 	}
 }
 
 func TestValidateReleaseArchitecture_OFFLINE_ARCH_001(t *testing.T) {
-	m := &Matrix{Version: "v1", Architecture: "x86_64"}
-	if err := ValidateReleaseArchitecture(m); err != nil {
+	m := &replay.Matrix{Version: "v1", Architecture: "x86_64"}
+	if err := replay.ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("unexpected architecture validation failure: %v", err)
 	}
-	m.Architecture = "arm64"
-	if err := ValidateReleaseArchitecture(m); err != nil {
+	m.Architecture = archArm64
+	if err := replay.ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("unexpected arm64 architecture validation failure: %v", err)
 	}
 	m.Architecture = "ppc64"
-	if err := ValidateReleaseArchitecture(m); err == nil {
+	if err := replay.ValidateReleaseArchitecture(m); err == nil {
 		t.Fatal("expected architecture validation failure")
 	}
 }

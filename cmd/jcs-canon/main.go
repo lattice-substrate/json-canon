@@ -27,22 +27,8 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
+//nolint:cyclop // Top-level CLI dispatch is explicit to preserve stable ABI behavior.
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	if len(args) == 1 {
-		switch args[0] {
-		case "--help", "-h":
-			if err := writeGlobalHelp(stdout); err != nil {
-				return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write help output", err))
-			}
-			return 0
-		case "--version":
-			if err := writeVersion(stdout); err != nil {
-				return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write version output", err))
-			}
-			return 0
-		}
-	}
-
 	if len(args) == 0 {
 		// CLI-EXIT-001
 		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, "no command specified"))
@@ -53,6 +39,16 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	}
 
 	switch args[0] {
+	case "--help", "-h":
+		if err := writeGlobalHelp(stdout); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write help output", err))
+		}
+		return 0
+	case "--version":
+		if err := writeVersion(stdout); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write version output", err))
+		}
+		return 0
 	case "canonicalize":
 		return cmdCanonicalize(args[1:], stdin, stdout, stderr)
 	case "verify":
@@ -102,15 +98,17 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		if err := writeCanonicalizeHelp(stdout); err != nil {
-			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write canonicalize help output", err))
+		helpErr := writeCanonicalizeHelp(stdout)
+		if helpErr != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write canonicalize help output", helpErr))
 		}
 		return 0
 	}
 
 	// CLI-IO-002
-	if err := ensureSingleInput(positional); err != nil {
-		return writeClassifiedError(stderr, err)
+	ensureErr := ensureSingleInput(positional)
+	if ensureErr != nil {
+		return writeClassifiedError(stderr, ensureErr)
 	}
 
 	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
@@ -144,27 +142,14 @@ func cmdVerify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 
 	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		if err := writeVerifyHelp(stdout); err != nil {
-			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write verify help output", err))
+		helpErr := writeVerifyHelp(stdout)
+		if helpErr != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write verify help output", helpErr))
 		}
 		return 0
 	}
 
-	if err := ensureSingleInput(positional); err != nil {
-		return writeClassifiedError(stderr, err)
-	}
-
-	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
-	if err != nil {
-		return writeClassifiedError(stderr, err)
-	}
-
-	parsed, err := jcstoken.Parse(input)
-	if err != nil {
-		return writeClassifiedError(stderr, err)
-	}
-
-	canonical, err := jcs.Serialize(parsed)
+	input, canonical, err := parseCanonicalFromInput(positional, stdin)
 	if err != nil {
 		return writeClassifiedError(stderr, err)
 	}
@@ -183,11 +168,32 @@ func cmdVerify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 	return 0
 }
 
+func parseCanonicalFromInput(positional []string, stdin io.Reader) ([]byte, []byte, error) {
+	if err := ensureSingleInput(positional); err != nil {
+		return nil, nil, err
+	}
+	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	parsed, err := jcstoken.Parse(input)
+	if err != nil {
+		return nil, nil, err
+	}
+	canonical, err := jcs.Serialize(parsed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return input, canonical, nil
+}
+
 // writeClassifiedError extracts jcserr.Error if possible and uses its exit code.
 func writeClassifiedError(stderr io.Writer, err error) int {
 	var je *jcserr.Error
 	if errors.As(err, &je) {
-		_ = writef(stderr, "error: %v\n", err)
+		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+			return jcserr.InternalIO.ExitCode()
+		}
 		return je.Class.ExitCode()
 	}
 	return writeErrorAndReturn(stderr, jcserr.InternalError.ExitCode(), "error: %v\n", err)
@@ -203,7 +209,11 @@ func readInput(positional []string, stdin io.Reader, maxInputSize int) ([]byte, 
 	if err != nil {
 		return nil, jcserr.Wrap(jcserr.CLIUsage, -1, fmt.Sprintf("read file %q", positional[0]), err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
 
 	data, err := readBounded(f, maxInputSize)
 	if err != nil {
@@ -240,7 +250,9 @@ func ensureSingleInput(positional []string) error {
 }
 
 func writeErrorAndReturn(stderr io.Writer, code int, format string, args ...any) int {
-	_ = writef(stderr, format, args...)
+	if writeErr := writef(stderr, format, args...); writeErr != nil {
+		return jcserr.InternalIO.ExitCode()
+	}
 	return code
 }
 

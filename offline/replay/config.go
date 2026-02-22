@@ -30,9 +30,13 @@ type NodeSpec struct {
 type NodeMode string
 
 const (
+	// NodeModeContainer executes a node via container runtime commands.
 	NodeModeContainer NodeMode = "container"
-	NodeModeVM        NodeMode = "vm"
+	// NodeModeVM executes a node via VM/libvirt runtime commands.
+	NodeModeVM NodeMode = "vm"
 )
+
+const architectureARM64 = "arm64"
 
 // RunnerConfig is an execution command contract for a node lane.
 type RunnerConfig struct {
@@ -54,6 +58,7 @@ type Profile struct {
 	EvidenceRequired bool     `yaml:"evidence_required" json:"evidence_required"`
 }
 
+// LoadMatrix reads, decodes, and validates a replay matrix document.
 func LoadMatrix(path string) (*Matrix, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -74,6 +79,7 @@ func LoadMatrix(path string) (*Matrix, error) {
 	return &m, nil
 }
 
+// LoadProfile reads, decodes, and validates a replay profile document.
 func LoadProfile(path string) (*Profile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -100,11 +106,14 @@ func ensureSingleJSONDocument(dec *json.Decoder) error {
 		if err == nil {
 			return fmt.Errorf("unexpected trailing json content")
 		}
-		return err
+		return fmt.Errorf("decode trailing json token: %w", err)
 	}
 	return nil
 }
 
+// ValidateMatrix validates replay matrix semantics and release-policy requirements.
+//
+//nolint:gocyclo,cyclop // Matrix policy validation is explicit to keep release-gate failures actionable.
 func ValidateMatrix(m *Matrix) error {
 	if m == nil {
 		return fmt.Errorf("matrix is nil")
@@ -165,6 +174,7 @@ func ValidateMatrix(m *Matrix) error {
 	return nil
 }
 
+// ValidateProfile validates profile semantics required by replay gates.
 func ValidateProfile(p *Profile) error {
 	if p == nil {
 		return fmt.Errorf("profile is nil")
@@ -193,10 +203,10 @@ func ValidateReleaseArchitecture(m *Matrix) error {
 		return fmt.Errorf("matrix is nil")
 	}
 	switch m.Architecture {
-	case "x86_64", "arm64":
+	case "x86_64", architectureARM64:
 		return nil
 	default:
-		return fmt.Errorf("release architecture must be one of x86_64, arm64, got %q", m.Architecture)
+		return fmt.Errorf("release architecture must be one of x86_64, %s, got %q", architectureARM64, m.Architecture)
 	}
 }
 

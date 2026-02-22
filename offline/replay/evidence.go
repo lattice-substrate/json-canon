@@ -9,6 +9,7 @@ import (
 	"strings"
 )
 
+// EvidenceSchemaVersion is the stable schema identifier for evidence bundles.
 const EvidenceSchemaVersion = "evidence.v1"
 
 // EvidenceBundle is the machine-consumed replay output artifact.
@@ -58,6 +59,7 @@ type EvidenceValidationOptions struct {
 	ExpectedArchitecture        string
 }
 
+// WriteEvidence writes a canonical JSON evidence bundle to disk.
 func WriteEvidence(path string, e *EvidenceBundle) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")
@@ -73,6 +75,7 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 	return nil
 }
 
+// LoadEvidence loads an evidence bundle from disk.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -85,6 +88,9 @@ func LoadEvidence(path string) (*EvidenceBundle, error) {
 	return &e, nil
 }
 
+// ValidateEvidenceBundle validates replay evidence against matrix/profile policy expectations.
+//
+//nolint:gocyclo,cyclop,funlen,maintidx // Evidence gate checks encode many policy invariants with explicit failure attribution.
 func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts EvidenceValidationOptions) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")

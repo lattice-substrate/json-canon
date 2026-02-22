@@ -58,8 +58,10 @@ type vectorCase struct {
 var (
 	buildOnce sync.Once
 	binPath   string
-	buildErr  error
+	errBuild  error
 )
+
+const canonicalObjectA1 = `{"a":1}`
 
 // TestConformanceRequirements runs all requirement checks.
 func TestConformanceRequirements(t *testing.T) {
@@ -100,7 +102,11 @@ func TestConformanceVectors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("open vector file: %v", err)
 			}
-			defer func() { _ = fd.Close() }()
+			defer func() {
+				if closeErr := fd.Close(); closeErr != nil {
+					t.Errorf("close vector file %s: %v", file, closeErr)
+				}
+			}()
 
 			sc := bufio.NewScanner(fd)
 			sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -326,10 +332,10 @@ func testHarness(t *testing.T) *harness {
 	t.Helper()
 	root := repoRoot(t)
 	buildOnce.Do(func() {
-		binPath, buildErr = buildConformanceBinary(root)
+		binPath, errBuild = buildConformanceBinary(root)
 	})
-	if buildErr != nil {
-		t.Fatalf("build conformance binary: %v", buildErr)
+	if errBuild != nil {
+		t.Fatalf("build conformance binary: %v", errBuild)
 	}
 	return &harness{root: root, bin: binPath}
 }
@@ -364,7 +370,7 @@ func buildConformanceBinary(root string) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%v: %s", err, strings.TrimSpace(out.String()))
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(out.String()))
 	}
 	return bin, nil
 }
@@ -434,6 +440,7 @@ func assertInvalid(t *testing.T, res cliResult, needle string) {
 // ==================== PARSE-UTF8 ====================
 
 func checkInvalidUTF8Rejected(t *testing.T, h *harness) {
+	t.Helper()
 	cases := []struct {
 		input []byte
 		need  string
@@ -448,29 +455,35 @@ func checkInvalidUTF8Rejected(t *testing.T, h *harness) {
 }
 
 func checkOverlongUTF8Rejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0xc0, 0xaf, '"'}), "valid UTF-8")
 }
 
 // ==================== PARSE-GRAM ====================
 
 func checkLeadingZeroRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`01`)), "leading zero")
 }
 
 func checkTrailingCommaObjectRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1,}`)), "expected")
 }
 
 func checkTrailingCommaArrayRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`[1,]`)), "invalid")
 }
 
 func checkUnescapedControlRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0x01, '"'}), "control")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte{'"', 0x00, '"'}), "control")
 }
 
 func checkTopLevelScalarAccepted(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`42`))
 	if res.exitCode != 0 || res.stdout != "42" {
 		t.Fatalf("unexpected result: %+v", res)
@@ -480,25 +493,29 @@ func checkTopLevelScalarAccepted(t *testing.T, h *harness) {
 }
 
 func checkInsignificantWhitespaceAccepted(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(" \n\t { \"a\" : 1 } \r "))
-	if res.exitCode != 0 || res.stdout != `{"a":1}` {
+	if res.exitCode != 0 || res.stdout != canonicalObjectA1 {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 	res = runCLI(t, h, []string{"canonicalize", "-"}, []byte("\r\n{\r\n\"a\"\r\n:\r\n1\r\n}\r\n"))
-	if res.exitCode != 0 || res.stdout != `{"a":1}` {
+	if res.exitCode != 0 || res.stdout != canonicalObjectA1 {
 		t.Fatalf("unexpected CRLF result: %+v", res)
 	}
 }
 
 func checkInvalidLiteralRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`tru`)), "invalid")
 }
 
 func checkTrailingContentRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`42 "extra"`)), "trailing content")
 }
 
 func checkNumberGrammarEnforced(t *testing.T, h *harness) {
+	t.Helper()
 	// Valid
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`0.5`))
 	if res.exitCode != 0 {
@@ -509,28 +526,34 @@ func checkNumberGrammarEnforced(t *testing.T, h *harness) {
 }
 
 func checkInvalidEscapeRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\x"`)), "invalid escape")
 }
 
 // ==================== IJSON ====================
 
 func checkDuplicateKeyRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1,"a":2}`)), "duplicate object key")
 }
 
 func checkDuplicateKeyAfterUnescapeRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"\u0061":1,"a":2}`)), "duplicate object key")
 }
 
 func checkLoneHighSurrogateRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uD800"`)), "lone high surrogate")
 }
 
 func checkLoneLowSurrogateRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uDC00"`)), "lone low surrogate")
 }
 
 func checkValidSurrogatePairDecoded(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uD83D\uDE00"`))
 	if res.exitCode != 0 || res.stdout != `"😀"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -538,6 +561,7 @@ func checkValidSurrogatePairDecoded(t *testing.T, h *harness) {
 }
 
 func checkNoncharacterRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uFDD0"`)), "noncharacter")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\uD83F\uDFFE"`)), "noncharacter")
 }
@@ -545,8 +569,9 @@ func checkNoncharacterRejected(t *testing.T, h *harness) {
 // ==================== CANON-WS ====================
 
 func checkWhitespaceRemovedInCanonicalOutput(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(` { "a" : 1 } `))
-	if res.exitCode != 0 || res.stdout != `{"a":1}` {
+	if res.exitCode != 0 || res.stdout != canonicalObjectA1 {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
@@ -554,6 +579,7 @@ func checkWhitespaceRemovedInCanonicalOutput(t *testing.T, h *harness) {
 // ==================== CANON-STR ====================
 
 func checkBackspaceEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u0008"`))
 	if res.exitCode != 0 || res.stdout != `"\b"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -561,6 +587,7 @@ func checkBackspaceEscaped(t *testing.T, h *harness) {
 }
 
 func checkTabEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u0009"`))
 	if res.exitCode != 0 || res.stdout != `"\t"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -568,6 +595,7 @@ func checkTabEscaped(t *testing.T, h *harness) {
 }
 
 func checkLineFeedEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u000a"`))
 	if res.exitCode != 0 || res.stdout != `"\n"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -575,6 +603,7 @@ func checkLineFeedEscaped(t *testing.T, h *harness) {
 }
 
 func checkFormFeedEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u000c"`))
 	if res.exitCode != 0 || res.stdout != `"\f"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -582,6 +611,7 @@ func checkFormFeedEscaped(t *testing.T, h *harness) {
 }
 
 func checkCarriageReturnEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u000d"`))
 	if res.exitCode != 0 || res.stdout != `"\r"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -589,6 +619,7 @@ func checkCarriageReturnEscaped(t *testing.T, h *harness) {
 }
 
 func checkOtherControlsEscapedLowerHex(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"\u001F"`))
 	if res.exitCode != 0 || res.stdout != `"\u001f"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -596,6 +627,7 @@ func checkOtherControlsEscapedLowerHex(t *testing.T, h *harness) {
 }
 
 func checkQuotationMarkEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"a\"b"`))
 	if res.exitCode != 0 || res.stdout != `"a\"b"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -603,6 +635,7 @@ func checkQuotationMarkEscaped(t *testing.T, h *harness) {
 }
 
 func checkBackslashEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"a\\b"`))
 	if res.exitCode != 0 || res.stdout != `"a\\b"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -610,6 +643,7 @@ func checkBackslashEscaped(t *testing.T, h *harness) {
 }
 
 func checkSolidusNotEscaped(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"a\/b"`))
 	if res.exitCode != 0 || res.stdout != `"a/b"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -617,6 +651,7 @@ func checkSolidusNotEscaped(t *testing.T, h *harness) {
 }
 
 func checkAboveU001FRawUTF8(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"<>&"`))
 	if res.exitCode != 0 || res.stdout != `"<>&"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -624,6 +659,7 @@ func checkAboveU001FRawUTF8(t *testing.T, h *harness) {
 }
 
 func checkNoNormalization(t *testing.T, _ *harness) {
+	t.Helper()
 	// NFC and NFD forms should produce different output
 	nfc := "\u00E9"       // é as single codepoint
 	nfd := "\u0065\u0301" // e + combining acute
@@ -643,6 +679,7 @@ func checkNoNormalization(t *testing.T, _ *harness) {
 }
 
 func checkStringEnclosedInQuotes(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`"abc"`))
 	if res.exitCode != 0 || res.stdout != `"abc"` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -652,6 +689,7 @@ func checkStringEnclosedInQuotes(t *testing.T, h *harness) {
 // ==================== CANON-SORT ====================
 
 func checkUTF16KeyOrdering(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"\uE000":1,"\uD800\uDC00":2}`))
 	// U+10000 (𐀀) sorts before U+E000 () in UTF-16 code-unit order
 	// because U+10000 encodes as surrogate pair D800 DC00 (0xD800 < 0xE000)
@@ -670,6 +708,7 @@ func checkUTF16KeyOrdering(t *testing.T, h *harness) {
 }
 
 func checkRecursiveObjectSort(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"b":[{"z":1,"a":2}],"a":3}`))
 	if res.exitCode != 0 || res.stdout != `{"a":3,"b":[{"a":2,"z":1}]}` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -677,6 +716,7 @@ func checkRecursiveObjectSort(t *testing.T, h *harness) {
 }
 
 func checkArrayOrderPreserved(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`[3,1,2]`))
 	if res.exitCode != 0 || res.stdout != `[3,1,2]` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -684,6 +724,7 @@ func checkArrayOrderPreserved(t *testing.T, h *harness) {
 }
 
 func checkSortUsesRawPropertyNames(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"\\n":1,"\n":2}`))
 	if res.exitCode != 0 || res.stdout != `{"\n":2,"\\n":1}` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -691,6 +732,7 @@ func checkSortUsesRawPropertyNames(t *testing.T, h *harness) {
 }
 
 func checkSortLexicographicRule(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"ab":4,"aa":3,"":1,"a":2}`))
 	if res.exitCode != 0 || res.stdout != `{"":1,"a":2,"aa":3,"ab":4}` {
 		t.Fatalf("unexpected result: %+v", res)
@@ -700,6 +742,7 @@ func checkSortLexicographicRule(t *testing.T, h *harness) {
 // ==================== CANON-LIT ====================
 
 func checkLowercaseLiterals(t *testing.T, h *harness) {
+	t.Helper()
 	for _, lit := range []string{"true", "false", "null"} {
 		res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(lit))
 		if res.exitCode != 0 || res.stdout != lit {
@@ -711,6 +754,7 @@ func checkLowercaseLiterals(t *testing.T, h *harness) {
 // ==================== CANON-ENC ====================
 
 func checkOutputIsUTF8(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"key":"value"}`))
 	if res.exitCode != 0 {
 		t.Fatalf("unexpected exit: %+v", res)
@@ -725,7 +769,8 @@ func checkOutputIsUTF8(t *testing.T, h *harness) {
 }
 
 func checkOutputHasNoBOM(t *testing.T, h *harness) {
-	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1}`))
+	t.Helper()
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(canonicalObjectA1))
 	if res.exitCode != 0 {
 		t.Fatalf("unexpected exit: %+v", res)
 	}
@@ -735,6 +780,7 @@ func checkOutputHasNoBOM(t *testing.T, h *harness) {
 }
 
 func checkGeneratorProducesGrammarConformingJSON(t *testing.T, _ *harness) {
+	t.Helper()
 	v, err := jcstoken.Parse([]byte(`{"z":[{"b":"\u0000","a":1e21}],"a":true}`))
 	if err != nil {
 		t.Fatalf("parse input: %v", err)
@@ -792,6 +838,7 @@ func decodeRune(b []byte) (rune, int) {
 // ==================== ECMA-FMT ====================
 
 func checkECMANaNRejected(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcsfloat.FormatDouble(math.NaN())
 	if err == nil {
 		t.Fatal("expected error for NaN")
@@ -799,6 +846,7 @@ func checkECMANaNRejected(t *testing.T, _ *harness) {
 }
 
 func checkECMANegZeroSerializes(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(math.Copysign(0, -1))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -809,6 +857,7 @@ func checkECMANegZeroSerializes(t *testing.T, _ *harness) {
 }
 
 func checkECMAInfinityRejected(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcsfloat.FormatDouble(math.Inf(1))
 	if err == nil {
 		t.Fatal("expected error for Infinity")
@@ -816,6 +865,7 @@ func checkECMAInfinityRejected(t *testing.T, _ *harness) {
 }
 
 func checkECMAIntegerFixed(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(1e20)
 	if err != nil {
 		t.Fatal(err)
@@ -826,6 +876,7 @@ func checkECMAIntegerFixed(t *testing.T, _ *harness) {
 }
 
 func checkECMAFractionFixed(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(0.5)
 	if err != nil {
 		t.Fatal(err)
@@ -836,6 +887,7 @@ func checkECMAFractionFixed(t *testing.T, _ *harness) {
 }
 
 func checkECMASmallFraction(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(0.000001)
 	if err != nil {
 		t.Fatal(err)
@@ -846,6 +898,7 @@ func checkECMASmallFraction(t *testing.T, _ *harness) {
 }
 
 func checkECMAExponential(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(1e21)
 	if err != nil {
 		t.Fatal(err)
@@ -856,6 +909,7 @@ func checkECMAExponential(t *testing.T, _ *harness) {
 }
 
 func checkECMAShortestRoundTrip(t *testing.T, _ *harness) {
+	t.Helper()
 	for _, v := range []float64{0.1, 0.2, 1e-7, 5e-324, math.MaxFloat64} {
 		s, err := jcsfloat.FormatDouble(v)
 		if err != nil {
@@ -872,6 +926,7 @@ func checkECMAShortestRoundTrip(t *testing.T, _ *harness) {
 }
 
 func checkECMAEvenDigitTieBreak(t *testing.T, _ *harness) {
+	t.Helper()
 	// Verify idempotency (consequence of correct tie-breaking)
 	for i := uint64(1); i < 100; i += 7 {
 		v := math.Float64frombits(i * 0x9e3779b97f4a7c15)
@@ -897,6 +952,7 @@ func checkECMAEvenDigitTieBreak(t *testing.T, _ *harness) {
 }
 
 func checkECMANegativeSign(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(-12.5)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -907,6 +963,7 @@ func checkECMANegativeSign(t *testing.T, _ *harness) {
 }
 
 func checkECMAMinimalK(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(1.2300000000000002)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -917,6 +974,7 @@ func checkECMAMinimalK(t *testing.T, _ *harness) {
 }
 
 func checkECMAScientificK1(t *testing.T, _ *harness) {
+	t.Helper()
 	got, err := jcsfloat.FormatDouble(1e21)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -929,16 +987,19 @@ func checkECMAScientificK1(t *testing.T, _ *harness) {
 // ==================== ECMA-VEC ====================
 
 func checkBaseGoldenOracle(t *testing.T, h *harness) {
+	t.Helper()
 	verifyFloatOracle(t, filepath.Join(h.root, "jcsfloat", "testdata", "golden_vectors.csv"), 54445,
 		"593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636")
 }
 
 func checkStressGoldenOracle(t *testing.T, h *harness) {
+	t.Helper()
 	verifyFloatOracle(t, filepath.Join(h.root, "jcsfloat", "testdata", "golden_stress_vectors.csv"), 231917,
 		"287d21ac87e5665550f1baf86038302a0afc67a74a020dffb872f1a93b26d410")
 }
 
 func checkECMABoundaryConstants(t *testing.T, _ *harness) {
+	t.Helper()
 	cases := []struct {
 		bits uint64
 		want string
@@ -968,16 +1029,19 @@ func checkECMABoundaryConstants(t *testing.T, _ *harness) {
 // ==================== PROF-NUM ====================
 
 func checkNegativeZeroRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0`)), "negative zero token")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0.0e1`)), "negative zero token")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`-0e-1`)), "negative zero token")
 }
 
 func checkNumberOverflowRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`1e999999`)), "overflows IEEE 754 double")
 }
 
 func checkUnderflowNonZeroRejected(t *testing.T, h *harness) {
+	t.Helper()
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`1e-400`)), "underflows to IEEE 754 zero")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`1e-324`)), "underflows to IEEE 754 zero")
 	assertInvalid(t, runCLI(t, h, []string{"canonicalize", "-"}, []byte(`2e-324`)), "underflows to IEEE 754 zero")
@@ -991,6 +1055,7 @@ func checkUnderflowNonZeroRejected(t *testing.T, h *harness) {
 // ==================== BOUND ====================
 
 func checkDepthLimitEnforced(t *testing.T, h *harness) {
+	t.Helper()
 	exact := strings.Repeat("[", jcstoken.DefaultMaxDepth) + strings.Repeat("]", jcstoken.DefaultMaxDepth)
 	okRes := runCLI(t, h, []string{"canonicalize", "-"}, []byte(exact))
 	if okRes.exitCode != 0 || okRes.stdout != exact {
@@ -1002,6 +1067,7 @@ func checkDepthLimitEnforced(t *testing.T, h *harness) {
 }
 
 func checkInputSizeLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions([]byte(`[]`), &jcstoken.Options{MaxInputSize: 2})
 	if err != nil {
 		t.Fatalf("expected exact input-size limit to pass, got %v", err)
@@ -1018,6 +1084,7 @@ func checkInputSizeLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkValueCountLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 3})
 	if err != nil {
 		t.Fatalf("expected exact value-count limit to pass, got %v", err)
@@ -1034,6 +1101,7 @@ func checkValueCountLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkObjectMemberLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions(
 		[]byte(`{"a":1,"b":2}`),
 		&jcstoken.Options{MaxObjectMembers: 2},
@@ -1056,6 +1124,7 @@ func checkObjectMemberLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkArrayElementLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxArrayElements: 2})
 	if err != nil {
 		t.Fatalf("expected exact array-element limit to pass, got %v", err)
@@ -1072,6 +1141,7 @@ func checkArrayElementLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkStringByteLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxStringBytes: 2})
 	if err != nil {
 		t.Fatalf("expected exact string-byte limit to pass, got %v", err)
@@ -1088,6 +1158,7 @@ func checkStringByteLimitEnforced(t *testing.T, _ *harness) {
 }
 
 func checkNumberTokenLengthLimitEnforced(t *testing.T, _ *harness) {
+	t.Helper()
 	_, err := jcstoken.ParseWithOptions([]byte(`12345`), &jcstoken.Options{MaxNumberChars: 5})
 	if err != nil {
 		t.Fatalf("expected exact number-token length limit to pass, got %v", err)
@@ -1106,6 +1177,7 @@ func checkNumberTokenLengthLimitEnforced(t *testing.T, _ *harness) {
 // ==================== CLI ====================
 
 func checkCanonicalizeFunctional(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"z":3,"a":1}`))
 	if res.exitCode != 0 || res.stdout != `{"a":1,"z":3}` {
 		t.Fatalf("canonicalize failed: %+v", res)
@@ -1113,6 +1185,7 @@ func checkCanonicalizeFunctional(t *testing.T, h *harness) {
 }
 
 func checkVerifyFunctional(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"a":1,"z":3}`))
 	if res.exitCode != 0 {
 		t.Fatalf("verify failed: %+v", res)
@@ -1120,6 +1193,7 @@ func checkVerifyFunctional(t *testing.T, h *harness) {
 }
 
 func checkNoCommandExitCode(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, nil, nil)
 	if res.exitCode != 2 || !strings.Contains(res.stderr, "usage:") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
@@ -1127,6 +1201,7 @@ func checkNoCommandExitCode(t *testing.T, h *harness) {
 }
 
 func checkUnknownCommandExitCode(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"bogus"}, nil)
 	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown command") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
@@ -1134,6 +1209,7 @@ func checkUnknownCommandExitCode(t *testing.T, h *harness) {
 }
 
 func checkInputViolationExitCode(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`01`))
 	if res.exitCode != 2 || !strings.Contains(res.stderr, string(jcserr.InvalidGrammar)) {
 		t.Fatalf("expected exit 2, got %d: %+v", res.exitCode, res)
@@ -1157,19 +1233,25 @@ func checkInputViolationExitCode(t *testing.T, h *harness) {
 }
 
 func checkInternalWriteFailureExitCode(t *testing.T, h *harness) {
+	t.Helper()
 	f, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
 	if err != nil {
 		t.Skipf("skip: cannot open /dev/full: %v", err)
 	}
-	t.Cleanup(func() { _ = f.Close() })
+	t.Cleanup(func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Errorf("close /dev/full: %v", closeErr)
+		}
+	})
 
-	res := runCLIToWriter(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1}`), f)
+	res := runCLIToWriter(t, h, []string{"canonicalize", "-"}, []byte(canonicalObjectA1), f)
 	if res.exitCode != 10 {
 		t.Fatalf("expected exit 10, got %d stderr=%q", res.exitCode, res.stderr)
 	}
 }
 
 func checkUnknownOptionRejected(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"verify", "--nope"}, nil)
 	if res.exitCode != 2 || !strings.Contains(res.stderr, "unknown option") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
@@ -1181,13 +1263,15 @@ func checkUnknownOptionRejected(t *testing.T, h *harness) {
 }
 
 func checkVerifyQuietSuppressesOk(t *testing.T, h *harness) {
-	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"a":1}`))
+	t.Helper()
+	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(canonicalObjectA1))
 	if res.exitCode != 0 || strings.Contains(res.stderr, "ok") {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
 func checkHelpExitsZero(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"--help"}, nil)
 	if res.exitCode != 0 {
 		t.Fatalf("expected exit 0 for top-level --help, got %d", res.exitCode)
@@ -1222,6 +1306,7 @@ func checkHelpExitsZero(t *testing.T, h *harness) {
 }
 
 func checkVersionExitsZero(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"--version"}, nil)
 	if res.exitCode != 0 {
 		t.Fatalf("expected exit 0 for --version, got %d", res.exitCode)
@@ -1232,6 +1317,7 @@ func checkVersionExitsZero(t *testing.T, h *harness) {
 }
 
 func checkStdinReading(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`42`))
 	if res.exitCode != 0 || res.stdout != "42" {
 		t.Fatalf("unexpected result: %+v", res)
@@ -1243,6 +1329,7 @@ func checkStdinReading(t *testing.T, h *harness) {
 }
 
 func checkMultipleInputRejected(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"canonicalize", "a.json", "b.json"}, nil)
 	if res.exitCode != 2 || !strings.Contains(res.stderr, "multiple input files") || !strings.Contains(res.stderr, string(jcserr.CLIUsage)) {
 		t.Fatalf("unexpected result: %+v", res)
@@ -1250,6 +1337,7 @@ func checkMultipleInputRejected(t *testing.T, h *harness) {
 }
 
 func checkFileAndStdinParity(t *testing.T, h *harness) {
+	t.Helper()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "in.json")
 	if err := os.WriteFile(p, []byte(`{"b":2,"a":1}`), 0o600); err != nil {
@@ -1264,20 +1352,23 @@ func checkFileAndStdinParity(t *testing.T, h *harness) {
 }
 
 func checkCanonicalizeStdoutOnly(t *testing.T, h *harness) {
-	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`{"a":1}`))
-	if res.exitCode != 0 || res.stdout != `{"a":1}` || res.stderr != "" {
+	t.Helper()
+	res := runCLI(t, h, []string{"canonicalize", "-"}, []byte(canonicalObjectA1))
+	if res.exitCode != 0 || res.stdout != canonicalObjectA1 || res.stderr != "" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
 func checkVerifyOkEmission(t *testing.T, h *harness) {
-	res := runCLI(t, h, []string{"verify", "-"}, []byte(`{"a":1}`))
+	t.Helper()
+	res := runCLI(t, h, []string{"verify", "-"}, []byte(canonicalObjectA1))
 	if res.exitCode != 0 || res.stderr != "ok\n" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
 }
 
 func checkErrorDiagnosticsIncludeFailureClass(t *testing.T, h *harness) {
+	t.Helper()
 	parseErr := runCLI(t, h, []string{"canonicalize", "-"}, []byte(`01`))
 	if parseErr.exitCode != 2 || !strings.Contains(parseErr.stderr, string(jcserr.InvalidGrammar)) {
 		t.Fatalf("expected INVALID_GRAMMAR class token, got %+v", parseErr)
@@ -1297,6 +1388,7 @@ func checkErrorDiagnosticsIncludeFailureClass(t *testing.T, h *harness) {
 // ==================== VERIFY ====================
 
 func checkVerifyRejectsNonCanonicalOrder(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte(`{"b":1,"a":2}`))
 	assertInvalid(t, res, "not canonical")
 	if !strings.Contains(res.stderr, string(jcserr.NotCanonical)) {
@@ -1305,6 +1397,7 @@ func checkVerifyRejectsNonCanonicalOrder(t *testing.T, h *harness) {
 }
 
 func checkVerifyRejectsNonCanonicalWhitespace(t *testing.T, h *harness) {
+	t.Helper()
 	res := runCLI(t, h, []string{"verify", "--quiet", "-"}, []byte("{\"a\":1}\n"))
 	assertInvalid(t, res, "not canonical")
 	if !strings.Contains(res.stderr, string(jcserr.NotCanonical)) {
@@ -1315,6 +1408,7 @@ func checkVerifyRejectsNonCanonicalWhitespace(t *testing.T, h *harness) {
 // ==================== DET ====================
 
 func checkDeterministicReplay(t *testing.T, h *harness) {
+	t.Helper()
 	input := []byte(`{"z":3,"a":1,"arr":[3,2,1],"n":1e21}`)
 	first := runCLI(t, h, []string{"canonicalize", "-"}, input)
 	if first.exitCode != 0 {
@@ -1330,6 +1424,7 @@ func checkDeterministicReplay(t *testing.T, h *harness) {
 }
 
 func checkParseSerializeIdempotence(t *testing.T, _ *harness) {
+	t.Helper()
 	input := []byte(`{"z":3,"a":[{"x":1,"y":2}],"n":1e21}`)
 	v1, err := jcstoken.Parse(input)
 	if err != nil {
@@ -1353,6 +1448,7 @@ func checkParseSerializeIdempotence(t *testing.T, _ *harness) {
 }
 
 func checkDeterministicStaticBuildCommand(t *testing.T, h *harness) {
+	t.Helper()
 	out := filepath.Join(t.TempDir(), "jcs-canon")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	t.Cleanup(cancel)
@@ -1391,7 +1487,11 @@ func assertELFStatic(t *testing.T, path string) {
 	if err != nil {
 		t.Fatalf("open ELF %s: %v", path, err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Errorf("close ELF %s: %v", path, closeErr)
+		}
+	}()
 
 	for _, p := range f.Progs {
 		if p.Type == elf.PT_INTERP {
@@ -1401,6 +1501,7 @@ func assertELFStatic(t *testing.T, path string) {
 }
 
 func checkNoNondeterminismSources(t *testing.T, h *harness) {
+	t.Helper()
 	// Verify no nondeterministic imports, no outbound/network subprocess imports,
 	// and no map iteration in core/runtime paths.
 	badImports := map[string]struct{}{
@@ -1650,6 +1751,7 @@ func TestBehaviorTestsLinkedToRequirements(t *testing.T) {
 }
 
 func checkBehaviorTestsLinkedToRequirements(t *testing.T, h *harness) {
+	t.Helper()
 	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
 
 	mapped := make(map[string]map[string]struct{})
@@ -1854,6 +1956,7 @@ func TestABIManifestBehaviorParity(t *testing.T) {
 }
 
 func checkABIManifestBehaviorParity(t *testing.T, h *harness) {
+	t.Helper()
 	manifest := loadABIManifest(t, filepath.Join(h.root, "abi_manifest.json"))
 
 	srcCommands, srcGlobalFlags, srcCommandFlags := loadCLISurfaceFromSource(
@@ -1884,6 +1987,7 @@ func TestGitHubActionsPinnedBySHA(t *testing.T) {
 }
 
 func checkGitHubActionsPinnedBySHA(t *testing.T, h *harness) {
+	t.Helper()
 	workflowFiles, err := filepath.Glob(filepath.Join(h.root, ".github", "workflows", "*.yml"))
 	if err != nil {
 		t.Fatalf("glob workflow files: %v", err)
@@ -1917,6 +2021,7 @@ func TestReleaseWorkflowVerificationArtifacts(t *testing.T) {
 }
 
 func checkReleaseWorkflowVerificationArtifacts(t *testing.T, h *harness) {
+	t.Helper()
 	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
 
 	assertContains(t, releaseWorkflow, "SHA256SUMS", "release workflow checksums")
@@ -1942,6 +2047,7 @@ func TestGovernanceDurabilityClausesPresent(t *testing.T) {
 }
 
 func checkGovernanceDurabilityClausesPresent(t *testing.T, h *harness) {
+	t.Helper()
 	gov := mustReadText(t, filepath.Join(h.root, "GOVERNANCE.md"))
 	assertContains(t, gov, "## Maintainer Policy", "governance maintainer policy")
 	assertContains(t, gov, "### Review Requirements", "governance review requirements")
@@ -1956,6 +2062,7 @@ func TestOfflineMatrixManifestPresent(t *testing.T) {
 }
 
 func checkOfflineMatrixManifestPresent(t *testing.T, h *harness) {
+	t.Helper()
 	matrixPath := filepath.Join(h.root, "offline", "matrix.yaml")
 	matrix, err := replay.LoadMatrix(matrixPath)
 	if err != nil {
@@ -1973,6 +2080,7 @@ func TestOfflineProfileColdReplayPolicy(t *testing.T) {
 }
 
 func checkOfflineProfileColdReplayPolicy(t *testing.T, h *harness) {
+	t.Helper()
 	profilePath := filepath.Join(h.root, "offline", "profiles", "maximal.yaml")
 	profile, err := replay.LoadProfile(profilePath)
 	if err != nil {
@@ -1993,6 +2101,7 @@ func TestOfflineEvidenceSchemaAndVerifyCLI(t *testing.T) {
 }
 
 func checkOfflineEvidenceSchemaAndVerifyCLI(t *testing.T, h *harness) {
+	t.Helper()
 	schema := mustReadText(t, filepath.Join(h.root, "offline", "schema", "evidence.v1.json"))
 	assertContains(t, schema, "\"schema_version\"", "offline evidence schema")
 	assertContains(t, schema, "\"node_replays\"", "offline evidence schema")
@@ -2010,6 +2119,7 @@ func TestOfflineReleaseGatePolicy(t *testing.T) {
 }
 
 func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
+	t.Helper()
 	releaseDoc := mustReadText(t, filepath.Join(h.root, "RELEASE_PROCESS.md"))
 	assertContains(t, releaseDoc, "go test ./offline/conformance", "offline release gate command")
 	assertContains(t, releaseDoc, "JCS_OFFLINE_EVIDENCE", "offline release gate environment variable")
@@ -2030,6 +2140,7 @@ func TestOfflineArchScopeDualArch(t *testing.T) {
 }
 
 func checkOfflineArchScopeDualArch(t *testing.T, h *harness) {
+	t.Helper()
 	tests := []struct {
 		path         string
 		architecture string
@@ -2298,7 +2409,7 @@ func loadMatrixRows(t *testing.T, path string) []matrixRow {
 	}
 	csvBlock := content[csvStart : csvStart+csvEnd]
 
-	var rows []matrixRow
+	rows := make([]matrixRow, 0, strings.Count(csvBlock, "\n"))
 	for i, line := range strings.Split(csvBlock, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -2663,7 +2774,11 @@ func verifyFloatOracle(t *testing.T, path string, expectedRows int, expectedSHA2
 	if err != nil {
 		t.Fatalf("open oracle: %v", err)
 	}
-	t.Cleanup(func() { _ = f.Close() })
+	t.Cleanup(func() {
+		if closeErr := f.Close(); closeErr != nil {
+			t.Errorf("close oracle %s: %v", path, closeErr)
+		}
+	})
 
 	h := sha256.New()
 	tee := io.TeeReader(f, h)

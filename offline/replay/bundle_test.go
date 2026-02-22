@@ -1,9 +1,11 @@
-package replay
+package replay_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 func TestCreateAndVerifyBundle(t *testing.T) {
@@ -23,7 +25,7 @@ func TestCreateAndVerifyBundle(t *testing.T) {
 	mustWrite(t, filepath.Join(vectorsDir, "core.jsonl"), []byte("{}\n"), 0o644)
 
 	bundlePath := filepath.Join(dir, "bundle.tgz")
-	manifest, err := CreateBundle(BundleOptions{
+	manifest, err := replay.CreateBundle(replay.BundleOptions{
 		OutputPath:  bundlePath,
 		BinaryPath:  bin,
 		WorkerPath:  worker,
@@ -37,7 +39,7 @@ func TestCreateAndVerifyBundle(t *testing.T) {
 	if manifest.BinarySHA256 == "" || manifest.VectorSetSHA256 == "" {
 		t.Fatalf("manifest missing checksums: %+v", manifest)
 	}
-	_, bundleSHA, err := VerifyBundle(bundlePath)
+	_, bundleSHA, err := replay.VerifyBundle(bundlePath)
 	if err != nil {
 		t.Fatalf("verify bundle: %v", err)
 	}

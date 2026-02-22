@@ -32,6 +32,9 @@ type RunOptions struct {
 	Now                 func() time.Time
 }
 
+// RunMatrix orchestrates replay execution across required nodes and replays.
+//
+//nolint:gocyclo,cyclop,funlen // Orchestration keeps per-stage checks explicit for reproducible replay diagnostics.
 func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory AdapterFactory, opts RunOptions) (*EvidenceBundle, error) {
 	if matrix == nil || profile == nil {
 		return nil, fmt.Errorf("matrix and profile are required")
@@ -47,7 +50,7 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	}
 	now := opts.Now
 	if now == nil {
-		now = time.Now
+		now = wallClockNow
 	}
 	if opts.Orchestrator == "" {
 		opts.Orchestrator = "jcs-offline-replay"
@@ -80,7 +83,11 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(tmpRoot) }()
+	defer func() {
+		if removeErr := os.RemoveAll(tmpRoot); removeErr != nil {
+			_ = removeErr
+		}
+	}()
 
 	for _, nodeID := range requiredNodes {
 		node := nodeIndex[nodeID]
@@ -149,6 +156,7 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	return bundle, nil
 }
 
+// LoadNodeRunEvidence loads one node replay evidence artifact from disk.
 func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -159,4 +167,9 @@ func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 		return nil, fmt.Errorf("decode node evidence: %w", err)
 	}
 	return &run, nil
+}
+
+//nolint:forbidigo // default runtime clock for evidence generation when no injected clock is provided.
+func wallClockNow() time.Time {
+	return time.Now()
 }

@@ -1,4 +1,4 @@
-package replay
+package replay_test
 
 import (
 	"context"
@@ -6,15 +6,17 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 type fakeAdapter struct{}
 
-func (fakeAdapter) Prepare(_ context.Context, _ NodeSpec, _ string, _ int) error { return nil }
-func (fakeAdapter) Cleanup(_ context.Context, _ NodeSpec, _ int) error           { return nil }
-func (fakeAdapter) RunReplay(_ context.Context, node NodeSpec, _ string, evidencePath string, replayIndex int) error {
+func (fakeAdapter) Prepare(_ context.Context, _ replay.NodeSpec, _ string, _ int) error { return nil }
+func (fakeAdapter) Cleanup(_ context.Context, _ replay.NodeSpec, _ int) error           { return nil }
+func (fakeAdapter) RunReplay(_ context.Context, node replay.NodeSpec, _ string, evidencePath string, replayIndex int) error {
 	d := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	run := NodeRunEvidence{
+	run := replay.NodeRunEvidence{
 		NodeID:             node.ID,
 		Mode:               string(node.Mode),
 		Distro:             node.Distro,
@@ -38,15 +40,15 @@ func (fakeAdapter) RunReplay(_ context.Context, node NodeSpec, _ string, evidenc
 }
 
 func TestRunMatrix(t *testing.T) {
-	m := &Matrix{
+	m := &replay.Matrix{
 		Version:      "v1",
 		Architecture: "x86_64",
-		Nodes: []NodeSpec{
-			{ID: "c1", Mode: NodeModeContainer, Distro: "debian", KernelFamily: "host", Replays: 2, Runner: RunnerConfig{Kind: "container_command", Replay: []string{"echo", "run"}}},
-			{ID: "v1", Mode: NodeModeVM, Distro: "ubuntu", KernelFamily: "ga", Replays: 2, Runner: RunnerConfig{Kind: "libvirt_command", Replay: []string{"echo", "run"}}},
+		Nodes: []replay.NodeSpec{
+			{ID: "c1", Mode: replay.NodeModeContainer, Distro: "debian", KernelFamily: "host", Replays: 2, Runner: replay.RunnerConfig{Kind: "container_command", Replay: []string{"echo", "run"}}},
+			{ID: "v1", Mode: replay.NodeModeVM, Distro: "ubuntu", KernelFamily: "ga", Replays: 2, Runner: replay.RunnerConfig{Kind: "libvirt_command", Replay: []string{"echo", "run"}}},
 		},
 	}
-	p := &Profile{
+	p := &replay.Profile{
 		Version:          "v1",
 		Name:             "max",
 		RequiredSuites:   []string{"canonical-byte-stability"},
@@ -55,10 +57,10 @@ func TestRunMatrix(t *testing.T) {
 		EvidenceRequired: true,
 	}
 
-	bundle, err := RunMatrix(context.Background(), m, p, func(node NodeSpec) (NodeAdapter, error) {
+	bundle, err := replay.RunMatrix(context.Background(), m, p, func(node replay.NodeSpec) (replay.NodeAdapter, error) {
 		_ = node
 		return fakeAdapter{}, nil
-	}, RunOptions{
+	}, replay.RunOptions{
 		BundlePath:          "bundle.tgz",
 		BundleSHA256:        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		ControlBinarySHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -71,7 +73,7 @@ func TestRunMatrix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run matrix: %v", err)
 	}
-	if bundle.SchemaVersion != EvidenceSchemaVersion {
+	if bundle.SchemaVersion != replay.EvidenceSchemaVersion {
 		t.Fatalf("unexpected schema: %s", bundle.SchemaVersion)
 	}
 	if len(bundle.NodeReplays) != 4 {

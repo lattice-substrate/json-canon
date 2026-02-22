@@ -1,3 +1,4 @@
+// Package executil provides command execution helpers for offline runtime adapters.
 package executil
 
 import (
@@ -17,10 +18,12 @@ type CommandRunner interface {
 // OSRunner executes commands on the host.
 type OSRunner struct{}
 
+// Run executes argv with merged environment variables and combined output capture.
 func (OSRunner) Run(ctx context.Context, argv []string, env map[string]string) (string, error) {
 	if len(argv) == 0 {
 		return "", fmt.Errorf("empty argv")
 	}
+	// #nosec G204 -- argv is policy-controlled by offline matrix/profile inputs.
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	if len(env) != 0 {
 		keys := make([]string, 0, len(env))
