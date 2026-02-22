@@ -623,21 +623,21 @@ func (p *parser) parseNumber() (*Value, error) {
 	}
 
 	// Integer part
-	if err := p.scanIntegerPart(); err != nil {
+	if err := p.scanIntegerPart(start); err != nil {
 		return nil, err
 	}
 
 	// Optional fraction
-	if err := p.scanFractionPart(); err != nil {
+	if err := p.scanFractionPart(start); err != nil {
 		return nil, err
 	}
 
 	// Optional exponent
-	if err := p.scanExponentPart(); err != nil {
+	if err := p.scanExponentPart(start); err != nil {
 		return nil, err
 	}
 
-	// BOUND-NUMCHARS-001
+	// BOUND-NUMCHARS-001 (final check for non-digit characters like '.', 'e', '+', '-')
 	if p.pos-start > p.maxNumberChars {
 		return nil, jcserr.New(jcserr.BoundExceeded, start,
 			fmt.Sprintf("number token length %d exceeds maximum %d", p.pos-start, p.maxNumberChars))
@@ -648,7 +648,7 @@ func (p *parser) parseNumber() (*Value, error) {
 }
 
 // PARSE-GRAM-001: leading zeros.
-func (p *parser) scanIntegerPart() *jcserr.Error {
+func (p *parser) scanIntegerPart(numStart int) *jcserr.Error {
 	if p.pos >= len(p.data) {
 		return p.newError("unexpected end of input in number")
 	}
@@ -666,11 +666,16 @@ func (p *parser) scanIntegerPart() *jcserr.Error {
 	}
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
+		// BOUND-NUMCHARS-001: fail fast during digit scanning.
+		if p.pos-numStart > p.maxNumberChars {
+			return jcserr.New(jcserr.BoundExceeded, numStart,
+				fmt.Sprintf("number token length %d exceeds maximum %d", p.pos-numStart, p.maxNumberChars))
+		}
 	}
 	return nil
 }
 
-func (p *parser) scanFractionPart() *jcserr.Error {
+func (p *parser) scanFractionPart(numStart int) *jcserr.Error {
 	if p.pos >= len(p.data) || p.data[p.pos] != '.' {
 		return nil
 	}
@@ -681,12 +686,17 @@ func (p *parser) scanFractionPart() *jcserr.Error {
 	}
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
+		// BOUND-NUMCHARS-001: fail fast during digit scanning.
+		if p.pos-numStart > p.maxNumberChars {
+			return jcserr.New(jcserr.BoundExceeded, numStart,
+				fmt.Sprintf("number token length %d exceeds maximum %d", p.pos-numStart, p.maxNumberChars))
+		}
 	}
 	return nil
 }
 
 //nolint:gocyclo,cyclop // REQ:PARSE-GRAM-009 exponent scanner mirrors JSON grammar stages for precise diagnostics.
-func (p *parser) scanExponentPart() *jcserr.Error {
+func (p *parser) scanExponentPart(numStart int) *jcserr.Error {
 	if p.pos >= len(p.data) || (p.data[p.pos] != 'e' && p.data[p.pos] != 'E') {
 		return nil
 	}
@@ -700,6 +710,11 @@ func (p *parser) scanExponentPart() *jcserr.Error {
 	}
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
+		// BOUND-NUMCHARS-001: fail fast during digit scanning.
+		if p.pos-numStart > p.maxNumberChars {
+			return jcserr.New(jcserr.BoundExceeded, numStart,
+				fmt.Sprintf("number token length %d exceeds maximum %d", p.pos-numStart, p.maxNumberChars))
+		}
 	}
 	return nil
 }

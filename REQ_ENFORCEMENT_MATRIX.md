@@ -221,7 +221,7 @@ PARSE-GRAM-007,normative,L3,jcstoken/token.go,ParseWithOptions,149,conformance/h
 PARSE-GRAM-008,normative,L1,jcstoken/token.go,ParseWithOptions,149,jcstoken/token_test.go,TestParse_PARSE_GRAM_008,TEST
 PARSE-GRAM-008,normative,L3,jcstoken/token.go,ParseWithOptions,149,conformance/harness_test.go,TestConformanceRequirements/PARSE-GRAM-008,CONFORMANCE
 PARSE-GRAM-009,normative,L1,jcstoken/token.go,ParseWithOptions,149,jcstoken/token_test.go,TestParse_PARSE_GRAM_009,TEST
-PARSE-GRAM-009,normative,L1,jcstoken/token.go,tokenRepresentsZero,731,jcstoken/token_test.go,TestParseAllowsZeroTokenVariants,TEST
+PARSE-GRAM-009,normative,L1,jcstoken/token.go,tokenRepresentsZero,746,jcstoken/token_test.go,TestParseAllowsZeroTokenVariants,TEST
 PARSE-GRAM-009,normative,L3,jcstoken/token.go,ParseWithOptions,149,conformance/harness_test.go,TestConformanceRequirements/PARSE-GRAM-009,CONFORMANCE
 PARSE-GRAM-010,normative,L1,jcstoken/token.go,ParseWithOptions,149,jcstoken/token_test.go,TestParse_PARSE_GRAM_010,TEST
 PARSE-GRAM-010,normative,L3,jcstoken/token.go,ParseWithOptions,149,conformance/harness_test.go,TestConformanceRequirements/PARSE-GRAM-010,CONFORMANCE

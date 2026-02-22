@@ -480,11 +480,11 @@ func init() {
 	}
 }
 
-// pow10Big returns 10^n as a *big.Int. Uses pre-computed cache for n < 700.
-// The returned value MUST NOT be mutated by the caller.
+// pow10Big returns 10^n as a new *big.Int. Uses pre-computed cache for n < 700,
+// returning a defensive copy to prevent callers from corrupting cached values.
 func pow10Big(n int) *big.Int {
 	if n >= 0 && n < len(pow10Cache) {
-		return pow10Cache[n]
+		return new(big.Int).Set(pow10Cache[n])
 	}
 	return new(big.Int).Exp(bigTen, big.NewInt(int64(n)), nil)
 }
