@@ -102,7 +102,7 @@ for n in matrix.get('nodes',[]):
         domain=replay[1] if len(replay)>1 else ''
         snapshot=replay[2] if len(replay)>2 else 'snapshot-cold'
         ssh_target=env.get('JCS_VM_SSH_TARGET', f"root@{domain}")
-        ssh_opts=env.get('JCS_VM_SSH_OPTIONS','')
+        ssh_opts=env.get('JCS_VM_SSH_OPTIONS','-') or '-'
         vms.append((n.get('id',''), domain, snapshot, ssh_target, ssh_opts, str(n.get('replays',0))))
 with open(os.path.join(out,'containers.tsv'),'w',encoding='utf-8') as f:
     for row in containers:
@@ -218,16 +218,16 @@ if [[ "$vm_count" != "0" ]]; then
     fi
 
     opts=( -o BatchMode=yes -o ConnectTimeout=5 )
-    if [[ -n "$ssh_opts" ]]; then
+    if [[ "$ssh_opts" != "-" ]]; then
       # shellcheck disable=SC2206
       extra=( $ssh_opts )
       opts=( "${extra[@]}" "${opts[@]}" )
     fi
 
-    if ssh "${opts[@]}" "$ssh_target" true >/dev/null 2>&1; then
+    if ssh_out="$(ssh -n "${opts[@]}" "$ssh_target" true 2>&1)"; then
       pass "vm ssh reachable: $node -> $ssh_target"
     else
-      fail "vm ssh unreachable: $node -> $ssh_target"
+      fail "vm ssh unreachable: $node -> $ssh_target ($ssh_out)"
     fi
   done < "$TMPDIR/vms.tsv"
 else
