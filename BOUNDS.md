@@ -13,7 +13,7 @@ security-sensitive or resource-constrained environments.
 | Max JSON values | 1,000,000 | `DefaultMaxValues` |
 | Max object members | 250,000 per object | `DefaultMaxObjectMembers` |
 | Max array elements | 250,000 per array | `DefaultMaxArrayElements` |
-| Max string bytes | 8 MiB (source bytes) | `DefaultMaxStringBytes` |
+| Max string bytes | 8 MiB (decoded UTF-8 bytes) | `DefaultMaxStringBytes` |
 | Max number chars | 4,096 | `DefaultMaxNumberChars` |
 
 All bounds are configurable via `jcstoken.Options`. The CLI uses defaults.

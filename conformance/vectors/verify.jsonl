@@ -3,11 +3,11 @@
 {"id":"VEC-VER-0003","mode":"verify","input":"\"hello\"","want_exit":0}
 {"id":"VEC-VER-0004","mode":"verify","input":"true","want_exit":0}
 {"id":"VEC-VER-0005","mode":"verify","input":"null","want_exit":0}
-{"id":"VEC-VER-0006","mode":"verify","input":"{ \"a\" : 1 }","want_stderr_contains":"not canonical","want_exit":2}
-{"id":"VEC-VER-0007","mode":"verify","input":"{\"b\":1,\"a\":2}","want_stderr_contains":"not canonical","want_exit":2}
-{"id":"VEC-VER-0008","mode":"verify","input":"[1, 2, 3]","want_stderr_contains":"not canonical","want_exit":2}
-{"id":"VEC-VER-0009","mode":"verify","input":"1.0","want_stderr_contains":"not canonical","want_exit":2}
-{"id":"VEC-VER-0010","mode":"verify","input":"1e2","want_stderr_contains":"not canonical","want_exit":2}
+{"id":"VEC-VER-0006","mode":"verify","input":"{ \"a\" : 1 }","want_stderr_contains":"NOT_CANONICAL","want_exit":2}
+{"id":"VEC-VER-0007","mode":"verify","input":"{\"b\":1,\"a\":2}","want_stderr_contains":"NOT_CANONICAL","want_exit":2}
+{"id":"VEC-VER-0008","mode":"verify","input":"[1, 2, 3]","want_stderr_contains":"NOT_CANONICAL","want_exit":2}
+{"id":"VEC-VER-0009","mode":"verify","input":"1.0","want_stderr_contains":"NOT_CANONICAL","want_exit":2}
+{"id":"VEC-VER-0010","mode":"verify","input":"1e2","want_stderr_contains":"NOT_CANONICAL","want_exit":2}
 {"id":"VEC-VER-0011","mode":"verify","input":"{\"a\":1,\"b\":2}","want_exit":0}
 {"id":"VEC-VER-0012","mode":"verify","input":"[]","want_exit":0}
 {"id":"VEC-VER-0013","mode":"verify","input":"{}","want_exit":0}

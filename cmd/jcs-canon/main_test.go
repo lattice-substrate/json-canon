@@ -44,6 +44,9 @@ func TestRunNoCommandExitCode(t *testing.T) {
 	if code != jcserr.CLIUsage.ExitCode() {
 		t.Fatalf("expected exit %d, got %d", jcserr.CLIUsage.ExitCode(), code)
 	}
+	if !strings.Contains(stderr.String(), string(jcserr.CLIUsage)) {
+		t.Fatalf("expected CLI_USAGE class token, got %q", stderr.String())
+	}
 	if !strings.Contains(stderr.String(), "usage:") {
 		t.Fatalf("expected usage output, got %q", stderr.String())
 	}
@@ -113,6 +116,9 @@ func TestRunUnknownCommandExitCode(t *testing.T) {
 	if code != jcserr.CLIUsage.ExitCode() {
 		t.Fatalf("expected exit %d, got %d", jcserr.CLIUsage.ExitCode(), code)
 	}
+	if !strings.Contains(stderr.String(), string(jcserr.CLIUsage)) {
+		t.Fatalf("expected CLI_USAGE class token, got %q", stderr.String())
+	}
 	if !strings.Contains(stderr.String(), "unknown command") {
 		t.Fatalf("expected unknown command error, got %q", stderr.String())
 	}
@@ -123,6 +129,15 @@ func TestParseFlagsUnknownOption(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected parseFlags error for unknown option")
 	}
+	assertClass(t, err, jcserr.CLIUsage)
+}
+
+func TestParseFlagsDoubleDashRejected(t *testing.T) {
+	_, _, err := parseFlags([]string{"--"})
+	if err == nil {
+		t.Fatal("expected parseFlags error for --")
+	}
+	assertClass(t, err, jcserr.CLIUsage)
 }
 
 func TestRunCanonicalizeWriteFailure(t *testing.T) {
@@ -138,6 +153,55 @@ func TestRunCanonicalizeWriteFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "writing output") {
 		t.Fatalf("expected write failure text, got %q", stderr.String())
+	}
+}
+
+func TestRunVerifySuccessWriteFailure(t *testing.T) {
+	code := run(
+		[]string{"verify", "-"},
+		strings.NewReader(`{"a":1}`),
+		&bytes.Buffer{},
+		failingWriter{},
+	)
+	if code != jcserr.InternalIO.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.InternalIO.ExitCode(), code)
+	}
+}
+
+func TestRunTopLevelHelpWriteFailure(t *testing.T) {
+	code := run([]string{"--help"}, strings.NewReader(""), failingWriter{}, &bytes.Buffer{})
+	if code != jcserr.InternalIO.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.InternalIO.ExitCode(), code)
+	}
+}
+
+func TestRunTopLevelVersionWriteFailure(t *testing.T) {
+	code := run([]string{"--version"}, strings.NewReader(""), failingWriter{}, &bytes.Buffer{})
+	if code != jcserr.InternalIO.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.InternalIO.ExitCode(), code)
+	}
+}
+
+func TestRunSubcommandHelpWriteFailure(t *testing.T) {
+	code := run([]string{"canonicalize", "--help"}, strings.NewReader(""), failingWriter{}, &bytes.Buffer{})
+	if code != jcserr.InternalIO.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.InternalIO.ExitCode(), code)
+	}
+}
+
+func TestRunVerifyNotCanonicalIncludesClass(t *testing.T) {
+	var stderr bytes.Buffer
+	code := run(
+		[]string{"verify", "--quiet", "-"},
+		strings.NewReader(`{"b":1,"a":2}`),
+		&bytes.Buffer{},
+		&stderr,
+	)
+	if code != jcserr.NotCanonical.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.NotCanonical.ExitCode(), code)
+	}
+	if !strings.Contains(stderr.String(), string(jcserr.NotCanonical)) {
+		t.Fatalf("expected NOT_CANONICAL class token, got %q", stderr.String())
 	}
 }
 

@@ -31,18 +31,25 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	if len(args) == 1 {
 		switch args[0] {
 		case "--help", "-h":
-			_ = writeGlobalHelp(stdout)
+			if err := writeGlobalHelp(stdout); err != nil {
+				return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write help output", err))
+			}
 			return 0
 		case "--version":
-			_ = writeVersion(stdout)
+			if err := writeVersion(stdout); err != nil {
+				return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write version output", err))
+			}
 			return 0
 		}
 	}
 
 	if len(args) == 0 {
 		// CLI-EXIT-001
-		_ = writeGlobalHelp(stderr)
-		return jcserr.CLIUsage.ExitCode()
+		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, "no command specified"))
+		if err := writeGlobalHelp(stderr); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write usage output", err))
+		}
+		return code
 	}
 
 	switch args[0] {
@@ -52,9 +59,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 		return cmdVerify(args[1:], stdin, stdout, stderr)
 	default:
 		// CLI-EXIT-002
-		_ = writef(stderr, "unknown command: %s\n", args[0])
-		_ = writeGlobalHelp(stderr)
-		return jcserr.CLIUsage.ExitCode()
+		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, fmt.Sprintf("unknown command: %s", args[0])))
+		if err := writeGlobalHelp(stderr); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write usage output", err))
+		}
+		return code
 	}
 }
 
@@ -66,26 +75,18 @@ type flags struct {
 func parseFlags(args []string) (flags, []string, error) {
 	var f flags
 	var positional []string
-	consumeAsPositional := false
 	for _, arg := range args {
-		if consumeAsPositional {
-			positional = append(positional, arg)
-			continue
-		}
-
 		switch arg {
 		case "--quiet", "-q":
 			f.quiet = true
 		case "--help", "-h":
 			f.help = true
-		case "--":
-			consumeAsPositional = true
 		case "-":
 			positional = append(positional, arg)
 		default:
 			if strings.HasPrefix(arg, "-") {
 				// CLI-FLAG-001
-				return flags{}, nil, fmt.Errorf("unknown option: %s", arg)
+				return flags{}, nil, jcserr.New(jcserr.CLIUsage, -1, fmt.Sprintf("unknown option: %s", arg))
 			}
 			positional = append(positional, arg)
 		}
@@ -96,18 +97,20 @@ func parseFlags(args []string) (flags, []string, error) {
 func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fl, positional, err := parseFlags(args)
 	if err != nil {
-		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		_ = writeCanonicalizeHelp(stdout)
+		if err := writeCanonicalizeHelp(stdout); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write canonicalize help output", err))
+		}
 		return 0
 	}
 
 	// CLI-IO-002
-	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
-		return exitCode
+	if err := ensureSingleInput(positional); err != nil {
+		return writeClassifiedError(stderr, err)
 	}
 
 	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
@@ -127,8 +130,7 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 
 	// CLI-IO-004: output to stdout only
 	if _, err := stdout.Write(canonical); err != nil {
-		return writeErrorAndReturn(stderr, jcserr.InternalIO.ExitCode(),
-			"error: writing output: %v\n", err)
+		return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "writing output", err))
 	}
 
 	return 0
@@ -137,17 +139,19 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 func cmdVerify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	fl, positional, err := parseFlags(args)
 	if err != nil {
-		return writeErrorAndReturn(stderr, jcserr.CLIUsage.ExitCode(), "error: %v\n", err)
+		return writeClassifiedError(stderr, err)
 	}
 
 	// CLI-FLAG-003: subcommand --help writes to stdout (frozen stream policy).
 	if fl.help {
-		_ = writeVerifyHelp(stdout)
+		if err := writeVerifyHelp(stdout); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write verify help output", err))
+		}
 		return 0
 	}
 
-	if exitCode, ok := ensureSingleInput(positional, stderr); ok {
-		return exitCode
+	if err := ensureSingleInput(positional); err != nil {
+		return writeClassifiedError(stderr, err)
 	}
 
 	input, err := readInput(positional, stdin, jcstoken.DefaultMaxInputSize)
@@ -167,13 +171,14 @@ func cmdVerify(args []string, stdin io.Reader, stdout io.Writer, stderr io.Write
 
 	// VERIFY-ORDER-001, VERIFY-WS-001
 	if !bytes.Equal(input, canonical) {
-		return writeErrorAndReturn(stderr, jcserr.NotCanonical.ExitCode(),
-			"error: input is not canonical\n")
+		return writeClassifiedError(stderr, jcserr.New(jcserr.NotCanonical, -1, "input is not canonical"))
 	}
 
 	// CLI-IO-005, CLI-FLAG-002
 	if !fl.quiet {
-		_ = writeLine(stderr, "ok")
+		if err := writeLine(stderr, "ok"); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "writing verify success output", err))
+		}
 	}
 	return 0
 }
@@ -227,12 +232,11 @@ func readBounded(r io.Reader, maxInputSize int) ([]byte, error) {
 	return data, nil
 }
 
-func ensureSingleInput(positional []string, stderr io.Writer) (int, bool) {
+func ensureSingleInput(positional []string) error {
 	if len(positional) <= 1 {
-		return 0, false
+		return nil
 	}
-	_ = writeLine(stderr, "error: multiple input files specified")
-	return jcserr.CLIUsage.ExitCode(), true
+	return jcserr.New(jcserr.CLIUsage, -1, "multiple input files specified")
 }
 
 func writeErrorAndReturn(stderr io.Writer, code int, format string, args ...any) int {

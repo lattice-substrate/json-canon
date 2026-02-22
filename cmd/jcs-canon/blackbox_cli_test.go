@@ -103,7 +103,7 @@ func TestBlackboxVerifyRejectsNonCanonicalVector(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("expected exit 2, got %d stderr=%q", code, string(stderr))
 	}
-	if !bytes.Contains(stderr, []byte("not canonical")) {
+	if !bytes.Contains(stderr, []byte("NOT_CANONICAL")) {
 		t.Fatalf("unexpected stderr: %q", string(stderr))
 	}
 }

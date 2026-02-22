@@ -335,7 +335,12 @@ func TestParse_PROF_UFLOW_001(t *testing.T) {
 // === BOUND-DEPTH-001: Nesting depth bounded ===
 
 func TestParse_BOUND_DEPTH_001(t *testing.T) {
-	_, err := jcstoken.ParseWithOptions([]byte(`[[[]]]`), &jcstoken.Options{MaxDepth: 2})
+	_, err := jcstoken.ParseWithOptions([]byte(`[[[]]]`), &jcstoken.Options{MaxDepth: 3})
+	if err != nil {
+		t.Fatalf("expected exact max-depth input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`[[[]]]`), &jcstoken.Options{MaxDepth: 2})
 	if err == nil {
 		t.Fatal("expected max-depth error")
 	}
@@ -348,7 +353,12 @@ func TestParse_BOUND_DEPTH_001(t *testing.T) {
 // === BOUND-INPUT-001: Input size bounded ===
 
 func TestParse_BOUND_INPUT_001(t *testing.T) {
-	_, err := jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxInputSize: 2})
+	_, err := jcstoken.ParseWithOptions([]byte(`[]`), &jcstoken.Options{MaxInputSize: 2})
+	if err != nil {
+		t.Fatalf("expected exact max-input input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`"ab"`), &jcstoken.Options{MaxInputSize: 2})
 	if err == nil {
 		t.Fatal("expected input-size error")
 	}
@@ -361,7 +371,12 @@ func TestParse_BOUND_INPUT_001(t *testing.T) {
 // === BOUND-VALUES-001: Value count bounded ===
 
 func TestParse_BOUND_VALUES_001(t *testing.T) {
-	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 2})
+	_, err := jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 3})
+	if err != nil {
+		t.Fatalf("expected exact value-count input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions([]byte(`[1,2]`), &jcstoken.Options{MaxValues: 2})
 	if err == nil {
 		t.Fatal("expected value-count error")
 	}
@@ -375,6 +390,14 @@ func TestParse_BOUND_VALUES_001(t *testing.T) {
 
 func TestParse_BOUND_MEMBERS_001(t *testing.T) {
 	_, err := jcstoken.ParseWithOptions(
+		[]byte(`{"a":1,"b":2}`),
+		&jcstoken.Options{MaxObjectMembers: 2},
+	)
+	if err != nil {
+		t.Fatalf("expected exact member-count input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions(
 		[]byte(`{"a":1,"b":2}`),
 		&jcstoken.Options{MaxObjectMembers: 1},
 	)
@@ -392,6 +415,14 @@ func TestParse_BOUND_MEMBERS_001(t *testing.T) {
 func TestParse_BOUND_ELEMS_001(t *testing.T) {
 	_, err := jcstoken.ParseWithOptions(
 		[]byte(`[1,2]`),
+		&jcstoken.Options{MaxArrayElements: 2},
+	)
+	if err != nil {
+		t.Fatalf("expected exact array-element input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions(
+		[]byte(`[1,2]`),
 		&jcstoken.Options{MaxArrayElements: 1},
 	)
 	if err == nil {
@@ -408,6 +439,14 @@ func TestParse_BOUND_ELEMS_001(t *testing.T) {
 func TestParse_BOUND_STRBYTES_001(t *testing.T) {
 	_, err := jcstoken.ParseWithOptions(
 		[]byte(`"ab"`),
+		&jcstoken.Options{MaxStringBytes: 2},
+	)
+	if err != nil {
+		t.Fatalf("expected exact string-byte input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions(
+		[]byte(`"ab"`),
 		&jcstoken.Options{MaxStringBytes: 1},
 	)
 	if err == nil {
@@ -423,6 +462,14 @@ func TestParse_BOUND_STRBYTES_001(t *testing.T) {
 
 func TestParse_BOUND_NUMCHARS_001(t *testing.T) {
 	_, err := jcstoken.ParseWithOptions(
+		[]byte(`1234`),
+		&jcstoken.Options{MaxNumberChars: 4},
+	)
+	if err != nil {
+		t.Fatalf("expected exact number-char input to pass, got %v", err)
+	}
+
+	_, err = jcstoken.ParseWithOptions(
 		[]byte(`12345`),
 		&jcstoken.Options{MaxNumberChars: 4},
 	)
