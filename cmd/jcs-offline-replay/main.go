@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -59,6 +63,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		return 0
+	case "inspect-matrix":
+		if err := cmdInspectMatrix(flags, stdout); err != nil {
+			fmt.Fprintf(stderr, "error: %v\n", err)
+			return 2
+		}
+		return 0
 	default:
 		fmt.Fprintf(stderr, "error: unknown subcommand %q\n", sub)
 		writeUsage(stderr)
@@ -80,9 +90,24 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 	if _, err := replay.LoadProfile(profilePath); err != nil {
 		return err
 	}
+	workerPath := requireFlag(flags, "--worker")
+	tempWorker := ""
+	if workerPath == "" {
+		var err error
+		workerPath, err = buildWorkerBinary()
+		if err != nil {
+			return err
+		}
+		tempWorker = workerPath
+	}
+	if tempWorker != "" {
+		defer func() { _ = os.Remove(tempWorker) }()
+	}
+
 	manifest, err := replay.CreateBundle(replay.BundleOptions{
 		OutputPath:  bundlePath,
 		BinaryPath:  binaryPath,
+		WorkerPath:  workerPath,
 		MatrixPath:  matrixPath,
 		ProfilePath: profilePath,
 		VectorsGlob: "conformance/vectors/*.jsonl",
@@ -93,6 +118,7 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 	}
 	fmt.Fprintf(stdout, "bundle: %s\n", bundlePath)
 	fmt.Fprintf(stdout, "binary_sha256: %s\n", manifest.BinarySHA256)
+	fmt.Fprintf(stdout, "worker_sha256: %s\n", manifest.WorkerSHA256)
 	fmt.Fprintf(stdout, "vector_set_sha256: %s\n", manifest.VectorSetSHA256)
 	return nil
 }
@@ -126,7 +152,16 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
+	timeout := 12 * time.Hour
+	if raw := strings.TrimSpace(flags["--timeout"]); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			return fmt.Errorf("invalid --timeout value %q", raw)
+		}
+		timeout = parsed
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	evidence, err := replay.RunMatrix(ctx, matrix, profile, adapterFactory(), replay.RunOptions{
@@ -205,6 +240,20 @@ func cmdReport(flags map[string]string, stdout io.Writer) error {
 	return nil
 }
 
+func cmdInspectMatrix(flags map[string]string, stdout io.Writer) error {
+	matrixPath := requireFlag(flags, "--matrix")
+	if matrixPath == "" {
+		return fmt.Errorf("inspect-matrix requires --matrix")
+	}
+	matrix, err := replay.LoadMatrix(matrixPath)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(matrix)
+}
+
 func adapterFactory() replay.AdapterFactory {
 	baseRunner := executil.OSRunner{}
 	containerAdapter := container.NewAdapter(baseRunner)
@@ -267,9 +316,27 @@ func fileSHA256(path string) (string, error) {
 }
 
 func writeUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report> [flags]")
-	fmt.Fprintln(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path>")
-	fmt.Fprintln(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path>")
+	fmt.Fprintln(w, "usage: jcs-offline-replay <prepare|run|verify-evidence|report|inspect-matrix> [flags]")
+	fmt.Fprintln(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]")
+	fmt.Fprintln(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]")
 	fmt.Fprintln(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path>")
 	fmt.Fprintln(w, "  report --evidence <path>")
+	fmt.Fprintln(w, "  inspect-matrix --matrix <path>")
+}
+
+func buildWorkerBinary() (string, error) {
+	tmpDir, err := os.MkdirTemp("", "jcs-offline-worker-*")
+	if err != nil {
+		return "", fmt.Errorf("create worker temp dir: %w", err)
+	}
+	out := filepath.Join(tmpDir, "jcs-offline-worker")
+	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", out, "./cmd/jcs-offline-worker")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("build worker binary: %v: %s", err, strings.TrimSpace(buf.String()))
+	}
+	return out, nil
 }

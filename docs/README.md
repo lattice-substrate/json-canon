@@ -24,6 +24,7 @@ document in this directory or by normative registries in the repository root.
 - `docs/TRACEABILITY_MODEL.md` - requirement-to-code-to-test evidence model
 - `docs/VECTOR_FORMAT.md` - JSONL vector schema and evolution policy
 - `docs/ALGORITHMIC_INVARIANTS.md` - strict parsing/canonicalization invariants
+- `docs/OFFLINE_REPLAY_HARNESS.md` - offline replay runbook and cross-arch proof workflow
 - `docs/adr/` - architectural decision records and ADR process
 
 ## Operational Docs

@@ -24,7 +24,15 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - ADR framework and accepted foundational decisions under `docs/adr/`.
 - Offline cold-replay framework under `offline/` with matrix/profile contracts, evidence schema, and offline conformance gate package.
 - New operator CLI `jcs-offline-replay` with `prepare`, `run`, `verify-evidence`, and `report` subcommands.
-- Runtime adapter scaffolding for container and libvirt execution lanes (`offline/runtime/container`, `offline/runtime/libvirt`).
+- `jcs-offline-replay inspect-matrix` subcommand for machine-readable matrix introspection.
+- New replay worker CLI `jcs-offline-worker` for per-lane vector execution and evidence emission.
+- Runtime adapter execution paths for container and libvirt lanes, plus operational runner scripts (`offline/scripts/replay-container.sh`, `offline/scripts/replay-libvirt.sh`).
+- End-to-end operator scripts for offline proof runs:
+  - `offline/scripts/cold-replay-preflight.sh`
+  - `offline/scripts/cold-replay-run.sh`
+  - `offline/scripts/cold-replay-audit-report.sh`
+  - `offline/scripts/cold-replay-cross-arch.sh`
+- Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
 - CI unit test timeout aligned to 20m (matching CONFORMANCE.md and release workflow).

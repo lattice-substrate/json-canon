@@ -1,7 +1,7 @@
 version: v1
-architecture: x86_64
+architecture: arm64
 nodes:
-  - id: debian12-container
+  - id: debian12-container-arm64
     mode: container
     distro: debian-12
     kernel_family: host
@@ -9,7 +9,7 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "debian:12-slim"]
-  - id: ubuntu2204-container
+  - id: ubuntu2204-container-arm64
     mode: container
     distro: ubuntu-22.04
     kernel_family: host
@@ -17,7 +17,7 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "ubuntu:22.04"]
-  - id: fedora40-container
+  - id: fedora40-container-arm64
     mode: container
     distro: fedora-40
     kernel_family: host
@@ -25,7 +25,7 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "fedora:40"]
-  - id: rocky9-container
+  - id: rocky9-container-arm64
     mode: container
     distro: rocky-9
     kernel_family: host
@@ -33,7 +33,7 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "rockylinux:9"]
-  - id: alpine320-container
+  - id: alpine320-container-arm64
     mode: container
     distro: alpine-3.20
     kernel_family: host
@@ -41,7 +41,7 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "alpine:3.20"]
-  - id: opensuse-container
+  - id: opensuse-container-arm64
     mode: container
     distro: opensuse-leap
     kernel_family: host
@@ -49,63 +49,63 @@ nodes:
     runner:
       kind: container_command
       replay: ["./offline/scripts/replay-container.sh", "opensuse/leap:15"]
-  - id: debian12-vm
+  - id: debian12-vm-arm64
     mode: vm
     distro: debian-12
     kernel_family: distro
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "debian12-vm", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "debian12-vm-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@debian12-vm"
-  - id: ubuntu2204-vm-ga
+        JCS_VM_SSH_TARGET: "root@debian12-vm-arm64"
+  - id: ubuntu2204-vm-ga-arm64
     mode: vm
     distro: ubuntu-22.04
     kernel_family: ga
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "ubuntu2204-vm-ga", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "ubuntu2204-vm-ga-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@ubuntu2204-vm-ga"
-  - id: ubuntu2204-vm-hwe
+        JCS_VM_SSH_TARGET: "root@ubuntu2204-vm-ga-arm64"
+  - id: ubuntu2204-vm-hwe-arm64
     mode: vm
     distro: ubuntu-22.04
     kernel_family: hwe
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "ubuntu2204-vm-hwe", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "ubuntu2204-vm-hwe-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@ubuntu2204-vm-hwe"
-  - id: fedora40-vm
+        JCS_VM_SSH_TARGET: "root@ubuntu2204-vm-hwe-arm64"
+  - id: fedora40-vm-arm64
     mode: vm
     distro: fedora-40
     kernel_family: distro
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "fedora40-vm", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "fedora40-vm-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@fedora40-vm"
-  - id: rocky9-vm
+        JCS_VM_SSH_TARGET: "root@fedora40-vm-arm64"
+  - id: rocky9-vm-arm64
     mode: vm
     distro: rocky-9
     kernel_family: distro
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "rocky9-vm", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "rocky9-vm-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@rocky9-vm"
-  - id: lts-legacy-kernel-vm
+        JCS_VM_SSH_TARGET: "root@rocky9-vm-arm64"
+  - id: lts-legacy-kernel-vm-arm64
     mode: vm
     distro: ubuntu-22.04
     kernel_family: legacy-lts
     replays: 5
     runner:
       kind: libvirt_command
-      replay: ["./offline/scripts/replay-libvirt.sh", "lts-legacy-kernel-vm", "snapshot-cold"]
+      replay: ["./offline/scripts/replay-libvirt.sh", "lts-legacy-kernel-vm-arm64", "snapshot-cold"]
       env:
-        JCS_VM_SSH_TARGET: "root@lts-legacy-kernel-vm"
+        JCS_VM_SSH_TARGET: "root@lts-legacy-kernel-vm-arm64"

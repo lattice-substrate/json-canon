@@ -11,19 +11,19 @@ import (
 
 // Matrix defines the offline replay execution lanes.
 type Matrix struct {
-	Version      string     `yaml:"version"`
-	Architecture string     `yaml:"architecture"`
-	Nodes        []NodeSpec `yaml:"nodes"`
+	Version      string     `yaml:"version" json:"version"`
+	Architecture string     `yaml:"architecture" json:"architecture"`
+	Nodes        []NodeSpec `yaml:"nodes" json:"nodes"`
 }
 
 // NodeSpec is one distro/kernel lane.
 type NodeSpec struct {
-	ID           string       `yaml:"id"`
-	Mode         NodeMode     `yaml:"mode"`
-	Distro       string       `yaml:"distro"`
-	KernelFamily string       `yaml:"kernel_family"`
-	Replays      int          `yaml:"replays"`
-	Runner       RunnerConfig `yaml:"runner"`
+	ID           string       `yaml:"id" json:"id"`
+	Mode         NodeMode     `yaml:"mode" json:"mode"`
+	Distro       string       `yaml:"distro" json:"distro"`
+	KernelFamily string       `yaml:"kernel_family" json:"kernel_family"`
+	Replays      int          `yaml:"replays" json:"replays"`
+	Runner       RunnerConfig `yaml:"runner" json:"runner"`
 }
 
 // NodeMode represents the node execution mode.
@@ -36,22 +36,22 @@ const (
 
 // RunnerConfig is an execution command contract for a node lane.
 type RunnerConfig struct {
-	Kind    string            `yaml:"kind"`
-	Prepare []string          `yaml:"prepare"`
-	Replay  []string          `yaml:"replay"`
-	Cleanup []string          `yaml:"cleanup"`
-	Env     map[string]string `yaml:"env"`
+	Kind    string            `yaml:"kind" json:"kind"`
+	Prepare []string          `yaml:"prepare" json:"prepare"`
+	Replay  []string          `yaml:"replay" json:"replay"`
+	Cleanup []string          `yaml:"cleanup" json:"cleanup"`
+	Env     map[string]string `yaml:"env" json:"env"`
 }
 
 // Profile defines required suites and gate policy.
 type Profile struct {
-	Version          string   `yaml:"version"`
-	Name             string   `yaml:"name"`
-	RequiredNodes    []string `yaml:"required_nodes"`
-	RequiredSuites   []string `yaml:"required_suites"`
-	MinColdReplays   int      `yaml:"min_cold_replays"`
-	HardReleaseGate  bool     `yaml:"hard_release_gate"`
-	EvidenceRequired bool     `yaml:"evidence_required"`
+	Version          string   `yaml:"version" json:"version"`
+	Name             string   `yaml:"name" json:"name"`
+	RequiredNodes    []string `yaml:"required_nodes" json:"required_nodes"`
+	RequiredSuites   []string `yaml:"required_suites" json:"required_suites"`
+	MinColdReplays   int      `yaml:"min_cold_replays" json:"min_cold_replays"`
+	HardReleaseGate  bool     `yaml:"hard_release_gate" json:"hard_release_gate"`
+	EvidenceRequired bool     `yaml:"evidence_required" json:"evidence_required"`
 }
 
 func LoadMatrix(path string) (*Matrix, error) {

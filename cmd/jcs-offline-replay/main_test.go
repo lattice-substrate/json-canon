@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -38,5 +40,42 @@ func TestParseKV(t *testing.T) {
 	}
 	if flags["--profile"] != "b.yaml" {
 		t.Fatalf("unexpected profile flag: %#v", flags)
+	}
+}
+
+func TestInspectMatrix(t *testing.T) {
+	dir := t.TempDir()
+	matrix := filepath.Join(dir, "matrix.yaml")
+	data := []byte(`version: v1
+architecture: x86_64
+nodes:
+  - id: n1
+    mode: container
+    distro: debian
+    kernel_family: host
+    replays: 1
+    runner:
+      kind: container_command
+      replay: ["echo","ok"]
+  - id: n2
+    mode: vm
+    distro: ubuntu
+    kernel_family: ga
+    replays: 1
+    runner:
+      kind: libvirt_command
+      replay: ["echo","ok"]
+`)
+	if err := os.WriteFile(matrix, data, 0o600); err != nil {
+		t.Fatalf("write matrix fixture: %v", err)
+	}
+
+	var out, err bytes.Buffer
+	code := run([]string{"inspect-matrix", "--matrix", matrix}, &out, &err)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, err.String())
+	}
+	if !strings.Contains(out.String(), "\"architecture\": \"x86_64\"") {
+		t.Fatalf("unexpected inspect output: %q", out.String())
 	}
 }
