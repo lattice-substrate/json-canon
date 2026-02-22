@@ -87,6 +87,16 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 |----|------|---------|-------|-------------|
 | TRACE-LINK-001 | docs/TRACEABILITY_MODEL.md | Required Mapping | MUST | Behavior tests in runtime packages MUST be linked from `REQ_ENFORCEMENT_MATRIX.md`. |
 
+## OFFLINE — Cold Replay Assurance
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| OFFLINE-MATRIX-001 | offline/README.md | Contracts | MUST | Offline replay matrix manifest (`offline/matrix.yaml`) MUST exist, parse, and include both `container` and `vm` lanes. |
+| OFFLINE-COLD-001 | offline/README.md | Contracts | MUST | Maximal offline profile (`offline/profiles/maximal.yaml`) MUST enforce at least 5 cold replays per required lane and `hard_release_gate: true`. |
+| OFFLINE-EVIDENCE-001 | offline/README.md | Contracts | MUST | Offline evidence schema (`offline/schema/evidence.v1.json`) and `verify-evidence` validation path MUST exist and remain executable. |
+| OFFLINE-GATE-001 | RELEASE_PROCESS.md | Verification Requirements | MUST | Release process MUST include explicit offline replay evidence gate execution via `go test ./offline/conformance`. |
+| OFFLINE-ARCH-001 | offline/profiles/maximal.yaml | Profile | MUST | Phase-1 offline replay profile architecture scope MUST be explicit and constrained to `x86_64`. |
+
 ## DET — Determinism
 
 | ID | Spec | Section | Level | Requirement |

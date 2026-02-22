@@ -16,6 +16,7 @@ Conformance is defined by the union of:
 - `abi_manifest.json`
 - conformance tests in `conformance/harness_test.go`
 - vector corpus in `conformance/vectors/*.jsonl`
+- offline replay contracts in `offline/matrix.yaml`, `offline/profiles/maximal.yaml`, and `offline/schema/evidence.v1.json`
 
 A release is non-conformant if any artifact is inconsistent with the others.
 
@@ -46,6 +47,13 @@ The following gate is REQUIRED for release readiness:
 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
   -ldflags="-s -w -buildid= -X main.version=v0.0.0-dev" \
   -o ./jcs-canon ./cmd/jcs-canon
+```
+
+When offline evidence is available for a release candidate, this gate is also REQUIRED:
+
+```bash
+JCS_OFFLINE_EVIDENCE=/path/to/evidence.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
 ## CI Contract
