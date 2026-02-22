@@ -2,11 +2,11 @@ package replay
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Matrix defines the offline replay execution lanes.
@@ -59,11 +59,14 @@ func LoadMatrix(path string) (*Matrix, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read matrix: %w", err)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
 	var m Matrix
 	if err := dec.Decode(&m); err != nil {
-		return nil, fmt.Errorf("decode matrix yaml: %w", err)
+		return nil, fmt.Errorf("decode matrix json: %w", err)
+	}
+	if err := ensureSingleJSONDocument(dec); err != nil {
+		return nil, fmt.Errorf("decode matrix json: %w", err)
 	}
 	if err := ValidateMatrix(&m); err != nil {
 		return nil, err
@@ -76,16 +79,30 @@ func LoadProfile(path string) (*Profile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read profile: %w", err)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
 	var p Profile
 	if err := dec.Decode(&p); err != nil {
-		return nil, fmt.Errorf("decode profile yaml: %w", err)
+		return nil, fmt.Errorf("decode profile json: %w", err)
+	}
+	if err := ensureSingleJSONDocument(dec); err != nil {
+		return nil, fmt.Errorf("decode profile json: %w", err)
 	}
 	if err := ValidateProfile(&p); err != nil {
 		return nil, err
 	}
 	return &p, nil
+}
+
+func ensureSingleJSONDocument(dec *json.Decoder) error {
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("unexpected trailing json content")
+		}
+		return err
+	}
+	return nil
 }
 
 func ValidateMatrix(m *Matrix) error {
