@@ -64,9 +64,12 @@ worker_host="$tmpdir/bundle/jcs-offline-worker"
 chmod +x "$worker_host"
 
 container_name="jcs-replay-${JCS_NODE_ID}-${JCS_REPLAY_INDEX}-$$"
+host_uid="$(id -u)"
+host_gid="$(id -g)"
 
 "$engine" run --rm --name "$container_name" \
   --network none \
+  --user "${host_uid}:${host_gid}" \
   -v "$JCS_BUNDLE_PATH:/work/bundle.tgz:ro" \
   -v "$worker_host:/work/jcs-offline-worker:ro" \
   -v "$evidence_dir:/work/out" \
@@ -82,3 +85,7 @@ container_name="jcs-replay-${JCS_NODE_ID}-${JCS_REPLAY_INDEX}-$$"
     --distro "$JCS_NODE_DISTRO" \
     --kernel-family "$JCS_NODE_KERNEL_FAMILY" \
     --replay-index "$JCS_REPLAY_INDEX"
+
+if [[ -f "$JCS_EVIDENCE_PATH" ]]; then
+  chmod u+rw,go+r "$JCS_EVIDENCE_PATH" >/dev/null 2>&1 || true
+fi
