@@ -14,7 +14,8 @@ document in this directory or by normative registries in the repository root.
 
 ## Engineering Specs
 
-- `docs/BOOK.md` - book-style project and operations guide
+- `docs/book/README.md` - chaptered handbook (project, architecture, operations, release)
+- `docs/BOOK.md` - compatibility portal to the chaptered handbook
 - `ARCHITECTURE.md` - package boundaries, runtime model, and invariants
 - `ABI.md` - stable CLI ABI contract (human-readable)
 - `NORMATIVE_REFERENCES.md` - external/internal normative source and interpretation rules
@@ -34,3 +35,11 @@ document in this directory or by normative registries in the repository root.
 - `offline/README.md` - offline cold-replay matrix and evidence workflow
 - `BOUNDS.md` - resource bounds and memory behavior
 - `GOVERNANCE.md` - review, compatibility, and policy commitments
+
+## Navigation
+
+Recommended start points:
+
+1. Project orientation: `docs/book/README.md`
+2. System contracts: `ARCHITECTURE.md`, `SPECIFICATION.md`, `ABI.md`
+3. Release and trust: `CONFORMANCE.md`, `RELEASE_PROCESS.md`, `VERIFICATION.md`

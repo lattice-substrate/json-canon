@@ -1,6 +1,6 @@
 # json-canon
 
-RFC 8785 JSON Canonicalization Scheme - pure Go core runtime with zero external dependencies.
+RFC 8785 JSON Canonicalization Scheme - pure Go canonicalization core with deterministic CLI and infrastructure-grade conformance evidence.
 
 ## Overview
 
@@ -84,6 +84,7 @@ Requirement registries are split for audit clarity:
 
 Official engineering docs are indexed in `docs/README.md`.
 Key references:
+- `docs/book/README.md`
 - `docs/BOOK.md`
 - `ARCHITECTURE.md`
 - `ABI.md`
