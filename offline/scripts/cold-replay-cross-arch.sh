@@ -10,6 +10,7 @@ Options:
   --x86-profile <path>      x86_64 profile (default: offline/profiles/maximal.yaml)
   --arm64-matrix <path>     arm64 matrix (default: offline/matrix.arm64.yaml)
   --arm64-profile <path>    arm64 profile (default: offline/profiles/maximal.arm64.yaml)
+  --local-no-rocky          Use local no-rocky matrices for both architectures
   --output-dir <path>       Output directory (default: offline/runs/cross-arch-<timestamp>)
   --timeout <duration>      Timeout for each run (default: 12h)
   --skip-preflight          Skip per-architecture preflight
@@ -42,6 +43,11 @@ while [[ $# -gt 0 ]]; do
     --arm64-profile)
       ARM_PROFILE="$2"
       shift 2
+      ;;
+    --local-no-rocky)
+      X86_MATRIX="offline/matrix.local-no-rocky.yaml"
+      ARM_MATRIX="offline/matrix.local-no-rocky.arm64.yaml"
+      shift
       ;;
     --output-dir)
       OUTDIR="$2"

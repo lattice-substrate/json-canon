@@ -1,0 +1,60 @@
+# Offline Replay Audit Summary
+
+- Result: **PASS**
+- Evidence: `/home/lenny/json-canon/offline/runs/20260222T023623Z/offline-evidence.json`
+- Matrix: `offline/matrix.yaml`
+- Profile: `offline/profiles/maximal.yaml`
+- Schema: `evidence.v1`
+- Profile Name: `maximal-offline-linux-x86_64`
+- Architecture: `x86_64`
+- Hard Release Gate: `True`
+- Node Count: `12`
+- Replay Rows: `60`
+
+## Aggregate Digests
+
+- canonical: `2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6`
+- verify: `66d329b3bd829da527feb00eb97fdb681a0e15c28ac14d8bfed29ecae13e70f6`
+- failure_class: `af58643f979138dadd16e4c78fd6d60d44d0818a5ce5269696ac3966f1d3306b`
+- exit_code: `73d91ef3f2fd6d709fd8491bb9c547290a1b3a13c234423ca96432f4258235d2`
+
+## Parity Checks
+
+- canonical_single_digest: `True`
+- verify_single_digest: `True`
+- failure_class_single_digest: `True`
+- exit_code_single_digest: `True`
+
+## Node Replay Counts
+
+- alpine320-container: `5`
+- debian12-container: `5`
+- debian12-vm: `5`
+- fedora40-container: `5`
+- fedora40-vm: `5`
+- lts-legacy-kernel-vm: `5`
+- opensuse-container: `5`
+- rocky9-container: `5`
+- rocky9-vm: `5`
+- ubuntu2204-container: `5`
+- ubuntu2204-vm-ga: `5`
+- ubuntu2204-vm-hwe: `5`
+
+## Node Case Counts By Replay Index
+
+- alpine320-container: `[74, 74, 74, 74, 74]`
+- debian12-container: `[74, 74, 74, 74, 74]`
+- debian12-vm: `[74, 74, 74, 74, 74]`
+- fedora40-container: `[74, 74, 74, 74, 74]`
+- fedora40-vm: `[74, 74, 74, 74, 74]`
+- lts-legacy-kernel-vm: `[74, 74, 74, 74, 74]`
+- opensuse-container: `[74, 74, 74, 74, 74]`
+- rocky9-container: `[74, 74, 74, 74, 74]`
+- rocky9-vm: `[74, 74, 74, 74, 74]`
+- ubuntu2204-container: `[74, 74, 74, 74, 74]`
+- ubuntu2204-vm-ga: `[74, 74, 74, 74, 74]`
+- ubuntu2204-vm-hwe: `[74, 74, 74, 74, 74]`
+
+[audit] wrote: /home/lenny/json-canon/offline/runs/20260222T023623Z/audit/audit-summary.json
+[audit] wrote: /home/lenny/json-canon/offline/runs/20260222T023623Z/audit/audit-summary.md
+[audit] wrote: /home/lenny/json-canon/offline/runs/20260222T023623Z/audit/controller-report.txt
