@@ -1,0 +1,4 @@
+bundle: /home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.1/arm64/offline-bundle.tgz
+binary_sha256: 7878ebc284f52d0150b6d3c8deb727c2c9781991f3b4990a3f140833671a4003
+worker_sha256: 855258996e9edd67790dfe365a2d9f3b9dd349490ee59fec6e6616b9e26ad242
+vector_set_sha256: 4e944d8f5eec849c55f7fc4152a06c30af9907212bb98dd2128256287b906ee1

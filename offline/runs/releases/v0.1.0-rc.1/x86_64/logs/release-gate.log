@@ -1,0 +1,4 @@
+=== RUN   TestOfflineReplayEvidenceReleaseGate
+--- PASS: TestOfflineReplayEvidenceReleaseGate (0.00s)
+PASS
+ok  	github.com/SolutionsExcite/json-canon/offline/conformance	0.007s
