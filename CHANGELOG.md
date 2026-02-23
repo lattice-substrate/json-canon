@@ -52,6 +52,11 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
+- Module identity is now aligned to the public repository path (`github.com/SolutionsExcite/json-canon`) across `go.mod`, imports, CI package filters, and verification docs.
+- Offline evidence contract now binds source identity via `source_git_commit` and `source_git_tag` in schema/model/validation.
+- Release workflow offline evidence gates now target per-tag evidence paths (`offline/runs/releases/<tag>/...`) and enforce expected commit/tag binding (`JCS_OFFLINE_EXPECTED_GIT_COMMIT`, `JCS_OFFLINE_EXPECTED_GIT_TAG`).
+- `jcs-offline-replay run` now stamps source commit/tag into generated evidence and `verify-evidence` accepts source identity expectations.
+- Offline release-gate docs and runbooks now require commit/tag-bound evidence validation commands.
 - `parseCanonicalFromInput` now wraps parser/serializer errors with additional context while preserving failure-class extraction (`errors.As`/`%w`) for stable exit-class behavior.
 - Number parser integer-part scanner was refactored into smaller helper stages to satisfy strict complexity lint policy without suppressions.
 - `ABI.md` command-flag contract now explicitly matches runtime/manifest behavior: `canonicalize` accepts `--quiet` for command symmetry.

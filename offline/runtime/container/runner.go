@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
-	"github.com/lattice-substrate/json-canon/offline/runtime/executil"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/runtime/executil"
 )
 
 // Adapter runs replay lanes through container-oriented commands.

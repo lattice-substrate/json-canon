@@ -1,4 +1,4 @@
-module github.com/lattice-substrate/json-canon
+module github.com/SolutionsExcite/json-canon
 
 go 1.22.5
 

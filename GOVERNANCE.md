@@ -40,6 +40,7 @@ Supported operating environment: Linux only.
 
 | Version | Support Level |
 |---------|-------------|
+| Pre-v1 release candidates (`v0.x.y-rcN`) | Best effort: compatibility stabilization, critical bug fixes, and release process hardening only |
 | Current major (v1.x.y) | Full: bug fixes, security patches, compatibility maintenance |
 | Previous major (v0.x.y) | Security-only: critical and high severity fixes for 12 months after current major release |
 | Older versions | Unsupported |

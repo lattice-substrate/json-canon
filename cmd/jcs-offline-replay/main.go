@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
-	"github.com/lattice-substrate/json-canon/offline/runtime/container"
-	"github.com/lattice-substrate/json-canon/offline/runtime/executil"
-	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/runtime/container"
+	"github.com/SolutionsExcite/json-canon/offline/runtime/executil"
+	"github.com/SolutionsExcite/json-canon/offline/runtime/libvirt"
 )
 
 const boolTrue = "true"
@@ -162,6 +162,10 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	sourceGitCommit, sourceGitTag, err := resolveSourceIdentity(flags)
+	if err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -172,6 +176,8 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 		ControlBinarySHA256: manifest.BinarySHA256,
 		MatrixSHA256:        matrixSHA,
 		ProfileSHA256:       profileSHA,
+		SourceGitCommit:     sourceGitCommit,
+		SourceGitTag:        sourceGitTag,
 		Orchestrator:        "jcs-offline-replay",
 	})
 	if err != nil {
@@ -272,6 +278,7 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("load verification digests: %w", err)
 	}
+	expectedSourceCommit, expectedSourceTag := resolveExpectedSourceIdentity(flags)
 
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        bundleSHA,
@@ -279,6 +286,8 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		ExpectedMatrixSHA256:        matrixSHA,
 		ExpectedProfileSHA256:       profileSHA,
 		ExpectedArchitecture:        matrix.Architecture,
+		ExpectedSourceGitCommit:     expectedSourceCommit,
+		ExpectedSourceGitTag:        expectedSourceTag,
 	}); err != nil {
 		return fmt.Errorf("validate evidence bundle: %w", err)
 	}
@@ -343,6 +352,12 @@ func writeReportHeader(stdout io.Writer, evidence *replay.EvidenceBundle) error 
 		return err
 	}
 	if err := writef(stdout, "architecture: %s\n", evidence.Architecture); err != nil {
+		return err
+	}
+	if err := writef(stdout, "source git commit: %s\n", evidence.SourceGitCommit); err != nil {
+		return err
+	}
+	if err := writef(stdout, "source git tag: %s\n", evidence.SourceGitTag); err != nil {
 		return err
 	}
 	if err := writef(stdout, "runs: %d\n", len(evidence.NodeReplays)); err != nil {
@@ -458,6 +473,47 @@ func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
 	return filepath.Join(base, "offline-bundle.tgz"), filepath.Join(base, "bin", "jcs-canon")
 }
 
+func resolveSourceIdentity(flags map[string]string) (string, string, error) {
+	sourceGitCommit := requireFlag(flags, "--source-git-commit")
+	if sourceGitCommit == "" {
+		sourceGitCommit = lookupEnvTrimmed("JCS_OFFLINE_SOURCE_GIT_COMMIT")
+	}
+	if sourceGitCommit == "" {
+		out, err := runCommandCapture("git", "rev-parse", "HEAD")
+		if err != nil {
+			return "", "", fmt.Errorf("resolve source git commit (set --source-git-commit or JCS_OFFLINE_SOURCE_GIT_COMMIT): %w (%s)", err, out)
+		}
+		sourceGitCommit = strings.TrimSpace(out)
+	}
+
+	sourceGitTag := requireFlag(flags, "--source-git-tag")
+	if sourceGitTag == "" {
+		sourceGitTag = lookupEnvTrimmed("JCS_OFFLINE_SOURCE_GIT_TAG")
+	}
+	if sourceGitTag == "" {
+		out, err := runCommandCapture("git", "describe", "--tags", "--exact-match")
+		if err == nil {
+			sourceGitTag = strings.TrimSpace(out)
+		}
+	}
+	if sourceGitTag == "" {
+		sourceGitTag = "untagged"
+	}
+	return sourceGitCommit, sourceGitTag, nil
+}
+
+func resolveExpectedSourceIdentity(flags map[string]string) (string, string) {
+	expectedCommit := requireFlag(flags, "--source-git-commit")
+	if expectedCommit == "" {
+		expectedCommit = lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT")
+	}
+	expectedTag := requireFlag(flags, "--source-git-tag")
+	if expectedTag == "" {
+		expectedTag = lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG")
+	}
+	return strings.TrimSpace(expectedCommit), strings.TrimSpace(expectedTag)
+}
+
 func fileSHA256(path string) (string, error) {
 	// #nosec G304 -- offline verification intentionally reads user-specified artifact paths.
 	data, err := os.ReadFile(path)
@@ -475,7 +531,7 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h]"); err != nil {
+	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  preflight --matrix <path> [--strict] [--no-strict]"); err != nil {
@@ -490,7 +546,7 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>]"); err != nil {
+	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  report --evidence <path>"); err != nil {

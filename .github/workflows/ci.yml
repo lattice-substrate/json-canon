@@ -65,7 +65,7 @@ jobs:
         run: go vet ./...
       - name: unit tests
         shell: bash
-        run: go test $(go list ./... | grep -v '^github.com/lattice-substrate/json-canon/conformance$') -count=1 -timeout=20m
+        run: go test $(go list ./... | grep -v '^github.com/SolutionsExcite/json-canon/conformance$') -count=1 -timeout=20m
 
   conformance:
     name: Conformance

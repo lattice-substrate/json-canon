@@ -19,6 +19,8 @@ type EvidenceBundle struct {
 	ControlBinarySHA   string            `json:"control_binary_sha256"`
 	MatrixSHA256       string            `json:"matrix_sha256"`
 	ProfileSHA256      string            `json:"profile_sha256"`
+	SourceGitCommit    string            `json:"source_git_commit"`
+	SourceGitTag       string            `json:"source_git_tag"`
 	GeneratedAtUTC     string            `json:"generated_at_utc"`
 	Orchestrator       string            `json:"orchestrator"`
 	ProfileName        string            `json:"profile_name"`
@@ -57,6 +59,8 @@ type EvidenceValidationOptions struct {
 	ExpectedMatrixSHA256        string
 	ExpectedProfileSHA256       string
 	ExpectedArchitecture        string
+	ExpectedSourceGitCommit     string
+	ExpectedSourceGitTag        string
 }
 
 // WriteEvidence writes a canonical JSON evidence bundle to disk.
@@ -119,6 +123,12 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 			return err
 		}
 	}
+	if err := validateGitCommitToken("source_git_commit", e.SourceGitCommit); err != nil {
+		return err
+	}
+	if err := validateGitTagToken("source_git_tag", e.SourceGitTag); err != nil {
+		return err
+	}
 	expectedArch := m.Architecture
 	if strings.TrimSpace(opts.ExpectedArchitecture) != "" {
 		expectedArch = strings.TrimSpace(opts.ExpectedArchitecture)
@@ -137,6 +147,14 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 	if opts.ExpectedProfileSHA256 != "" && e.ProfileSHA256 != opts.ExpectedProfileSHA256 {
 		return fmt.Errorf("profile_sha256 mismatch: evidence=%q expected=%q", e.ProfileSHA256, opts.ExpectedProfileSHA256)
+	}
+	if expectedCommit := strings.TrimSpace(opts.ExpectedSourceGitCommit); expectedCommit != "" &&
+		e.SourceGitCommit != expectedCommit {
+		return fmt.Errorf("source_git_commit mismatch: evidence=%q expected=%q", e.SourceGitCommit, expectedCommit)
+	}
+	if expectedTag := strings.TrimSpace(opts.ExpectedSourceGitTag); expectedTag != "" &&
+		e.SourceGitTag != expectedTag {
+		return fmt.Errorf("source_git_tag mismatch: evidence=%q expected=%q", e.SourceGitTag, expectedTag)
 	}
 	if !e.HardReleaseGate {
 		return fmt.Errorf("evidence must record hard_release_gate=true")
@@ -269,6 +287,28 @@ func validateSHA256Token(name, value string) error {
 	}
 	if _, err := hex.DecodeString(token); err != nil {
 		return fmt.Errorf("%s must be valid hex: %w", name, err)
+	}
+	return nil
+}
+
+func validateGitCommitToken(name, value string) error {
+	token := strings.TrimSpace(value)
+	if len(token) != 40 {
+		return fmt.Errorf("%s must be 40 hex characters", name)
+	}
+	if _, err := hex.DecodeString(token); err != nil {
+		return fmt.Errorf("%s must be valid hex: %w", name, err)
+	}
+	return nil
+}
+
+func validateGitTagToken(name, value string) error {
+	token := strings.TrimSpace(value)
+	if token == "" {
+		return fmt.Errorf("%s must not be empty", name)
+	}
+	if strings.ContainsAny(token, " \t\r\n") {
+		return fmt.Errorf("%s must not contain whitespace", name)
 	}
 	return nil
 }

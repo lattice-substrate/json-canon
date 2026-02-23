@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
 )
 
 type fakeAdapter struct{}
@@ -70,6 +71,8 @@ func TestRunMatrix(t *testing.T) {
 		ControlBinarySHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		MatrixSHA256:        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		ProfileSHA256:       "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		SourceGitCommit:     strings.Repeat("f", 40),
+		SourceGitTag:        "v0.0.0-dev",
 		Now: func() time.Time {
 			return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 		},

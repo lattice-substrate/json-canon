@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lattice-substrate/json-canon/jcs"
-	"github.com/lattice-substrate/json-canon/jcserr"
-	"github.com/lattice-substrate/json-canon/jcsfloat"
-	"github.com/lattice-substrate/json-canon/jcstoken"
-	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/jcs"
+	"github.com/SolutionsExcite/json-canon/jcserr"
+	"github.com/SolutionsExcite/json-canon/jcsfloat"
+	"github.com/SolutionsExcite/json-canon/jcstoken"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
 )
 
 type harness struct {
@@ -2321,8 +2321,11 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
 	assertContains(t, releaseWorkflow, "offline evidence gate x86_64", "release workflow x86_64 offline gate")
 	assertContains(t, releaseWorkflow, "offline evidence gate arm64", "release workflow arm64 offline gate")
+	assertContains(t, releaseWorkflow, "JCS_OFFLINE_CONTROL_BINARY", "release workflow control binary override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_MATRIX", "release workflow matrix override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
+	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT", "release workflow expected git commit env")
+	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG", "release workflow expected git tag env")
 }
 
 // TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.

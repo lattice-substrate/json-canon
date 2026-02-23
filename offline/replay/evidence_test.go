@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
 )
 
 func TestValidateEvidenceBundleParity(t *testing.T) {
@@ -64,6 +64,20 @@ func TestValidateEvidenceBundleRejectsTamperedMetadata(t *testing.T) {
 			},
 			want: "architecture mismatch",
 		},
+		{
+			name: "source_git_commit",
+			tamper: func(e *replay.EvidenceBundle) {
+				e.SourceGitCommit = strings.Repeat("b", 40)
+			},
+			want: "source_git_commit mismatch",
+		},
+		{
+			name: "source_git_tag",
+			tamper: func(e *replay.EvidenceBundle) {
+				e.SourceGitTag = "v0.0.0-wrong"
+			},
+			want: "source_git_tag mismatch",
+		},
 	}
 
 	for _, tc := range tests {
@@ -99,12 +113,16 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		EvidenceRequired: true,
 	}
 	digest := strings.Repeat("a", 64)
+	sourceCommit := strings.Repeat("f", 40)
+	sourceTag := "v0.0.0-dev"
 	e := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
 		BundleSHA256:       digest,
 		ControlBinarySHA:   digest,
 		MatrixSHA256:       digest,
 		ProfileSHA256:      digest,
+		SourceGitCommit:    sourceCommit,
+		SourceGitTag:       sourceTag,
 		ProfileName:        "max",
 		Architecture:       "x86_64",
 		HardReleaseGate:    true,
@@ -126,6 +144,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		ExpectedMatrixSHA256:        digest,
 		ExpectedProfileSHA256:       digest,
 		ExpectedArchitecture:        "x86_64",
+		ExpectedSourceGitCommit:     sourceCommit,
+		ExpectedSourceGitTag:        sourceTag,
 	}
 	return m, p, e, opts
 }
