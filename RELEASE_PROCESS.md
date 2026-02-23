@@ -47,14 +47,20 @@ A release is incomplete if verification steps are missing or invalid.
 For offline cold-replay assurance, release validation MUST include both architecture gates:
 
 ```bash
-JCS_OFFLINE_EVIDENCE=/path/to/x86_64/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
-JCS_OFFLINE_EVIDENCE=/path/to/arm64/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/arm64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
@@ -73,6 +79,16 @@ jcs-offline-replay cross-arch \
   --run-official-vectors \
   --run-official-es6-100m
 ```
+
+For release tagging, move the validated cross-arch output under:
+
+- `offline/runs/releases/<tag>/x86_64/...`
+- `offline/runs/releases/<tag>/arm64/...`
+
+and ensure `offline-evidence.json` records:
+
+- `source_git_commit` matching the release commit SHA,
+- `source_git_tag` matching the release tag.
 
 For interoperability regression evidence, maintainers SHOULD also run:
 

@@ -18,9 +18,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lattice-substrate/json-canon/jcs"
-	"github.com/lattice-substrate/json-canon/jcserr"
-	"github.com/lattice-substrate/json-canon/jcstoken"
+	"github.com/SolutionsExcite/json-canon/jcs"
+	"github.com/SolutionsExcite/json-canon/jcserr"
+	"github.com/SolutionsExcite/json-canon/jcstoken"
 )
 
 func main() {

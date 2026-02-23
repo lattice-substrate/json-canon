@@ -17,7 +17,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/SolutionsExcite/json-canon/jcserr"
 )
 
 // Limits for denial-of-service protection (BOUND-* requirements).

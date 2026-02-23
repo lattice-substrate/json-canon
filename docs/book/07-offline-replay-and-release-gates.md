@@ -42,14 +42,20 @@ Cross-architecture run:
 ## Required Release Gate Tests
 
 ```bash
-JCS_OFFLINE_EVIDENCE=/path/to/x86_64/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
-JCS_OFFLINE_EVIDENCE=/path/to/arm64/offline-evidence.json \
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/arm64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 

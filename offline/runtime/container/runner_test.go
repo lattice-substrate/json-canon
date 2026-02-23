@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
-	"github.com/lattice-substrate/json-canon/offline/runtime/container"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/runtime/container"
 )
 
 type fakeRunner struct {

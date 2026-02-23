@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
 )
 
 func repoRoot(t *testing.T) string {
@@ -74,7 +74,7 @@ func TestOfflineEvidenceSchemaPresent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read schema: %v", err)
 	}
-	for _, needle := range []string{"schema_version", "node_replays", "aggregate_canonical_sha256"} {
+	for _, needle := range []string{"schema_version", "source_git_commit", "source_git_tag", "node_replays", "aggregate_canonical_sha256"} {
 		if !strings.Contains(string(data), needle) {
 			t.Fatalf("schema missing %q", needle)
 		}
@@ -102,6 +102,15 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	}
 	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_PROFILE") {
 		t.Fatal("release workflow missing JCS_OFFLINE_PROFILE for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_CONTROL_BINARY") {
+		t.Fatal("release workflow missing JCS_OFFLINE_CONTROL_BINARY for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT") {
+		t.Fatal("release workflow missing JCS_OFFLINE_EXPECTED_GIT_COMMIT for offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG") {
+		t.Fatal("release workflow missing JCS_OFFLINE_EXPECTED_GIT_TAG for offline evidence gate")
 	}
 	if !strings.Contains(releaseWorkflow, "offline evidence gate arm64") {
 		t.Fatal("release workflow missing explicit arm64 offline evidence gate")
@@ -152,6 +161,8 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		ExpectedMatrixSHA256:        mustFileSHA256(t, matrixPath),
 		ExpectedProfileSHA256:       mustFileSHA256(t, profilePath),
 		ExpectedArchitecture:        matrix.Architecture,
+		ExpectedSourceGitCommit:     lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
+		ExpectedSourceGitTag:        lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),
 	}); err != nil {
 		t.Fatalf("offline evidence gate failed: %v", err)
 	}

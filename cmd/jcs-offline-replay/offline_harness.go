@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/SolutionsExcite/json-canon/offline/replay"
 )
 
 const (
@@ -377,6 +377,10 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	if writeErr := writef(stdout, "[run] output: %s\n", outDirAbs); writeErr != nil {
 		return nil, writeErr
 	}
+	sourceGitCommit, sourceGitTag, err := resolveOfflineSourceIdentity()
+	if err != nil {
+		return nil, err
+	}
 
 	if buildErr := buildCanonicalizer(canonBin, opts.Version, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
 		return nil, buildErr
@@ -410,11 +414,13 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}
 
 	runFlags := map[string]string{
-		"--matrix":   opts.MatrixPath,
-		"--profile":  opts.ProfilePath,
-		"--bundle":   bundlePath,
-		"--evidence": evidencePath,
-		"--timeout":  opts.Timeout.String(),
+		"--matrix":            opts.MatrixPath,
+		"--profile":           opts.ProfilePath,
+		"--bundle":            bundlePath,
+		"--evidence":          evidencePath,
+		"--timeout":           opts.Timeout.String(),
+		"--source-git-commit": sourceGitCommit,
+		"--source-git-tag":    sourceGitTag,
 	}
 	if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "run.log"), stdout, func(w io.Writer) error {
 		return cmdRun(runFlags, w)
@@ -449,7 +455,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}
 
 	if !opts.SkipReleaseGate {
-		if gateErr := runOfflineReleaseGate(matrixAbs, profileAbs, evidencePath, filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout); gateErr != nil {
+		if gateErr := runOfflineReleaseGate(matrixAbs, profileAbs, evidencePath, sourceGitCommit, sourceGitTag, filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout); gateErr != nil {
 			return nil, gateErr
 		}
 	} else if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout, func(w io.Writer) error {
@@ -512,15 +518,44 @@ func buildController(outputPath, logPath string, stdout io.Writer) error {
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-replay")
 }
 
-func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, logPath string, stdout io.Writer) error {
+func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSourceGitCommit, expectedSourceGitTag, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] release gate test"); err != nil {
 		return err
 	}
-	return runGoCommandLogged(logPath, stdout, map[string]string{
+	env := map[string]string{
 		"JCS_OFFLINE_EVIDENCE": evidencePath,
 		"JCS_OFFLINE_MATRIX":   matrixPath,
 		"JCS_OFFLINE_PROFILE":  profilePath,
-	}, "test", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
+	}
+	if strings.TrimSpace(expectedSourceGitCommit) != "" {
+		env["JCS_OFFLINE_EXPECTED_GIT_COMMIT"] = expectedSourceGitCommit
+	}
+	if strings.TrimSpace(expectedSourceGitTag) != "" {
+		env["JCS_OFFLINE_EXPECTED_GIT_TAG"] = expectedSourceGitTag
+	}
+	return runGoCommandLogged(logPath, stdout, env, "test", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
+}
+
+func resolveOfflineSourceIdentity() (string, string, error) {
+	sourceGitCommit := lookupEnvTrimmed("JCS_OFFLINE_SOURCE_GIT_COMMIT")
+	if sourceGitCommit == "" {
+		out, err := runCommandCapture("git", "rev-parse", "HEAD")
+		if err != nil {
+			return "", "", fmt.Errorf("resolve source git commit (set JCS_OFFLINE_SOURCE_GIT_COMMIT): %w (%s)", err, out)
+		}
+		sourceGitCommit = strings.TrimSpace(out)
+	}
+	sourceGitTag := lookupEnvTrimmed("JCS_OFFLINE_SOURCE_GIT_TAG")
+	if sourceGitTag == "" {
+		out, err := runCommandCapture("git", "describe", "--tags", "--exact-match")
+		if err == nil {
+			sourceGitTag = strings.TrimSpace(out)
+		}
+	}
+	if sourceGitTag == "" {
+		sourceGitTag = "untagged"
+	}
+	return sourceGitCommit, sourceGitTag, nil
 }
 
 func runOfficialVectorGates(outputDir string, stdout io.Writer) error {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,8 @@ type RunOptions struct {
 	ControlBinarySHA256 string
 	MatrixSHA256        string
 	ProfileSHA256       string
+	SourceGitCommit     string
+	SourceGitTag        string
 	Orchestrator        string
 	GlobalEnv           map[string]string
 	Now                 func() time.Time
@@ -55,6 +58,15 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	if opts.Orchestrator == "" {
 		opts.Orchestrator = "jcs-offline-replay"
 	}
+	sourceCommit := strings.TrimSpace(opts.SourceGitCommit)
+	if sourceCommit == "" {
+		// Deterministic placeholder for non-release runs that do not supply source identity.
+		sourceCommit = "0000000000000000000000000000000000000000"
+	}
+	sourceTag := strings.TrimSpace(opts.SourceGitTag)
+	if sourceTag == "" {
+		sourceTag = "untagged"
+	}
 
 	requiredNodes, err := requiredNodeIDs(matrix, profile)
 	if err != nil {
@@ -71,6 +83,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ControlBinarySHA: opts.ControlBinarySHA256,
 		MatrixSHA256:     opts.MatrixSHA256,
 		ProfileSHA256:    opts.ProfileSHA256,
+		SourceGitCommit:  sourceCommit,
+		SourceGitTag:     sourceTag,
 		GeneratedAtUTC:   now().UTC().Format(time.RFC3339Nano),
 		Orchestrator:     opts.Orchestrator,
 		ProfileName:      profile.Name,
@@ -150,6 +164,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ExpectedMatrixSHA256:        opts.MatrixSHA256,
 		ExpectedProfileSHA256:       opts.ProfileSHA256,
 		ExpectedArchitecture:        matrix.Architecture,
+		ExpectedSourceGitCommit:     sourceCommit,
+		ExpectedSourceGitTag:        sourceTag,
 	}); err != nil {
 		return nil, err
 	}

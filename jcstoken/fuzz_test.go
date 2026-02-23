@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/jcs"
-	"github.com/lattice-substrate/json-canon/jcstoken"
+	"github.com/SolutionsExcite/json-canon/jcs"
+	"github.com/SolutionsExcite/json-canon/jcstoken"
 )
 
 // FuzzParseCanonicalRoundTrip: parse → serialize → parse → serialize idempotence.

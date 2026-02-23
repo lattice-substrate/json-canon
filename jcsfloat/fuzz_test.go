@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/jcsfloat"
+	"github.com/SolutionsExcite/json-canon/jcsfloat"
 )
 
 // FuzzFormatDoubleRoundTrip: uint64 bits → format → parse → verify round-trip.

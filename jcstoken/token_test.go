@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lattice-substrate/json-canon/jcserr"
-	"github.com/lattice-substrate/json-canon/jcstoken"
+	"github.com/SolutionsExcite/json-canon/jcserr"
+	"github.com/SolutionsExcite/json-canon/jcstoken"
 )
 
 func mustParse(t *testing.T, in string) *jcstoken.Value {

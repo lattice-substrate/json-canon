@@ -131,14 +131,14 @@ OFFLINE-MATRIX-001,policy,L1,offline/replay/config.go,ValidateMatrix,121,offline
 OFFLINE-MATRIX-001,policy,L3,conformance/harness_test.go,checkOfflineMatrixManifestPresent,2256,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-MATRIX-001,CONFORMANCE
 OFFLINE-COLD-001,policy,L1,offline/replay/config.go,ValidateProfile,182,offline/replay/config_test.go,TestLoadProfile_OFFLINE_COLD_001,TEST
 OFFLINE-COLD-001,policy,L3,conformance/harness_test.go,checkOfflineProfileColdReplayPolicy,2274,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-COLD-001,CONFORMANCE
-OFFLINE-EVIDENCE-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,96,offline/replay/evidence_test.go,TestValidateEvidenceBundleParity,TEST
-OFFLINE-EVIDENCE-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,96,offline/replay/evidence_test.go,TestValidateEvidenceBundleRejectsTamperedMetadata,TEST
+OFFLINE-EVIDENCE-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,100,offline/replay/evidence_test.go,TestValidateEvidenceBundleParity,TEST
+OFFLINE-EVIDENCE-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,100,offline/replay/evidence_test.go,TestValidateEvidenceBundleRejectsTamperedMetadata,TEST
 OFFLINE-EVIDENCE-001,policy,L3,conformance/harness_test.go,checkOfflineEvidenceSchemaAndVerifyCLI,2295,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-EVIDENCE-001,CONFORMANCE
 OFFLINE-GATE-001,policy,L1,offline/conformance/harness_test.go,TestOfflineReleaseGateDocumentation,84,offline/conformance/harness_test.go,TestOfflineReleaseGateDocumentation,TEST
 OFFLINE-GATE-001,policy,L3,conformance/harness_test.go,checkOfflineReleaseGatePolicy,2313,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-GATE-001,CONFORMANCE
 OFFLINE-ARCH-001,policy,L1,offline/replay/config.go,ValidateReleaseArchitecture,205,offline/replay/config_test.go,TestValidateReleaseArchitecture_OFFLINE_ARCH_001,TEST
 OFFLINE-ARCH-001,policy,L1,offline/replay/config.go,ValidateReleaseArchitecture,205,offline/replay/config_test.go,TestLoadArm64Matrix_OFFLINE_ARCH_001,TEST
-OFFLINE-ARCH-001,policy,L3,conformance/harness_test.go,checkOfflineArchScopeDualArch,2334,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-ARCH-001,CONFORMANCE
+OFFLINE-ARCH-001,policy,L3,conformance/harness_test.go,checkOfflineArchScopeDualArch,2337,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-ARCH-001,CONFORMANCE
 OFFLINE-LOCAL-001,policy,L1,cmd/jcs-offline-replay/offline_harness.go,cmdCrossArch,,cmd/jcs-offline-replay/offline_harness_test.go,TestBuildCrossArchReport,TEST
 OFFLINE-LOCAL-001,policy,L1,cmd/jcs-offline-replay/offline_harness.go,runOfficialES6100MGate,,cmd/jcs-offline-replay/offline_harness_test.go,TestBuildAuditSummary,TEST
 OFFLINE-LOCAL-001,policy,L3,conformance/harness_test.go,checkOfflineLocalProofCLI,,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-LOCAL-001,CONFORMANCE

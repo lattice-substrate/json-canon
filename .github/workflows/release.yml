@@ -31,21 +31,33 @@ jobs:
         env:
           JCS_OFFICIAL_ES6_ENABLE_100M: "1"
         run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
+      - name: build release control binary for offline evidence gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/release-offline-control
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+            -ldflags="-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
+            -o .tmp/release-offline-control/jcs-canon ./cmd/jcs-canon
       - name: offline evidence gate x86_64
         env:
-          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/offline-evidence.json
-          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/bin/jcs-canon
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/x86_64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/x86_64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.yaml
+          JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ github.sha }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ github.ref_name }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: offline evidence gate arm64
         env:
-          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/offline-evidence.json
-          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/bin/jcs-canon
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/arm64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/arm64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.arm64.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.arm64.yaml
+          JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ github.sha }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ github.ref_name }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8
