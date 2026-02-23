@@ -78,8 +78,7 @@ linters-settings:
   errcheck:
     check-type-assertions: true
     check-blank: true
-    exclude-functions:
-      # Only if truly safe - generally avoid exclusions
+    exclude-functions: []
 
   errorlint:
     errorf: true
