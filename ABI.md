@@ -40,7 +40,7 @@ The stable ABI includes:
 ### Command Flags
 
 - `--help`, `-h` (exit 0)
-- `--quiet` (for `verify`; suppresses `ok\n` success text)
+- `--quiet` (for `verify`; suppresses `ok\n` success text; accepted by `canonicalize` for command symmetry and has no success-output effect)
 
 ## Input Contract
 

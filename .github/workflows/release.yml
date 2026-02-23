@@ -33,18 +33,18 @@ jobs:
         run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
       - name: offline evidence gate x86_64
         env:
-          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/20260222T023623Z/offline-evidence.json
-          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/20260222T023623Z/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/20260222T023623Z/bin/jcs-canon
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/x86_64/bin/jcs-canon
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.yaml
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: offline evidence gate arm64
         env:
-          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/offline-evidence.json
-          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T021513Z/arm64/bin/jcs-canon
-          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.local-no-rocky.arm64.yaml
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/cross-arch-20260222T073846Z/arm64/bin/jcs-canon
+          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.arm64.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.arm64.yaml
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint

@@ -38,6 +38,7 @@ The following gates are REQUIRED prior to merge:
 
 ```bash
 go vet ./...
+go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --config=golangci.yml
 go test ./... -count=1 -timeout=20m
 go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
