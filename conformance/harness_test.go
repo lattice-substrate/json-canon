@@ -2078,7 +2078,7 @@ func checkCILintGateEnforced(t *testing.T, h *harness) {
 	t.Helper()
 	ciWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "ci.yml"))
 	assertContains(t, ciWorkflow, "name: Lint", "ci lint gate presence")
-	assertContains(t, ciWorkflow, "golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9", "ci lint gate action pin")
+	assertContains(t, ciWorkflow, "golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84", "ci lint gate action pin")
 	assertContains(t, ciWorkflow, "version: v1.64.8", "ci lint gate version pin")
 	assertContains(t, ciWorkflow, "args: --config=golangci.yml", "ci lint gate deterministic config")
 	assertContains(t, ciWorkflow, "needs: [binary_hygiene, lint]", "ci lint gate dependency enforcement")
