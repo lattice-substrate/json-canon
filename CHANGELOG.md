@@ -100,6 +100,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Lint governance hardened to fail-closed: PR/main CI lint gate restored with pinned golangci-lint config/version, local mandatory gates now require the same pinned lint invocation, strict `nolint` rationale enforcement added, and policy traceability expanded with `LINT-*` requirements.
 
 ### Fixed
+- CI/release lint workflow compatibility: pinned `golangci/golangci-lint-action` to `v6.5.2` SHA so enforced `golangci-lint v1.64.8` runs successfully in GitHub Actions.
 - Performance: `lshByInt` O(n) loop replaced with single `big.Int.Lsh` call for subnormal float formatting.
 - Removed unreachable `+` prefix check in `tokenRepresentsZero`.
 - Deduplicated `isNoncharacter`; canonical definition exported as `jcstoken.IsNoncharacter`.
