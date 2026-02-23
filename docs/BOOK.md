@@ -24,3 +24,7 @@ Direct chapter links:
 
 For binding normative and ABI contracts, use `docs/README.md` and root-level
 contract documents.
+
+For executable interoperability differentials, see:
+
+- `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`

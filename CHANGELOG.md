@@ -15,6 +15,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   - `TestOfficialRFC8785Vectors`
   - `TestOfficialES6CorpusChecksums10K`
   - release-only `TestOfficialES6CorpusChecksums100M`
+- New executable differential suite documenting Cyberphone Go invalid-input acceptance vs `json-canon` strict rejection:
+  - `TestCyberphoneGoDifferentialInvalidAcceptance`
+  - reference table in `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`
 - New policy requirements `OFFICIAL-VEC-001..004` with matrix mappings and conformance requirement coverage.
 - Publication-readiness governance files (`LICENSE`, `NOTICE`, `SECURITY.md`, `CONTRIBUTING.md`).
 - Stable top-level CLI flags: `--help`/`-h` and `--version`.

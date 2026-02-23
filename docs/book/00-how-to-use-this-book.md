@@ -27,6 +27,7 @@ When guidance conflicts, root contracts and requirement registries win.
 For every important claim, verify at least one concrete artifact:
 
 - Behavior claims -> `SPECIFICATION.md` + tests.
+- Interoperability strictness claims -> `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md` + differential conformance test.
 - ABI claims -> `ABI.md` + `abi_manifest.json`.
 - Release gate claims -> `CONFORMANCE.md`, `RELEASE_PROCESS.md`, and
   `offline/conformance` tests.

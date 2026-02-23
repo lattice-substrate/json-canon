@@ -14,6 +14,7 @@ This architecture covers:
 - canonical serialization domain,
 - CLI/runtime behavior and failure mapping,
 - conformance and evidence system integration,
+- interoperability differential evidence against external implementations,
 - release-time build and trust constraints.
 
 ## Architectural Goals

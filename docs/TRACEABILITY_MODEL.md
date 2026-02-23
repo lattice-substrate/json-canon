@@ -11,6 +11,7 @@ Traceability covers:
 - policy requirements (`REQ_REGISTRY_POLICY.md`)
 - enforcement mappings (`REQ_ENFORCEMENT_MATRIX.md`)
 - executable checks (`go test ./conformance`)
+- interoperability differential evidence (`conformance/cyberphone_differential_test.go`)
 
 ## Required Mapping
 

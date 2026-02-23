@@ -94,6 +94,18 @@ go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=
 
 Expected checksum: `0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272`.
 
+## 7. Verify Differential Strictness Evidence (Optional but Recommended)
+
+To confirm strict-domain behavior versus the Cyberphone Go implementation:
+
+```bash
+go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1 -v
+```
+
+Reference vector table:
+
+- `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`
+
 ## Trust Model
 
 | Property | Mechanism |

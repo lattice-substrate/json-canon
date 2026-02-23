@@ -52,5 +52,6 @@ See `FAILURE_TAXONOMY.md` for the complete class contract.
 - Behavior contract: `SPECIFICATION.md`
 - Algorithmic constraints: `docs/ALGORITHMIC_INVARIANTS.md`
 - Executable tests: `go test ./...`, `go test ./conformance -v`
+- Differential strictness evidence: `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`
 
 [Previous: Architecture](04-architecture.md) | [Book Home](README.md) | [Next: CLI and ABI Contract](06-cli-and-abi.md)
