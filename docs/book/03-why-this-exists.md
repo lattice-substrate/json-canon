@@ -19,6 +19,9 @@ Common failure modes in generic stacks include:
 4. unstable error behavior,
 5. undocumented ABI changes.
 
+Concrete differential examples against Cyberphone Go are tracked in
+`docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`.
+
 ## Project Goals
 
 This project was designed to provide:

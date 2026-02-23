@@ -74,6 +74,12 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
+For interoperability regression evidence, maintainers SHOULD also run:
+
+```bash
+go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1
+```
+
 ## Release Checklist
 
 1. Confirm CI status for target commit/tag.

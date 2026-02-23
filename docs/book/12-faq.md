@@ -30,8 +30,11 @@ conditions.
 ## Why is there a module dependency if core runtime claims minimal deps?
 
 The canonicalization core is standard-library based. The repository module also
-contains operational tooling that uses `gopkg.in/yaml.v3` for matrix/profile
-handling.
+contains:
+
+- operational tooling that uses `gopkg.in/yaml.v3` for matrix/profile handling,
+- differential conformance tests that import Cyberphone Go JCS
+  (`github.com/cyberphone/json-canonicalization`).
 
 ## Where should new contributors start?
 

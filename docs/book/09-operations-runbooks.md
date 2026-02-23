@@ -16,6 +16,12 @@ go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
 ```
 
+Recommended interoperability evidence gate:
+
+```bash
+go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1 -v
+```
+
 ## Static Release Build Validation
 
 ```bash

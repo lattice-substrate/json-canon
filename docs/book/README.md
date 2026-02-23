@@ -41,4 +41,5 @@ For binding contracts, always prioritize the source-of-truth documents listed in
 - Conformance policy: `CONFORMANCE.md`
 - Release workflow: `RELEASE_PROCESS.md`
 - Artifact verification: `VERIFICATION.md`
+- Differential strictness examples: `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`
 - Offline harness runbook: `docs/OFFLINE_REPLAY_HARNESS.md`

@@ -17,6 +17,7 @@ Conformance is defined by the union of:
 - conformance tests in `conformance/harness_test.go`
 - vector corpus in `conformance/vectors/*.jsonl`
 - official external fixtures in `conformance/official/`
+- differential interoperability checks in `conformance/cyberphone_differential_test.go`
 - offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, and `offline/schema/evidence.v1.json`
 
 A release is non-conformant if any artifact is inconsistent with the others.
@@ -122,3 +123,8 @@ The repository SHOULD retain durable conformance evidence via:
 Project conformance is self-validated by internal executable evidence.
 External interoperability checks MAY be added but MUST NOT replace internal
 traceability gates.
+
+Current differential reference example:
+
+- `go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1`
+- `docs/CYBERPHONE_DIFFERENTIAL_EXAMPLES.md`
