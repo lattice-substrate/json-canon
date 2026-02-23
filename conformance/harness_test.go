@@ -1250,9 +1250,12 @@ func checkInputViolationExitCode(t *testing.T, h *harness) {
 
 func checkInternalWriteFailureExitCode(t *testing.T, h *harness) {
 	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("CLI-EXIT-004 conformance gate is Linux-only")
+	}
 	f, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
 	if err != nil {
-		t.Skipf("skip: cannot open /dev/full: %v", err)
+		t.Fatalf("open /dev/full: %v", err)
 	}
 	t.Cleanup(func() {
 		if closeErr := f.Close(); closeErr != nil {

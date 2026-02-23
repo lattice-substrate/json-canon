@@ -178,11 +178,11 @@ func parseCanonicalFromInput(positional []string, stdin io.Reader) ([]byte, []by
 	}
 	parsed, err := jcstoken.Parse(input)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("parse canonical input: %w", err)
 	}
 	canonical, err := jcs.Serialize(parsed)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("serialize canonical input: %w", err)
 	}
 	return input, canonical, nil
 }

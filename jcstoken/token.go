@@ -654,16 +654,24 @@ func (p *parser) scanIntegerPart(numStart int) *jcserr.Error {
 	}
 
 	if p.data[p.pos] == '0' {
-		p.pos++
-		if p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
-			return p.newError("leading zero in number")
-		}
-		return nil
+		return p.scanZeroIntegerPart()
 	}
 
 	if p.data[p.pos] < '1' || p.data[p.pos] > '9' {
 		return p.newErrorf(jcserr.InvalidGrammar, "invalid number character %q", string(p.data[p.pos]))
 	}
+	return p.scanNonZeroIntegerDigits(numStart)
+}
+
+func (p *parser) scanZeroIntegerPart() *jcserr.Error {
+	p.pos++
+	if p.pos < len(p.data) && isDigit(p.data[p.pos]) {
+		return p.newError("leading zero in number")
+	}
+	return nil
+}
+
+func (p *parser) scanNonZeroIntegerDigits(numStart int) *jcserr.Error {
 	for p.pos < len(p.data) && isDigit(p.data[p.pos]) {
 		p.pos++
 		// BOUND-NUMCHARS-001: fail fast during digit scanning.

@@ -52,6 +52,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
+- `parseCanonicalFromInput` now wraps parser/serializer errors with additional context while preserving failure-class extraction (`errors.As`/`%w`) for stable exit-class behavior.
+- Number parser integer-part scanner was refactored into smaller helper stages to satisfy strict complexity lint policy without suppressions.
+- `ABI.md` command-flag contract now explicitly matches runtime/manifest behavior: `canonicalize` accepts `--quiet` for command symmetry.
+- `CONFORMANCE.md` mandatory validation gate list now includes the pinned local golangci-lint command, aligning with `AGENTS.md` and `CONTRIBUTING.md`.
+- Conformance requirement check `CLI-EXIT-004` is now fail-closed on Linux if `/dev/full` cannot be opened (instead of skipping), removing silent gate bypass in supported runtime environments.
+- Release workflow offline evidence gates now reference the current cross-arch evidence bundle set and align arm64 matrix path with published release/verification docs (`offline/matrix.arm64.yaml`).
 - CI conformance workflow step now explicitly documents that it includes the official ES6 10k checksum gate.
 - Release workflow now includes an explicit `official ES6 100M checksum gate` step prior to publish jobs.
 - Release/conformance/verification docs now include the required command for the 100M official ES6 checksum gate.
