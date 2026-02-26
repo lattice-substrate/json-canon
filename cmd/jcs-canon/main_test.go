@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SolutionsExcite/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcserr"
 )
 
 type failingWriter struct{}

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/SolutionsExcite/json-canon/jcs"
-	"github.com/SolutionsExcite/json-canon/jcserr"
-	"github.com/SolutionsExcite/json-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/jcs"
+	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
 func canon(t *testing.T, in string) string {

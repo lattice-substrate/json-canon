@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SolutionsExcite/json-canon/offline/replay"
-	"github.com/SolutionsExcite/json-canon/offline/runtime/container"
-	"github.com/SolutionsExcite/json-canon/offline/runtime/executil"
-	"github.com/SolutionsExcite/json-canon/offline/runtime/libvirt"
+	"github.com/lattice-substrate/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/runtime/container"
+	"github.com/lattice-substrate/json-canon/offline/runtime/executil"
+	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
 )
 
 const boolTrue = "true"

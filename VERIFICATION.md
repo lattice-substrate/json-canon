@@ -13,7 +13,7 @@ This document describes how to verify the authenticity and integrity of
 Download the release artifacts from the GitHub Releases page:
 
 ```bash
-gh release download vX.Y.Z --repo SolutionsExcite/json-canon --dir ./release
+gh release download vX.Y.Z --repo lattice-substrate/json-canon --dir ./release
 ```
 
 ## 2. Verify Checksums
@@ -33,7 +33,7 @@ repository's CI workflow from the tagged source commit.
 
 ```bash
 gh attestation verify ./jcs-canon-linux/jcs-canon \
-  --repo SolutionsExcite/json-canon
+  --repo lattice-substrate/json-canon
 ```
 
 Successful output confirms:
@@ -46,7 +46,7 @@ Successful output confirms:
 To independently verify the binary is reproducible from source:
 
 ```bash
-git clone https://github.com/SolutionsExcite/json-canon.git
+git clone https://github.com/lattice-substrate/json-canon.git
 cd json-canon
 git checkout vX.Y.Z
 

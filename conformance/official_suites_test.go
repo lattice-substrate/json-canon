@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SolutionsExcite/json-canon/jcsfloat"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
 )
 
 const (

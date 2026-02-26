@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 const archArm64 = "arm64"

@@ -6,7 +6,7 @@
 navigate to the repository's **Security** tab -> **Advisories** -> **Report a vulnerability**.
 
 If GitHub private reporting is unavailable, email:
-`SolutionsExcite@gmail.com` (listed in `NOTICE`).
+`security@lattice-substrate.org` (listed in `NOTICE`).
 
 Do **not** open public issues for unpatched vulnerabilities.
 

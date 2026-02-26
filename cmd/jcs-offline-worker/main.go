@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 const maxVectorLineBytes = 4 * 1024 * 1024
