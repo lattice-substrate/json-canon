@@ -4,6 +4,12 @@ This directory contains official engineering documentation for `json-canon`.
 These documents are authoritative unless superseded by a newer committed
 document in this directory or by normative registries in the repository root.
 
+## Getting Started and Integration
+
+- `docs/QUICKSTART.md` - 5-minute getting started for Go library and CLI
+- `docs/INTEGRATION_GUIDE.md` - CI/CD patterns, error handling, resource limits, migration
+- `docs/COMPARISON.md` - evaluate json-canon vs alternatives (differentiators, feature matrix)
+
 ## Normative and ABI Sources
 
 - `REQ_REGISTRY_NORMATIVE.md`
@@ -41,6 +47,7 @@ document in this directory or by normative registries in the repository root.
 
 Recommended start points:
 
-1. Project orientation: `docs/book/README.md`
-2. System contracts: `ARCHITECTURE.md`, `SPECIFICATION.md`, `ABI.md`
-3. Release and trust: `CONFORMANCE.md`, `RELEASE_PROCESS.md`, `VERIFICATION.md`
+1. Getting started: `docs/QUICKSTART.md`
+2. Project orientation: `docs/book/README.md`
+3. System contracts: `ARCHITECTURE.md`, `SPECIFICATION.md`, `ABI.md`
+4. Release and trust: `CONFORMANCE.md`, `RELEASE_PROCESS.md`, `VERIFICATION.md`
