@@ -7,6 +7,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Developer-oriented documentation overhaul:
+  - `docs/QUICKSTART.md` — 5-minute getting started guide for Go library and CLI.
+  - `docs/INTEGRATION_GUIDE.md` — CI/CD patterns, error handling, resource limits, migration guides.
+  - `docs/COMPARISON.md` — evaluation guide with differential strictness table, feature matrix, and use-case guidance.
+  - `README.md` rewritten as a developer-oriented landing page with progressive disclosure to new guides and handbook.
+  - `docs/README.md` updated with new "Getting Started and Integration" section.
 - Official external conformance fixture packs under `conformance/official/`:
   - Cyberphone `testdata/{input,output,outhex}` vectors with pinned provenance metadata.
   - RFC 8785-derived fixtures for §3.2.3 key sorting and Appendix B finite number mappings.
