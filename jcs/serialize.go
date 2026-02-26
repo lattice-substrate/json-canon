@@ -13,9 +13,9 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"github.com/SolutionsExcite/json-canon/jcserr"
-	"github.com/SolutionsExcite/json-canon/jcsfloat"
-	"github.com/SolutionsExcite/json-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
+	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed

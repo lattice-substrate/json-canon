@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 func TestValidateEvidenceBundleParity(t *testing.T) {

@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SolutionsExcite/json-canon/jcs"
-	"github.com/SolutionsExcite/json-canon/jcserr"
-	"github.com/SolutionsExcite/json-canon/jcsfloat"
-	"github.com/SolutionsExcite/json-canon/jcstoken"
-	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/jcs"
+	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
+	"github.com/lattice-substrate/json-canon/jcstoken"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 type harness struct {

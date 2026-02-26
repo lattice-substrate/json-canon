@@ -52,7 +52,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
-- Module identity is now aligned to the public repository path (`github.com/SolutionsExcite/json-canon`) across `go.mod`, imports, CI package filters, and verification docs.
+- Module identity is now aligned to the public repository path (`github.com/lattice-substrate/json-canon`) across `go.mod`, imports, CI package filters, and verification docs.
 - Offline evidence contract now binds source identity via `source_git_commit` and `source_git_tag` in schema/model/validation.
 - Release workflow offline evidence gates now target per-tag evidence paths (`offline/runs/releases/<tag>/...`) and enforce expected commit/tag binding (`JCS_OFFLINE_EXPECTED_GIT_COMMIT`, `JCS_OFFLINE_EXPECTED_GIT_TAG`).
 - Release workflow now supports `workflow_dispatch` reruns, marks `-rc` tags as GitHub prereleases, and fails publish if artifact globs do not match (`fail_on_unmatched_files: true`).

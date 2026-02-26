@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SolutionsExcite/json-canon/offline/replay"
+	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
 func TestParseBoolToken(t *testing.T) {

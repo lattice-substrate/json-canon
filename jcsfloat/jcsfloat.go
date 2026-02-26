@@ -15,7 +15,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/SolutionsExcite/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcserr"
 )
 
 var bigTen = big.NewInt(10)
