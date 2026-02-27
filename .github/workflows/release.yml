@@ -97,6 +97,14 @@ jobs:
           cp NOTICE dist/
           cp README.md dist/
           cp CHANGELOG.md dist/
+          bundle="jcs-canon-linux-x86_64.tar.gz"
+          bundle_root="${bundle%.tar.gz}"
+          bundle_dir=".tmp/release-bundle/${bundle_root}"
+          mkdir -p "${bundle_dir}"
+          cp "dist/${bin}" "${bundle_dir}/"
+          cp LICENSE NOTICE README.md CHANGELOG.md "${bundle_dir}/"
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='UTC 1970-01-01' \
+            -C .tmp/release-bundle -czf "dist/${bundle}" "${bundle_root}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: jcs-canon-linux
@@ -114,7 +122,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find dist -type f -name 'jcs-canon' -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
+          find dist -type f \( -name 'jcs-canon' -o -name 'jcs-canon-linux-*.tar.gz' \) -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS
           cat dist/SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

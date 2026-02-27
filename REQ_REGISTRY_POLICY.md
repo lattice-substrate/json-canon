@@ -82,7 +82,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | SUPPLY-PIN-001 | CLAUDE | Security and Supply-Chain Requirements | MUST | All GitHub Actions workflow dependencies MUST be pinned to immutable full commit SHA references. |
-| SUPPLY-PROV-001 | CLAUDE | Security and Supply-Chain Requirements | MUST | Release workflow MUST publish checksums and build provenance attestation steps. |
+| SUPPLY-PROV-001 | CLAUDE | Security and Supply-Chain Requirements | MUST | Release workflow MUST publish checksums, a compressed Linux release bundle (`jcs-canon-linux-x86_64.tar.gz`), and build provenance attestation steps. |
 
 ## GOV — Governance Durability
 

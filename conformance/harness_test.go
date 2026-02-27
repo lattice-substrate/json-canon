@@ -2054,6 +2054,8 @@ func checkReleaseWorkflowVerificationArtifacts(t *testing.T, h *harness) {
 
 	assertContains(t, releaseWorkflow, "SHA256SUMS", "release workflow checksums")
 	assertContains(t, releaseWorkflow, "sha256sum", "release workflow checksums")
+	assertContains(t, releaseWorkflow, "jcs-canon-linux-x86_64.tar.gz", "release workflow compressed bundle")
+	assertContains(t, releaseWorkflow, "tar --sort=name", "release workflow compressed bundle")
 	assertContains(t, releaseWorkflow, "actions/attest-build-provenance@", "release workflow provenance")
 	assertContains(t, releaseWorkflow, "attestations: write", "release workflow permissions")
 	assertContains(t, releaseWorkflow, "id-token: write", "release workflow permissions")

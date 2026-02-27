@@ -6,6 +6,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Release workflow now emits a deterministic compressed Linux bundle (`jcs-canon-linux-x86_64.tar.gz`) and includes it in `SHA256SUMS` and published GitHub Release assets.
+
 ## [v0.2.0-rc.2] - 2026-02-26
 
 ### Fixed

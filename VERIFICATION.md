@@ -23,7 +23,7 @@ cd release
 sha256sum --check SHA256SUMS
 ```
 
-All listed binaries must show `OK`. Any mismatch indicates a corrupted or
+All listed artifacts must show `OK`. Any mismatch indicates a corrupted or
 tampered artifact.
 
 ## 3. Verify Build Provenance (SLSA Attestation)
@@ -32,7 +32,7 @@ Each binary has a GitHub-signed build attestation proving it was built by the
 repository's CI workflow from the tagged source commit.
 
 ```bash
-gh attestation verify ./jcs-canon-linux/jcs-canon \
+gh attestation verify ./jcs-canon-linux-x86_64.tar.gz \
   --repo lattice-substrate/json-canon
 ```
 
