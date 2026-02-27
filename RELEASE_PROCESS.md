@@ -46,6 +46,15 @@ A release is incomplete if verification steps are missing or invalid.
 
 For offline cold-replay assurance, release validation MUST include both architecture gates:
 
+Build the release-gate control binary with the exact release workflow Go patch
+version and release tag version string:
+
+```bash
+GOTOOLCHAIN=go1.24.13 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+  -ldflags="-s -w -buildid= -X main.version=<tag>" \
+  -o /abs/path/to/release-control/jcs-canon ./cmd/jcs-canon
+```
+
 ```bash
 JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \

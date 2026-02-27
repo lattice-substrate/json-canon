@@ -115,6 +115,15 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if !strings.Contains(releaseWorkflow, "offline evidence gate arm64") {
 		t.Fatal("release workflow missing explicit arm64 offline evidence gate")
 	}
+	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
+		t.Fatal("release workflow must fetch at least two commits for offline evidence parent-commit binding")
+	}
+	if !strings.Contains(releaseWorkflow, "go-version: '1.24.13'") {
+		t.Fatal("release workflow must pin go-version to exact patch for offline evidence control-binary determinism")
+	}
+	if !strings.Contains(releaseWorkflow, "git rev-parse --verify HEAD^") {
+		t.Fatal("release workflow must resolve expected evidence source commit via verified parent commit")
+	}
 }
 
 func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
