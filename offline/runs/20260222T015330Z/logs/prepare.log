@@ -1,4 +1,0 @@
-bundle: /home/lenny/json-canon/offline/runs/20260222T015330Z/offline-bundle.tgz
-binary_sha256: a2735b60b2da56663fc9f58bc34ccfd5f5f96baf41088c3a1abc0ae77ea7a402
-worker_sha256: 444bba269752be3dd0b59afaf775d2198662944c401e014a1b5241a0c767ba39
-vector_set_sha256: 4e944d8f5eec849c55f7fc4152a06c30af9907212bb98dd2128256287b906ee1

@@ -87,6 +87,9 @@ with at least:
 
 Use these to audit and archive proof.
 
+`offline/runs/...` outputs are operator-local artifacts and are not tracked in
+git.
+
 ## 5. How To Read Pass/Fail
 
 ### Pass conditions

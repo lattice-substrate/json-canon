@@ -3,6 +3,10 @@
 /lattice-canon
 dist/
 
+# Local offline replay artifacts (binaries, bundles, logs, and evidence outputs).
+offline/runs/*
+!offline/runs/.gitkeep
+
 # OS artifacts
 .DS_Store
 
