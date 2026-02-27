@@ -6,6 +6,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.2.0] - 2026-02-27
+
 ### Fixed
 - Release workflow now emits a deterministic compressed Linux bundle (`jcs-canon-linux-x86_64.tar.gz`) and includes it in `SHA256SUMS` and published GitHub Release assets.
 - Release workflow offline evidence gate now pins Go to `1.24.13`, uses `actions/checkout` with `fetch-depth: 2`, and resolves the parent commit via `git rev-parse --verify HEAD^` to prevent control-binary/toolchain drift and shallow-clone `HEAD~1` mis-resolution.
