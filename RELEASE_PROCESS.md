@@ -33,10 +33,10 @@ Before creating a release tag, all MUST be true:
 
 Each release SHOULD include:
 
-1. `jcs-canon` binary,
-2. `SHA256SUMS`,
-3. provenance attestation,
-4. `LICENSE`, `NOTICE`, `README.md`, and `CHANGELOG.md` snapshot.
+1. compressed Linux release bundle: `jcs-canon-linux-x86_64.tar.gz` (contains `jcs-canon`, `LICENSE`, `NOTICE`, `README.md`, `CHANGELOG.md`),
+2. raw `jcs-canon` binary,
+3. `SHA256SUMS`,
+4. provenance attestation.
 
 ## Verification Requirements
 
