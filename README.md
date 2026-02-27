@@ -1,5 +1,10 @@
 # json-canon
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/lattice-substrate/json-canon.svg)](https://pkg.go.dev/github.com/lattice-substrate/json-canon)
+[![Go Report Card](https://goreportcard.com/badge/github.com/lattice-substrate/json-canon)](https://goreportcard.com/report/github.com/lattice-substrate/json-canon)
+[![CI](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml/badge.svg)](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml)
+[![Coverage](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml/badge.svg)](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml)
+
 Deterministic JSON for signing, hashing, and audit trails.
 
 ## The Problem

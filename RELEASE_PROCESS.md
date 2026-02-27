@@ -21,6 +21,7 @@ Before creating a release tag, all MUST be true:
 1. Patch: bug fixes only, no ABI changes.
 2. Minor: backward-compatible additions.
 3. Major: required for breaking ABI changes.
+4. Published version tags are immutable: never force-move, recreate, or retag an existing `vX.Y.Z`.
 
 ## Tagging and Build
 
