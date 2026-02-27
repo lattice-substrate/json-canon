@@ -5,8 +5,7 @@ This handbook is the chaptered guide for `json-canon`.
 Use it to understand what the project is for, what guarantees it makes, how to
 operate it, and how to evaluate release candidates.
 
-For binding contracts, always prioritize the source-of-truth documents listed in
-`AGENTS.md` and `docs/README.md`.
+For binding contracts, always prioritize the source-of-truth documents listed in `docs/README.md`.
 
 ## Table of Contents
 
