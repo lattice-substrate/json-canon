@@ -2,12 +2,12 @@
 
 This document records executable differential cases between:
 
-- Cyberphone Go package:
-  `github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer`
+- recorded Cyberphone Go outputs (captured as fixture data in the differential test),
 - `json-canon` CLI (`jcs-canon canonicalize`)
 
 The cases are encoded as a Go test in
 `conformance/cyberphone_differential_test.go`.
+The test does not import external modules.
 
 ## Cases
 
