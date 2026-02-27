@@ -65,6 +65,12 @@ git.
 For release gate validation (x86_64 and arm64):
 
 ```bash
+GOTOOLCHAIN=go1.24.13 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+  -ldflags="-s -w -buildid= -X main.version=<tag>" \
+  -o /abs/path/to/release-control/jcs-canon ./cmd/jcs-canon
+```
+
+```bash
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \

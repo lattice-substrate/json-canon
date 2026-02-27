@@ -17,9 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24.x'
+          go-version: '1.24.13'
       - name: go vet
         run: go vet ./...
       - name: unit tests
@@ -34,7 +36,13 @@ jobs:
         run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
       - name: resolve evidence source commit
         id: evidence-source
-        run: echo "commit=$(git rev-parse HEAD~1)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp
+          git rev-parse --verify HEAD^ > .tmp/evidence-source-commit
+          read -r commit < .tmp/evidence-source-commit
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
       - name: build release control binary for offline evidence gate
         shell: bash
         run: |
@@ -83,9 +91,11 @@ jobs:
         os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24.x'
+          go-version: '1.24.13'
       - name: Build binary
         shell: bash
         run: |
