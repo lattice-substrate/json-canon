@@ -6,6 +6,18 @@ This document defines the stable CLI ABI contract for `json-canon` in a
 human-readable form. The machine-readable source of truth is
 `abi_manifest.json`; both documents must remain consistent.
 
+## Why ABI Stability Is Non-Negotiable
+
+When systems depend on a canonicalizer as an infrastructure primitive, they
+pin its version and build automation around its command surface, exit codes,
+and output byte contract. A silent change to any of these — a renamed flag,
+a shifted exit code, a different byte sequence for the same input — breaks
+every dependent system simultaneously.
+
+Strict SemVer is not a policy preference. It is the mechanism that prevents
+a canonicalizer upgrade from becoming a coordinated emergency across every
+system that depends on byte-identical output.
+
 ## Stability Policy
 
 The ABI follows strict SemVer.

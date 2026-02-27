@@ -22,6 +22,32 @@ Conformance is defined by the union of:
 
 A release is non-conformant if any artifact is inconsistent with the others.
 
+## Why These Gates Exist
+
+Infrastructure primitives that produce canonical bytes for signing, hashing,
+and replay cannot afford nondeterminism discovered after deployment. The cost
+model is inverted: the cost of exhaustive pre-release evidence is low compared
+to the cost of a single byte-level divergence in production, which invalidates
+signatures, breaks content-addressed lookups, and fails determinism proofs
+across dependent systems.
+
+Each gate layer addresses a distinct failure mode:
+
+- **Unit tests** prove local invariants for individual functions.
+- **Conformance checks** prove that every traced requirement is implemented
+  and tested — not just claimed.
+- **Oracle vectors** (286,000+) prove ECMA-262 number formatting correctness
+  against an independent reference, eliminating the risk of self-consistent
+  but wrong output.
+- **Race and static analysis** prove absence of data races and common defects
+  that could cause nondeterministic output under concurrent use.
+- **Offline replay** proves behavioral stability across Linux distributions,
+  kernel versions, and CPU architectures — extending trust beyond the CI
+  environment into conditions that match production deployment.
+- **Traceability validation** proves that requirement-to-test mappings remain
+  complete — a requirement without a test is an unverified claim, which is
+  equivalent to no requirement at all.
+
 ## Required Conformance Properties
 
 1. Every requirement ID exists in exactly one registry.
