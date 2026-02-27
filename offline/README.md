@@ -57,6 +57,9 @@ Each full run emits an `offline/runs/...` directory containing:
 - checksums (`audit/bundle.sha256`, `audit/evidence.sha256`)
 - run index (`RUN_INDEX.txt`)
 
+`offline/runs/...` is operator-local output and is intentionally not tracked in
+git.
+
 ## Release Gate
 
 For release gate validation (x86_64 and arm64):

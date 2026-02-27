@@ -1,4 +1,0 @@
-bundle: /home/lenny/json-canon/offline/runs/cross-arch-20260222T073846Z/x86_64/offline-bundle.tgz
-binary_sha256: 9d5cbafb519db7afe58e8fa50a3d03d64f2f9f8375a824e298263ce0f68b3868
-worker_sha256: 6d5b2ebdc70149ec550007d86c0e963b2a6f237fb3c13dd129b2d6de98c4ede6
-vector_set_sha256: 4e944d8f5eec849c55f7fc4152a06c30af9907212bb98dd2128256287b906ee1
