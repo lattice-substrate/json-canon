@@ -6,6 +6,17 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.2.0-rc.2] - 2026-02-26
+
+### Fixed
+- Release workflow evidence gate now correctly resolves the evidence source commit (`HEAD~1`) instead of the tagged commit, fixing a structural mismatch where evidence always binds to the parent of the commit containing evidence files.
+
+### Changed
+- Release documentation now explicitly describes the evidence commit sequence and source-identity binding model.
+- Documentation now explains the engineering rationale ("why") behind architectural decisions, governance weight, conformance gates, ABI stability, and the infrastructure-grade design model.
+
+## [v0.1.0-rc.2] - 2026-02-26
+
 ### Added
 - Developer-oriented documentation overhaul:
   - `docs/QUICKSTART.md` — 5-minute getting started guide for Go library and CLI.
@@ -58,6 +69,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Full offline proof runbook in `docs/OFFLINE_REPLAY_HARNESS.md`.
 
 ### Changed
+- Evidence schema `$id` URL updated from `solutionsexcite.github.io` to `lattice-substrate.github.io` to match module org migration.
 - Module identity is now aligned to the public repository path (`github.com/lattice-substrate/json-canon`) across `go.mod`, imports, CI package filters, and verification docs.
 - Offline evidence contract now binds source identity via `source_git_commit` and `source_git_tag` in schema/model/validation.
 - Release workflow offline evidence gates now target per-tag evidence paths (`offline/runs/releases/<tag>/...`) and enforce expected commit/tag binding (`JCS_OFFLINE_EXPECTED_GIT_COMMIT`, `JCS_OFFLINE_EXPECTED_GIT_TAG`).

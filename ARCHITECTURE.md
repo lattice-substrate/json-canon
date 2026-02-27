@@ -39,6 +39,12 @@ This architecture covers:
 
 Dependency direction is inward only (L5 -> L1).
 
+One-way layering is a determinism-preservation constraint: higher-level
+concerns (CLI flags, I/O policies) cannot contaminate lower-level guarantees
+(number formatting, key sorting, error classification). Each layer's
+correctness is provable in isolation, which means a refactor at one layer
+cannot silently break invariants at another.
+
 ## Primary Execution Flows
 
 ### Canonicalize Flow
@@ -78,8 +84,14 @@ Determinism is an architectural property, not a test-only property.
 
 ## Number Formatting Subsystem
 
-`jcsfloat` is a dedicated subsystem to avoid stdlib behavior drift and generic
-JSON formatter limitations.
+`jcsfloat` exists because `strconv.FormatFloat` and `encoding/json` are not
+contractually bound to ECMA-262 Number::toString semantics. Their output can
+change across Go versions without notice. A canonicalization primitive that
+delegates number formatting to stdlib inherits that instability — any
+formatting drift produces different canonical bytes, breaking every downstream
+signature and hash. `jcsfloat` uses a hand-written Burger-Dybvig algorithm with
+even-digit tie-breaking, validated against 286,000+ oracle vectors, to eliminate
+this dependency.
 
 Subsystem invariants:
 
@@ -118,6 +130,13 @@ Runtime surface is intentionally narrow:
 2. Static release binary (`CGO_ENABLED=0`).
 3. No outbound network calls in core runtime.
 4. No subprocess execution in core runtime.
+
+These constraints exist because canonicalization primitives operate at trust
+boundaries. When a system uses canonical bytes as the basis for signatures,
+hashes, or determinism proofs, the canonicalizer's runtime surface is part of
+the system's attack surface. Network calls, subprocess execution, and dynamic
+linking introduce vectors that can alter output bytes in ways that are
+difficult to audit and impossible to replay offline.
 
 ## Architecture Change Policy
 

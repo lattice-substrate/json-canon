@@ -1,0 +1,9 @@
+offline_cold_replay_run_dir=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64
+matrix=offline/matrix.yaml
+profile=offline/profiles/maximal.yaml
+bundle=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/offline-bundle.tgz
+evidence=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/offline-evidence.json
+controller=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/bin/jcs-offline-replay
+canonicalizer=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/bin/jcs-canon
+audit_markdown=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/audit/audit-summary.md
+audit_json=/home/lenny/json-canon/offline/runs/releases/v0.1.0-rc.2/x86_64/audit/audit-summary.json

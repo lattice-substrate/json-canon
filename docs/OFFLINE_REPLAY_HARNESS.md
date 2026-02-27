@@ -184,5 +184,12 @@ JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
+**Parent-commit binding model:** Evidence records `source_git_commit` at
+generation time (commit A). Evidence files are then committed on top (commit B),
+and the release tag points to commit B. Because evidence always binds to the
+commit where it was generated, `<release-commit-sha>` above refers to commit A
+(the parent of the tagged commit), not the tagged commit itself. The release
+workflow resolves this automatically via `HEAD~1`.
+
 This is the final executable gate that the archived evidence is complete and
 policy-conformant.

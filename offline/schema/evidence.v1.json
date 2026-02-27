@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://solutionsexcite.github.io/json-canon/offline/schema/evidence.v1.json",
+  "$id": "https://lattice-substrate.github.io/json-canon/offline/schema/evidence.v1.json",
   "title": "json-canon offline replay evidence v1",
   "type": "object",
   "additionalProperties": false,

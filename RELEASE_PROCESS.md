@@ -87,7 +87,8 @@ For release tagging, move the validated cross-arch output under:
 
 and ensure `offline-evidence.json` records:
 
-- `source_git_commit` matching the release commit SHA,
+- `source_git_commit` matching the evidence generation commit (parent of the
+  tagged commit),
 - `source_git_tag` matching the release tag.
 
 For interoperability regression evidence, maintainers SHOULD also run:
@@ -95,6 +96,30 @@ For interoperability regression evidence, maintainers SHOULD also run:
 ```bash
 go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1
 ```
+
+## Evidence Commit Sequence
+
+Offline evidence records `source_git_commit` at generation time using
+`git rev-parse HEAD`. The evidence files are then committed on top of that
+commit, producing a new SHA. The release tag points to this evidence commit.
+
+The correct commit sequence is:
+
+```
+Commit A:  all code/doc changes         ← evidence records this SHA
+Commit B:  evidence files only           ← tag points here
+```
+
+1. Finalize all code and documentation changes (commit A).
+2. Generate offline evidence with `JCS_OFFLINE_SOURCE_GIT_TAG=<tag>` — evidence
+   binds `source_git_commit` to commit A.
+3. Commit evidence files only (commit B).
+4. Create annotated tag on commit B.
+
+Because a commit can never contain its own SHA, the evidence source commit is
+structurally always the parent of the tagged commit. The release workflow
+resolves this by comparing against `HEAD~1` (commit A) rather than `HEAD`
+(commit B).
 
 ## Release Checklist
 

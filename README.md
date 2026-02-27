@@ -62,6 +62,39 @@ echo '{"b":2,"a":1}' | jcs-canon canonicalize -
 jcs-canon verify document.json
 ```
 
+## Why This Approach
+
+json-canon is designed as a canonicalization primitive for systems where
+governed artifacts are compared by raw bytes. In these systems, nondeterminism
+in JSON rendering is not a formatting inconvenience — it is a correctness
+failure that breaks signatures, invalidates content-addressed hashes, and
+causes replay-based determinism proofs to fail.
+
+This shapes every engineering decision in the project:
+
+- **Custom parser and serializer** — `encoding/json` semantics can change
+  across Go versions. A canonicalization primitive cannot tolerate formatting
+  drift, so json-canon owns every byte of its output through a hand-written
+  strict parser and ECMA-262-compatible number formatter.
+- **Strict input rejection** — accepting invalid JSON silently (as some
+  implementations do) means two systems may canonicalize the same malformed
+  input differently. Strict rejection eliminates this class of divergence.
+- **Stable ABI under SemVer** — when downstream systems pin a canonicalizer
+  version, breaking changes in commands, exit codes, or output bytes force
+  coordinated upgrades across the entire dependency tree. Strict versioning
+  prevents surprise breakage.
+- **Exhaustive conformance gates** — unit tests prove local behavior;
+  286,000+ oracle vectors prove number formatting correctness; offline replay
+  proves stability across architectures and kernel versions. Infrastructure
+  primitives cannot afford nondeterminism discovered in production.
+- **Traced requirements** — every normative behavior maps from an RFC clause
+  to a requirement ID to an implementation symbol to a test. This traceability
+  is not process theater — it is the only way to prove that a conformance
+  claim is actually enforced.
+
+For the full rationale, see [Why This Exists](docs/book/03-why-this-exists.md)
+in the engineering handbook.
+
 ## When to Use
 
 - Signing or hashing JSON documents — you need byte-deterministic output.
@@ -142,6 +175,7 @@ go test ./conformance -count=1 -v -timeout=10m
 - [`docs/COMPARISON.md`](docs/COMPARISON.md) — evaluate json-canon vs alternatives
 
 **Architecture and contracts:**
+- [`docs/book/03-why-this-exists.md`](docs/book/03-why-this-exists.md) — why json-canon is engineered this way
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — package boundaries, runtime model
 - [`ABI.md`](ABI.md) — stable CLI contract
 - [`SPECIFICATION.md`](SPECIFICATION.md) — normative behavior contract
