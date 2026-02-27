@@ -12,6 +12,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Repository hygiene for public visibility: removed tracked `offline/runs/...` artifacts (local binaries, bundles, logs, and machine-path-bearing outputs) and now ignore this path by default.
+- Removed the Cyberphone Go module dependency from test code (`go.mod` is now dependency-free) by converting differential conformance checks to recorded-output vectors.
 
 ## [v0.2.0-rc.2] - 2026-02-26
 

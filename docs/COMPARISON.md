@@ -28,7 +28,7 @@ implementations and decide whether it fits their use case.
 
 These cases demonstrate where `json-canon` rejects inputs that Cyberphone Go
 silently accepts and canonicalizes. All cases are encoded as executable tests in
-`conformance/cyberphone_differential_test.go`.
+`conformance/cyberphone_differential_test.go` with recorded differential outputs.
 
 | Case | Input | Cyberphone Go | json-canon |
 |------|-------|---------------|------------|
@@ -40,54 +40,16 @@ silently accepts and canonicalizes. All cases are encoded as executable tests in
 
 Full details: [CYBERPHONE_DIFFERENTIAL_EXAMPLES.md](CYBERPHONE_DIFFERENTIAL_EXAMPLES.md).
 
-## Live Differential Demo
+## Differential Gate
 
-Copy-paste this block from the repo root to see concrete non-compliance
-acceptance in Cyberphone Go and strict rejection in `json-canon`:
+Run the recorded differential strictness gate:
 
 ```bash
-cat > /tmp/cyberphone-canon-demo.go <<'EOF'
-package main
-
-import (
-	"fmt"
-	"io"
-	"os"
-
-	cyberphone "github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer"
-)
-
-func main() {
-	in, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read error: %v\n", err)
-		os.Exit(2)
-	}
-	out, err := cyberphone.Transform(in)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-	_, _ = os.Stdout.Write(out)
-}
-EOF
-
-echo "== Case 1: hex float literal (invalid JSON) =="
-printf '%s' '{"n":0x1p-2}' | go run /tmp/cyberphone-canon-demo.go ; echo
-printf '%s' '{"n":0x1p-2}' | go run ./cmd/jcs-canon canonicalize -
-
-echo "== Case 2: plus-prefixed number (invalid JSON) =="
-printf '%s' '{"n":+1}' | go run /tmp/cyberphone-canon-demo.go ; echo
-printf '%s' '{"n":+1}' | go run ./cmd/jcs-canon canonicalize -
-
-echo "== Case 3: leading zero number (invalid JSON) =="
-printf '%s' '{"n":01}' | go run /tmp/cyberphone-canon-demo.go ; echo
-printf '%s' '{"n":01}' | go run ./cmd/jcs-canon canonicalize -
+go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=1 -v
 ```
 
-Expected behavior:
-- Cyberphone emits canonical-looking JSON for these invalid numeric forms.
-- `json-canon` rejects them with deterministic parse-class failures.
+Expected behavior: `json-canon` rejects all listed malformed inputs with stable
+failure classes (`INVALID_GRAMMAR`, `INVALID_UTF8`, `LONE_SURROGATE`).
 
 ## When json-canon Is the Right Choice
 
