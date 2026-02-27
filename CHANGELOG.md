@@ -6,6 +6,14 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- New `Coverage` CI workflow (`.github/workflows/coverage.yml`) that publishes `coverage.out` and `coverage-summary.txt` artifacts for each run.
+
+### Changed
+- README now includes discoverability and quality badges for pkg.go.dev, Go Report Card, CI, and Coverage workflow status.
+- Release policy now explicitly states that published SemVer tags are immutable and must never be force-moved or recreated.
+- Repository metadata and topic classification on GitHub were populated for improved public discoverability.
+
 ## [v0.2.0] - 2026-02-27
 
 ### Fixed

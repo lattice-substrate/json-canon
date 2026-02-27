@@ -18,3 +18,6 @@ offline/runs/*
 # Go test artifacts
 *.test
 *.out
+
+# Local temporary workspace files
+/.tmp/
