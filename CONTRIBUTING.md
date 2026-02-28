@@ -29,6 +29,17 @@ go run ./cmd/jcs-gate
 
 Lint is a required gate and must pass before merge.
 
+## Pre-Push Hook (Optional)
+
+To catch vet and lint failures before pushing release tags:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This runs `go vet` and `golangci-lint` automatically when pushing `v*` tags.
+Normal branch pushes are not affected.
+
 ## Tooling Policy (Infrastructure/ABI)
 
 - Required validation and release-critical automation must be Go-native (`go test`, Go code, or Go tools).

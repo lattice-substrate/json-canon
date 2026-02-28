@@ -6,6 +6,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Optional pre-push git hook (`.githooks/pre-push`) that validates vet and lint before tag pushes.
+
+### Fixed
+- Release workflow offline evidence gate now derives `source_git_commit`/`source_git_tag` from archived evidence and builds the control binary from that commit, preventing false failures when a tag is not exactly one commit after evidence generation.
+
 ## [v0.2.1] - 2026-02-27
 
 ### Fixed
