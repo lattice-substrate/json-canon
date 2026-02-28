@@ -1,0 +1,4 @@
+=== RUN   TestOfflineReplayEvidenceReleaseGate
+--- PASS: TestOfflineReplayEvidenceReleaseGate (0.00s)
+PASS
+ok  	github.com/lattice-substrate/json-canon/offline/conformance	0.008s
