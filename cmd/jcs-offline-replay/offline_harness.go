@@ -763,7 +763,10 @@ func runCommandCapture(name string, args ...string) (string, error) {
 func resolveRepoRoot() string {
 	out, err := runCommandCapture("git", "rev-parse", "--show-toplevel")
 	if err != nil {
-		cwd, _ := os.Getwd()
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			return "."
+		}
 		return cwd
 	}
 	return strings.TrimSpace(out)
