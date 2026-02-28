@@ -196,9 +196,11 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 		return err
 	}
 
+	repoRoot := resolveRepoRoot()
+
 	compareJSON := filepath.Join(outDirAbs, "cross-arch-compare.json")
 	compareMD := filepath.Join(outDirAbs, "cross-arch-compare.md")
-	report, err := compareCrossArchEvidence(x86Run.EvidencePath, armRun.EvidencePath, compareJSON, compareMD)
+	report, err := compareCrossArchEvidence(x86Run.EvidencePath, armRun.EvidencePath, compareJSON, compareMD, repoRoot)
 	if err != nil {
 		return err
 	}
@@ -257,7 +259,8 @@ func cmdAuditSummary(flags map[string]string, stdout io.Writer) error {
 		return fmt.Errorf("audit-summary requires --matrix, --profile, --evidence")
 	}
 	outputDir := strings.TrimSpace(flags["--output-dir"])
-	controllerReport, summary, markdown, err := buildAuditOutputs(matrixPath, profilePath, evidencePath)
+	repoRoot := resolveRepoRoot()
+	controllerReport, summary, markdown, err := buildAuditOutputs(matrixPath, profilePath, evidencePath, repoRoot)
 	if err != nil {
 		return err
 	}
@@ -340,6 +343,8 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	if strings.TrimSpace(opts.Version) == "" {
 		opts.Version = defaultBuildVersion
 	}
+	repoRoot := resolveRepoRoot()
+
 	outDirAbs, err := filepath.Abs(opts.OutputDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve output dir: %w", err)
@@ -448,7 +453,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}
 
 	if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "audit.log"), stdout, func(w io.Writer) error {
-		_, _, _, auditErr := writeAuditOutputs(opts.MatrixPath, opts.ProfilePath, evidencePath, filepath.Join(outDirAbs, "audit"), controllerReport, w)
+		_, _, _, auditErr := writeAuditOutputs(opts.MatrixPath, opts.ProfilePath, evidencePath, filepath.Join(outDirAbs, "audit"), controllerReport, repoRoot, w)
 		return auditErr
 	}); stepErr != nil {
 		return nil, stepErr
@@ -464,10 +469,10 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		return nil, stepErr
 	}
 
-	if checksumErr := writeChecksumFile(filepath.Join(outDirAbs, "audit", "bundle.sha256"), bundlePath); checksumErr != nil {
+	if checksumErr := writeChecksumFile(filepath.Join(outDirAbs, "audit", "bundle.sha256"), bundlePath, repoRoot); checksumErr != nil {
 		return nil, checksumErr
 	}
-	if checksumErr := writeChecksumFile(filepath.Join(outDirAbs, "audit", "evidence.sha256"), evidencePath); checksumErr != nil {
+	if checksumErr := writeChecksumFile(filepath.Join(outDirAbs, "audit", "evidence.sha256"), evidencePath, repoRoot); checksumErr != nil {
 		return nil, checksumErr
 	}
 
@@ -479,7 +484,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		CanonicalPath:  canonBin,
 		MatrixPath:     opts.MatrixPath,
 		ProfilePath:    opts.ProfilePath,
-	}); indexErr != nil {
+	}, repoRoot); indexErr != nil {
 		return nil, indexErr
 	}
 
@@ -755,6 +760,26 @@ func runCommandCapture(name string, args ...string) (string, error) {
 	return strings.TrimSpace(out.String()), err
 }
 
+func resolveRepoRoot() string {
+	out, err := runCommandCapture("git", "rev-parse", "--show-toplevel")
+	if err != nil {
+		cwd, _ := os.Getwd()
+		return cwd
+	}
+	return strings.TrimSpace(out)
+}
+
+func toRepoRelative(repoRoot, absPath string) string {
+	if !filepath.IsAbs(absPath) {
+		return absPath
+	}
+	rel, err := filepath.Rel(repoRoot, absPath)
+	if err != nil {
+		return absPath
+	}
+	return rel
+}
+
 func runSSHProbe(target, options string) (string, error) {
 	args := make([]string, 0, 12)
 	if strings.TrimSpace(options) != "" && strings.TrimSpace(options) != "-" {
@@ -822,7 +847,7 @@ func containsLine(text, want string) bool {
 	return false
 }
 
-func buildAuditOutputs(matrixPath, profilePath, evidencePath string) (string, auditSummary, string, error) {
+func buildAuditOutputs(matrixPath, profilePath, evidencePath, repoRoot string) (string, auditSummary, string, error) {
 	if err := cmdVerifyEvidence(map[string]string{
 		"--matrix":   matrixPath,
 		"--profile":  profilePath,
@@ -840,18 +865,18 @@ func buildAuditOutputs(matrixPath, profilePath, evidencePath string) (string, au
 	if err != nil {
 		return "", auditSummary{}, "", fmt.Errorf("load evidence: %w", err)
 	}
-	summary := buildAuditSummary(evidence, matrixPath, profilePath, evidencePath, wallClockNowUTC())
+	summary := buildAuditSummary(evidence, matrixPath, profilePath, toRepoRelative(repoRoot, evidencePath), wallClockNowUTC())
 	markdown := renderAuditSummaryMarkdown(summary)
 	return reportOut, summary, markdown, nil
 }
 
 //nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 audit output writer keeps artifact writes and diagnostics explicit.
-func writeAuditOutputs(matrixPath, profilePath, evidencePath, outputDir, controllerReport string, out io.Writer) (auditSummary, string, string, error) {
+func writeAuditOutputs(matrixPath, profilePath, evidencePath, outputDir, controllerReport, repoRoot string, out io.Writer) (auditSummary, string, string, error) {
 	evidence, err := replay.LoadEvidence(evidencePath)
 	if err != nil {
 		return auditSummary{}, "", "", fmt.Errorf("load evidence: %w", err)
 	}
-	summary := buildAuditSummary(evidence, matrixPath, profilePath, evidencePath, wallClockNowUTC())
+	summary := buildAuditSummary(evidence, matrixPath, profilePath, toRepoRelative(repoRoot, evidencePath), wallClockNowUTC())
 	markdown := renderAuditSummaryMarkdown(summary)
 
 	jsonPath := filepath.Join(outputDir, "audit-summary.json")
@@ -1017,7 +1042,7 @@ func renderAuditSummaryMarkdown(summary auditSummary) string {
 	return strings.Join(lines, "\n")
 }
 
-func compareCrossArchEvidence(x86EvidencePath, armEvidencePath, jsonPath, mdPath string) (*crossArchReport, error) {
+func compareCrossArchEvidence(x86EvidencePath, armEvidencePath, jsonPath, mdPath, repoRoot string) (*crossArchReport, error) {
 	x86Evidence, err := replay.LoadEvidence(x86EvidencePath)
 	if err != nil {
 		return nil, fmt.Errorf("load x86 evidence: %w", err)
@@ -1026,7 +1051,7 @@ func compareCrossArchEvidence(x86EvidencePath, armEvidencePath, jsonPath, mdPath
 	if err != nil {
 		return nil, fmt.Errorf("load arm64 evidence: %w", err)
 	}
-	report := buildCrossArchReport(x86Evidence, armEvidence, x86EvidencePath, armEvidencePath, wallClockNowUTC())
+	report := buildCrossArchReport(x86Evidence, armEvidence, toRepoRelative(repoRoot, x86EvidencePath), toRepoRelative(repoRoot, armEvidencePath), wallClockNowUTC())
 	if err := writeCrossArchReport(report, jsonPath, mdPath); err != nil {
 		return nil, err
 	}
@@ -1172,29 +1197,29 @@ func runLoggedStepCapture(logPath string, stdout io.Writer, fn func(io.Writer) e
 	return buf.String(), nil
 }
 
-func writeChecksumFile(outputPath, artifactPath string) error {
+func writeChecksumFile(outputPath, artifactPath, repoRoot string) error {
 	sum, err := fileSHA256(artifactPath)
 	if err != nil {
 		return err
 	}
-	line := sum + "  " + artifactPath + "\n"
+	line := sum + "  " + toRepoRelative(repoRoot, artifactPath) + "\n"
 	if err := os.WriteFile(outputPath, []byte(line), filePerm); err != nil {
 		return fmt.Errorf("write checksum file %s: %w", outputPath, err)
 	}
 	return nil
 }
 
-func writeRunIndex(path string, artifacts runSuiteArtifacts) error {
+func writeRunIndex(path string, artifacts runSuiteArtifacts, repoRoot string) error {
 	content := strings.Join([]string{
-		"offline_cold_replay_run_dir=" + artifacts.OutputDir,
+		"offline_cold_replay_run_dir=" + toRepoRelative(repoRoot, artifacts.OutputDir),
 		"matrix=" + artifacts.MatrixPath,
 		"profile=" + artifacts.ProfilePath,
-		"bundle=" + artifacts.BundlePath,
-		"evidence=" + artifacts.EvidencePath,
-		"controller=" + artifacts.ControllerPath,
-		"canonicalizer=" + artifacts.CanonicalPath,
-		"audit_markdown=" + filepath.Join(artifacts.OutputDir, "audit", "audit-summary.md"),
-		"audit_json=" + filepath.Join(artifacts.OutputDir, "audit", "audit-summary.json"),
+		"bundle=" + toRepoRelative(repoRoot, artifacts.BundlePath),
+		"evidence=" + toRepoRelative(repoRoot, artifacts.EvidencePath),
+		"controller=" + toRepoRelative(repoRoot, artifacts.ControllerPath),
+		"canonicalizer=" + toRepoRelative(repoRoot, artifacts.CanonicalPath),
+		"audit_markdown=" + toRepoRelative(repoRoot, filepath.Join(artifacts.OutputDir, "audit", "audit-summary.md")),
+		"audit_json=" + toRepoRelative(repoRoot, filepath.Join(artifacts.OutputDir, "audit", "audit-summary.json")),
 	}, "\n") + "\n"
 	if err := os.WriteFile(path, []byte(content), filePerm); err != nil {
 		return fmt.Errorf("write run index: %w", err)
