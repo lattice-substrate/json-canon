@@ -34,23 +34,58 @@ jobs:
         env:
           JCS_OFFICIAL_ES6_ENABLE_100M: "1"
         run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
-      - name: resolve evidence source commit
+      - name: resolve evidence source metadata
         id: evidence-source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p .tmp
-          git rev-parse --verify HEAD^ > .tmp/evidence-source-commit
-          read -r commit < .tmp/evidence-source-commit
+          evidence_path="offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-evidence.json"
+          if [[ ! -f "${evidence_path}" ]]; then
+            echo "::error::missing offline evidence: ${evidence_path}"
+            exit 1
+          fi
+
+          commit="$(jq -r '.source_git_commit // empty' "${evidence_path}")"
+          tag="$(jq -r '.source_git_tag // empty' "${evidence_path}")"
+          if [[ -z "${commit}" || -z "${tag}" ]]; then
+            echo "::error::offline evidence missing source_git_commit/source_git_tag"
+            exit 1
+          fi
+          if [[ ! "${commit}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::offline evidence source_git_commit is not a full SHA: ${commit}"
+            exit 1
+          fi
+          if [[ "${tag}" != "${GITHUB_REF_NAME}" ]]; then
+            echo "::error::offline evidence source_git_tag ${tag} does not match release tag ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          if ! git cat-file -e "${commit}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "${commit}"
+          fi
+
           echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       - name: build release control binary for offline evidence gate
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .tmp/release-offline-control
-          CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-            -ldflags="-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
-            -o .tmp/release-offline-control/jcs-canon ./cmd/jcs-canon
+          source_tree=".tmp/release-offline-source"
+          control_binary="${GITHUB_WORKSPACE}/.tmp/release-offline-control/jcs-canon"
+          rm -rf "${source_tree}"
+
+          cleanup() {
+            git worktree remove --force "${source_tree}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          git worktree add --detach "${source_tree}" "${{ steps.evidence-source.outputs.commit }}"
+          (
+            cd "${source_tree}"
+            CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+              -ldflags="-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
+              -o "${control_binary}" ./cmd/jcs-canon
+          )
       - name: offline evidence gate x86_64
         env:
           JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/x86_64/offline-evidence.json
@@ -59,7 +94,7 @@ jobs:
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.yaml
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
-          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ github.ref_name }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: offline evidence gate arm64
         env:
@@ -69,7 +104,7 @@ jobs:
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.arm64.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.arm64.yaml
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
-          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ github.ref_name }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
