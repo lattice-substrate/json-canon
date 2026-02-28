@@ -3,8 +3,12 @@ name: Coverage
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'articles/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'articles/**'
 
 jobs:
   coverage:

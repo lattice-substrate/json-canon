@@ -11,6 +11,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - Release workflow offline evidence gate now derives `source_git_commit`/`source_git_tag` from archived evidence and builds the control binary from that commit, preventing false failures when a tag is not exactly one commit after evidence generation.
+- CI and Coverage workflows now ignore `articles/**`-only changes so docs/article release commits do not trigger full runtime gates.
 
 ## [v0.2.1] - 2026-02-27
 
