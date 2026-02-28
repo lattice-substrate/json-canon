@@ -57,7 +57,23 @@ The output is a JSON evidence bundle:
 }
 ```
 
-When all 60 replays (12 nodes times 5 replays each) produce identical digests, the evidence proves that canonical output is byte-stable across environments.
+When all 60 replays (12 nodes times 5 replays each) produce identical digests, the evidence shows that canonical output is byte-stable **for that specific binary across the tested matrix**.
+
+## Proof Boundary: What This Evidence Proves
+
+This matters for rigor. The evidence bundle does **not** claim:
+
+- "all possible builds are deterministic,"
+- "all Linux environments are covered,"
+- or "future toolchains will preserve behavior automatically."
+
+It does claim:
+
+- this exact control binary (by SHA-256),
+- built from this exact source commit,
+- produced identical output across this explicit replay matrix and replay count.
+
+That distinction is the boundary between engineering evidence and overclaiming. Determinism is established for a concrete artifact under a declared environment envelope.
 
 ## Test Bundles: Immutable Input Packages
 
@@ -155,6 +171,12 @@ Each node has a mode (container or VM), a distribution, a kernel family, and a r
 The distinction matters: container-mode tests prove that userspace differences don't affect output. VM-mode tests prove that kernel differences don't affect output. Together, they cover the two main sources of environmental variation on Linux.
 
 A typical x86_64 matrix includes 12 nodes: 6 container lanes (Debian 12, Ubuntu 22.04, Fedora 40, Rocky 9, Alpine 3.20, openSUSE) and 6 VM lanes (Debian, Fedora, Rocky, Ubuntu with GA kernel, Ubuntu with HWE kernel, and a legacy LTS kernel). Each runs 5 replays, for a total of 60 independent executions.
+
+### Environment Pinning and Reproducibility Boundaries
+
+Matrix declarations define *which lanes* must run. Reproducibility additionally depends on how those lanes are provisioned over time. If a lane references a moving base image tag, the lane identity remains the same while underlying bits may drift.
+
+For peer-review-grade replay reproducibility, pin lane substrates as immutable artifacts (for example: container image digests and checksummed VM base images/snapshots) and record those identifiers alongside evidence. Without that, evidence still proves parity for the observed run, but re-running months later may exercise different substrate bits.
 
 A profile defines the policy for what constitutes a valid evidence bundle:
 

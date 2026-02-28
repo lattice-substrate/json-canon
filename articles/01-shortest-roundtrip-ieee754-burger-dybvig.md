@@ -13,9 +13,9 @@ Every programmer has seen this:
 
 The joke is that floating-point arithmetic is broken. It isn't. IEEE 754 is doing exactly what it specifies. The problem surfaces when you need to *serialize* these values to text — and when two different systems need to produce *exactly the same text* for the same value.
 
-This is what RFC 8785 (JSON Canonicalization Scheme) requires: byte-deterministic JSON output. And the hardest part of that requirement is number formatting. You need the *shortest* decimal string that, when parsed back, recovers the original IEEE 754 bits. You need to agree on tie-breaking when two representations are equally short. And you need to match the exact output format specified by ECMA-262 (the JavaScript specification), because that's what RFC 8785 mandates.
+This is what [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) requires: byte-deterministic JSON output. And the hardest part of that requirement is number formatting. You need the *shortest* decimal string that, when parsed back, recovers the original IEEE 754 bits. You need to agree on tie-breaking when two representations are equally short. And you need to match the exact output format specified by [ECMA-262 Number serialization](https://tc39.es/ecma262/#sec-numeric-types-number-tostring), because that's what RFC 8785 mandates.
 
-Go's `strconv.FormatFloat` cannot guarantee all of this. So I implemented the Burger-Dybvig algorithm from scratch in 490 lines of Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
+Go's `strconv.FormatFloat` is a high-quality shortest-round-trip formatter, but it is not an ECMA-262 conformance contract. So I implemented the Burger-Dybvig algorithm from scratch in 490 lines of Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
 
 ## IEEE 754 Anatomy: 64 Bits of Structure
 
@@ -392,17 +392,25 @@ These boundary behaviors can be verified against specific bit patterns:
 
 ## Why strconv.FormatFloat Is Insufficient
 
-Go's `strconv.FormatFloat` is the standard library's number-to-string conversion. With format `'e'`, `'f'`, or `'g'` and precision -1, it produces shortest-round-trip representations. But it doesn't match ECMA-262 output.
+Go's `strconv.FormatFloat` is the standard library's number-to-string conversion. With format `'e'`, `'f'`, or `'g'` and precision `-1`, it produces shortest-round-trip representations. The issue for JCS is not quality; the issue is contract mismatch. RFC 8785 requires ECMAScript-compatible rendering rules, and `FormatFloat` does not expose that contract.
 
-The differences fall into three categories.
+The gaps are concrete.
 
-**Tie-breaking divergence.** ECMA-262 Note 2 mandates even-digit tie-breaking (banker's rounding). Go's `strconv` package uses a different tie-breaking strategy. When the digit-generation algorithm reaches the exact midpoint between two equally short representations, the two implementations may choose different final digits. The difference is one digit, in one position, on a subset of inputs — but "one digit off" is a complete conformance failure when the specification demands bit-identical output.
+**Format-policy divergence.** ECMA-262 and `FormatFloat` make different notation choices at key boundaries. Examples:
 
-**Format divergence.** ECMA-262 §6.1.6.1.20 has specific formatting rules that differ from any single `strconv.FormatFloat` mode. For example, ECMA-262 uses `e+` notation for positive exponents (not `E+`), omits trailing zeros in the mantissa, and uses fixed-point notation for exponents between -6 and 21. No combination of `strconv.FormatFloat` format character and precision reproduces these rules exactly.
+| Value | ECMA-262 / RFC 8785 expected | `FormatFloat(v, 'g', -1, 64)` |
+|-------|-------------------------------|--------------------------------|
+| `1e20` | `100000000000000000000` | `1e+20` |
+| `1e-6` | `0.000001` | `1e-06` |
+| `1000000` | `1000000` | `1e+06` |
 
-**Algorithm transparency.** Go's runtime uses Grisu3 with a fallback to exact arithmetic when Grisu3 can't determine the shortest representation. This is an optimization — Grisu3 is faster than Burger-Dybvig for most values. But the fallback path may produce different tie-breaking behavior than the main path, and the exact boundary between the two paths is an implementation detail of the Go runtime that can change between releases. For infrastructure that needs reproducible output across Go versions, depending on an implementation detail of the standard library is a risk.
+These are all valid shortest representations, but only one side matches the JCS contract (see RFC 8785's ECMAScript-compatible serialization examples in Appendix B).
 
-Building from scratch eliminates all three issues. The Burger-Dybvig algorithm always uses exact multiprecision arithmetic, always applies even-digit tie-breaking, and always formats according to the ECMA-262 rules. The cost is performance — big integer arithmetic is slower than Grisu3 — but for a canonicalization library, correctness is the constraint, not speed.
+**Single-mode mismatch.** ECMA-262 output policy spans multiple branches (fixed integer, fixed fraction, small fraction, exponential) with exact thresholds. No single `FormatFloat` mode (`'e'`, `'f'`, or `'g'`) reproduces all branches across the full range.
+
+**Upstream algorithm drift risk.** Go's shortest-mode internals are not static over time. As of **Go 1.26.0 (February 2026)**, shortest mode in [`internal/strconv/ftoa.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.0/src/internal/strconv/ftoa.go) explicitly says "Use the Dragonbox algorithm" and calls `dboxFtoa`; the Dragonbox implementation in [`ftoadbox.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.0/src/internal/strconv/ftoadbox.go) states round-to-nearest, ties-to-even behavior. Older Go releases used different internals. That evolution is normal for a standard library, but it is exactly why canonicalization code should not outsource its normative behavior to implementation details of an external runtime.
+
+Building from scratch eliminates these issues. The Burger-Dybvig path always uses exact multiprecision arithmetic, applies explicit midpoint handling, and formats according to ECMA-262 branch rules. The cost is performance, but for canonicalization, correctness is the constraint.
 
 ## Special Values
 
