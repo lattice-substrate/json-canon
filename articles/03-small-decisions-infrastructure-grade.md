@@ -1,6 +1,6 @@
 ---
 title: "The Small Decisions That Make Software Infrastructure-Grade"
-published: false
+published: true
 tags: go, programming, architecture, softwareengineering
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -28,7 +28,7 @@ In UTF-16 code-unit order: U+10000 (`D800`) < U+E000 (`E000`). The high surrogat
 
 In UTF-8 byte order: U+E000 (`EE`) < U+10000 (`F0`). The three-byte UTF-8 prefix `EE` is numerically less than the four-byte prefix `F0`.
 
-The two orderings disagree. RFC 8785 mandates UTF-16 code-unit order. Most canonicalization implementations get this wrong because they use byte-order comparison, which works for UTF-8 strings but produces a different order than the specification requires.
+The two orderings disagree. RFC 8785 mandates UTF-16 code-unit order (see §3.2.3). Most canonicalization implementations get this wrong because they use byte-order comparison, which works for UTF-8 strings but produces a different order than the specification requires.
 
 Why does RFC 8785 use UTF-16 code-unit order instead of the more natural (for modern systems) Unicode code-point order? Because JCS is defined for interoperability with ECMAScript string serialization rules, and ECMAScript strings are sequences of 16-bit code units. The required sort is a pure lexicographic code-unit comparison, not locale-aware collation (`localeCompare` is locale-sensitive and is not the JCS rule).
 

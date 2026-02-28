@@ -1,6 +1,6 @@
 ---
 title: "Shortest Round-Trip: Implementing IEEE 754 to Decimal Conversion in Go"
-published: false
+published: true
 tags: go, programming, algorithms, ieee754
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -405,6 +405,8 @@ The gaps are concrete.
 | `1000000` | `1000000` | `1e+06` |
 
 These are all valid shortest representations, but only one side matches the JCS contract (see RFC 8785's ECMAScript-compatible serialization examples in Appendix B).
+
+These three examples are sufficient to establish the core point: ECMA-262 rendering switches policy across multiple exponent ranges, while any single `FormatFloat` mode has one fixed rendering policy. Once boundary cases disagree, conformance requires a dedicated ECMA-262 formatting layer.
 
 **Single-mode mismatch.** ECMA-262 output policy spans multiple branches (fixed integer, fixed fraction, small fraction, exponential) with exact thresholds. No single `FormatFloat` mode (`'e'`, `'f'`, or `'g'`) reproduces all branches across the full range.
 
