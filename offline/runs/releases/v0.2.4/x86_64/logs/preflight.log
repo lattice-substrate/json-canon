@@ -1,0 +1,37 @@
+[preflight] repo: /tmp/json-canon-release-v0.2.4-20260228T030222Z
+[preflight] matrix: offline/matrix.yaml
+[preflight] checking base toolchain
+[PASS] command available: go
+[PASS] command available: tar
+[PASS] container engine reachable: docker
+[preflight] checking offline container images
+[PASS] container image present: debian12-container -> debian:12-slim
+[PASS] container image present: ubuntu2204-container -> ubuntu:22.04
+[PASS] container image present: fedora40-container -> fedora:40
+[PASS] container image present: rocky9-container -> rockylinux:9
+[PASS] container image present: alpine320-container -> alpine:3.20
+[PASS] container image present: opensuse-container -> opensuse/leap:15
+[preflight] checking vm/libvirt dependencies
+[PASS] command available: virsh
+[PASS] command available: ssh
+[PASS] command available: scp
+[PASS] libvirt domain exists: debian12-vm -> debian12-vm
+[PASS] snapshot exists: debian12-vm/snapshot-cold
+[PASS] vm ssh reachable: debian12-vm -> root@debian12-vm
+[PASS] libvirt domain exists: ubuntu2204-vm-ga -> ubuntu2204-vm-ga
+[PASS] snapshot exists: ubuntu2204-vm-ga/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-ga -> root@ubuntu2204-vm-ga
+[PASS] libvirt domain exists: ubuntu2204-vm-hwe -> ubuntu2204-vm-hwe
+[PASS] snapshot exists: ubuntu2204-vm-hwe/snapshot-cold
+[PASS] vm ssh reachable: ubuntu2204-vm-hwe -> root@ubuntu2204-vm-hwe
+[PASS] libvirt domain exists: fedora40-vm -> fedora40-vm
+[PASS] snapshot exists: fedora40-vm/snapshot-cold
+[PASS] vm ssh reachable: fedora40-vm -> root@fedora40-vm
+[PASS] libvirt domain exists: rocky9-vm -> rocky9-vm
+[PASS] snapshot exists: rocky9-vm/snapshot-cold
+[PASS] vm ssh reachable: rocky9-vm -> root@rocky9-vm
+[PASS] libvirt domain exists: lts-legacy-kernel-vm -> lts-legacy-kernel-vm
+[PASS] snapshot exists: lts-legacy-kernel-vm/snapshot-cold
+[PASS] vm ssh reachable: lts-legacy-kernel-vm -> root@lts-legacy-kernel-vm
+[preflight] failures=0 warnings=0
+[preflight] RESULT=PASS
