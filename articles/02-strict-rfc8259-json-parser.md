@@ -1,6 +1,6 @@
 ---
 title: "What Your JSON Parser Doesn't Reject: Building a Strict RFC 8259 Parser in Go"
-published: false
+published: true
 tags: go, programming, parsing, json
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -13,24 +13,31 @@ I built a strict JSON parser in 809 lines of Go. It enforces every constraint in
 
 Go's `encoding/json` is a solid general-purpose parser. For canonicalization, some of its documented behaviors are intentionally too permissive. On Go 1.25.6, representative examples look like this:
 
-| Input | `encoding/json` result | Strict parser | Why it matters |
-|-------|-------------------------|---------------|----------------|
-| `"\uD800\u0041"` | Decodes as `"�A"` (invalid surrogate replaced) | Rejected: lone surrogate | RFC 7493 §2.1 forbids surrogates |
-| `"\uFDD0"` | Accepts noncharacter | Rejected: noncharacter | RFC 7493 §2.1 forbids noncharacters |
-| `{"a":1,"a":2}` | Later key wins (`a=2`) | Rejected: duplicate key | RFC 7493 §2.3 requires unique names |
-| raw bytes `22 ff 22` | Decodes as `"�"` | Rejected: invalid UTF-8 | silent byte substitution changes meaning |
-| `-0` | Accepts lexical `-0` | Rejected: negative zero token | policy profile forbids lexical ambiguity |
-| `1e-400` | Parses to `0` | Rejected: underflow | non-zero token collapses to zero |
+| Input | `encoding/json` result | Strict parser | Source | Why it matters |
+|-------|-------------------------|---------------|--------|----------------|
+| `"\uD800\u0041"` | Decodes as `"�A"` (invalid surrogate replaced) | Rejected: lone surrogate | RFC 7493 §2.1 | I-JSON forbids surrogates |
+| `"\uFDD0"` | Accepts noncharacter | Rejected: noncharacter | RFC 7493 §2.1 | I-JSON forbids noncharacters |
+| `{"a":1,"a":2}` | Later key wins (`a=2`) | Rejected: duplicate key | RFC 7493 §2.3 | I-JSON requires unique names |
+| raw bytes `22 ff 22` | Decodes as `"�"` | Rejected: invalid UTF-8 | project policy | silent byte substitution changes meaning |
+| `-0` | Accepts lexical `-0` | Rejected: negative zero token | project policy | lexical ambiguity at acceptance boundary |
+| `1e-400` | Parses to `0` with `err == nil` (Go 1.25.6) | Rejected: underflow | project policy | non-zero token collapses to zero |
+
+Rows labeled RFC 7493 are normative I-JSON requirements. Rows labeled project policy are stricter acceptance rules chosen to keep canonicalization fail-closed and deterministic.
 
 These are not bugs in `encoding/json`; they are compatibility choices. The [Go package documentation for `Unmarshal`](https://pkg.go.dev/encoding/json#Unmarshal) explicitly states that invalid UTF-8 / invalid UTF-16 surrogates are replaced by U+FFFD, and duplicate object keys are processed in order with later values replacing earlier ones.
 
-Minimal reproduction (Go 1.25.6):
+Minimal reproduction (Go 1.25.6), with explicit error checks:
 
 ```go
 var v any
-_ = json.Unmarshal([]byte(`"\uD800\u0041"`), &v) // v == "�A"
-_ = json.Unmarshal([]byte(`{"a":1,"a":2}`), &v)  // v == map[string]any{"a": float64(2)}
-_ = json.Unmarshal([]byte("1e-400"), &v)         // v == float64(0)
+err := json.Unmarshal([]byte(`"\uD800\u0041"`), &v)
+fmt.Printf("case surrogate err=%v v=%#v\n", err, v) // err=<nil>, v="�A"
+
+err = json.Unmarshal([]byte(`{"a":1,"a":2}`), &v)
+fmt.Printf("case dup-key err=%v v=%#v\n", err, v) // err=<nil>, later duplicate replaces earlier value
+
+err = json.Unmarshal([]byte("1e-400"), &v)
+fmt.Printf("case underflow err=%v v=%#v\n", err, v) // err=<nil>, v=0
 ```
 
 For application code, replacement and merge behavior is pragmatic. A canonicalization engine has a different contract: reject ambiguous or lossy inputs so every accepted value has a single deterministic canonical form. If two parsers disagree on interpretation, canonical output is undefined. Rejection is the safe outcome.

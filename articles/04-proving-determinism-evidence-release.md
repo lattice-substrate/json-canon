@@ -1,6 +1,6 @@
 ---
 title: "Proving Determinism: Evidence-Based Release Engineering"
-published: false
+published: true
 tags: go, devops, programming, testing
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
