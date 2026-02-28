@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths-ignore:
       - 'articles/**'
+  workflow_dispatch:
 
 jobs:
   coverage:
