@@ -6,13 +6,21 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.2.1] - 2026-02-27
+
+### Fixed
+- Offline harness now writes repo-relative paths in all evidence metadata artifacts (RUN_INDEX.txt, checksums, audit summaries, cross-arch reports).
+- Removed v0.2.0-rc.3 and v0.2.0-rc.4 evidence that was derived from manual edits of rc.3 output rather than independent harness runs.
+- Replaced v0.2.0 evidence with supersession notice.
+
 ### Added
-- New `Coverage` CI workflow (`.github/workflows/coverage.yml`) that publishes `coverage.out` and `coverage-summary.txt` artifacts for each run.
+- Coverage CI workflow and discoverability badges.
+- ADR-0004: evidence metadata path remediation.
+- Regression tests for absolute path prevention in evidence artifacts.
 
 ### Changed
-- README now includes discoverability and quality badges for pkg.go.dev, Go Report Card, CI, and Coverage workflow status.
-- Release policy now explicitly states that published SemVer tags are immutable and must never be force-moved or recreated.
-- Repository metadata and topic classification on GitHub were populated for improved public discoverability.
+- Release policy now explicitly states published SemVer tags are immutable.
+- Repository metadata/topics populated for public discoverability.
 
 ## [v0.2.0] - 2026-02-27
 
