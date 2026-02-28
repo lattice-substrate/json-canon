@@ -13,6 +13,8 @@ Before creating a release tag, all MUST be true:
 2. Registry, matrix, citations, and ABI artifacts are consistent.
 3. `CHANGELOG.md` includes release notes.
 4. Any compatibility-impacting decisions are recorded in ADRs.
+5. Pre-push hook is active (`git config core.hooksPath .githooks`) or
+   `go run ./cmd/jcs-gate` has been run manually.
 
 ## Versioning Rules
 
@@ -127,9 +129,10 @@ Commit B:  evidence files only           ← tag points here
 4. Create annotated tag on commit B.
 
 Because a commit can never contain its own SHA, the evidence source commit is
-structurally always the parent of the tagged commit. The release workflow
-resolves this by comparing against `HEAD~1` (commit A) rather than `HEAD`
-(commit B).
+often the parent of the tagged commit in the standard two-commit release flow.
+To avoid brittle assumptions when follow-up commits are added before tagging,
+the release workflow resolves source identity directly from archived evidence
+(`source_git_commit` / `source_git_tag`) and validates against those values.
 
 ## Release Checklist
 
@@ -138,9 +141,10 @@ resolves this by comparing against `HEAD~1` (commit A) rather than `HEAD`
 3. Confirm changelog accuracy and migration guidance (if applicable).
 4. Validate offline replay evidence gates for both `x86_64` and `arm64` release matrices.
 5. Validate official ES6 100,000,000-line checksum gate.
-6. Publish tag and release.
-7. Verify checksums and attestation on published artifacts.
-8. Announce release with compatibility notes.
+6. Run `go run ./cmd/jcs-gate` or confirm pre-push hook is active.
+7. Publish tag and release.
+8. Verify checksums and attestation on published artifacts.
+9. Announce release with compatibility notes.
 
 ## Rollback/Revocation
 
