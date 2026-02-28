@@ -464,4 +464,4 @@ Neither is wrong. They serve different purposes. But when you build infrastructu
 
 The 809 lines of parser code in the `jcstoken` package exist to provide one guarantee: if the parser returns a value, that value has a single, unambiguous, deterministic canonical representation. Every rejection — leading zeros, lone surrogates, duplicate keys, noncharacters, overflow, underflow, negative zero — eliminates a case where two consumers might disagree.
 
-The implementation lives in the `jcstoken` package of [json-canon](https://github.com/nicholasgasior/json-canon), an RFC 8785 JSON canonicalization library.
+The implementation lives in the `jcstoken` package of [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library.

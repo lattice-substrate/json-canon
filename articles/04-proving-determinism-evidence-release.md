@@ -399,4 +399,4 @@ For most projects, this is overkill. A well-written test suite with good coverag
 
 For infrastructure that downstream systems depend on for correctness — not just convenience — this is the minimum required to make the claim credible.
 
-The implementation described here is from [json-canon](https://github.com/nicholasgasior/json-canon), an RFC 8785 JSON canonicalization library written in Go.
+The implementation described here is from [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library written in Go.

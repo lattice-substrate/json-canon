@@ -561,4 +561,4 @@ Putting it all together, the conversion from IEEE 754 bits to canonical decimal 
 
 The entire implementation is 490 lines of Go with zero external dependencies (only `math`, `math/big`, and the project's own error package). It is deterministic, locale-independent, and produces identical output regardless of platform or Go runtime version.
 
-The implementation lives in the `jcsfloat` package of [json-canon](https://github.com/nicholasgasior/json-canon), an RFC 8785 JSON canonicalization library.
+The implementation lives in the `jcsfloat` package of [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library.
