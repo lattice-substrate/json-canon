@@ -15,7 +15,7 @@ The joke is that floating-point arithmetic is broken. It isn't. IEEE 754 is doin
 
 This is what [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) requires: byte-deterministic JSON output. And the hardest part of that requirement is number formatting. You need the *shortest* decimal string that, when parsed back, recovers the original IEEE 754 bits. You need to agree on tie-breaking when two representations are equally short. And you need to match the exact output format specified by [ECMA-262 Number serialization](https://tc39.es/ecma262/#sec-numeric-types-number-tostring), because that's what RFC 8785 mandates.
 
-Go's `strconv.FormatFloat` is a high-quality shortest-round-trip formatter, but it is not an ECMA-262 conformance contract. So I implemented the Burger-Dybvig algorithm from scratch in 490 lines of Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
+Go's `strconv.FormatFloat` is a high-quality shortest-round-trip formatter, but it is not an ECMA-262 conformance contract. So I implemented the [Burger-Dybvig algorithm](https://legacy.cs.indiana.edu/~dyb/pubs/FP-Printing-PLDI96.pdf) from scratch in 490 lines of Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
 
 ## IEEE 754 Anatomy: 64 Bits of Structure
 
@@ -62,19 +62,21 @@ func decodeFloatParts(f float64) floatParts {
 }
 ```
 
-Two things to note here. First, the subnormal branch: when `biasedExp == 0`, there's no implicit leading 1, and the effective exponent is fixed at `2^(-1074)` (the smallest representable power). Second, the `lowerBoundary` flag: when the mantissa is zero and the exponent is above the minimum normal range, the float sits at a power-of-two boundary where the gap to the *lower* adjacent representable is half the gap to the *upper* adjacent. This asymmetry matters for the algorithm.
+Two things to note here. First, the subnormal branch: when `biasedExp == 0`, there's no implicit leading 1, and the effective exponent is fixed at -1074 (so the smallest representable positive value is 2^-1074 ≈ 5 × 10^-324). Second, the `lowerBoundary` flag: when the mantissa is zero and the exponent is above the minimum normal range, the float sits at a power-of-two boundary where the gap to the *lower* adjacent representable is half the gap to the *upper* adjacent. This asymmetry matters for the algorithm.
 
 The exponent extraction itself works on the raw bit pattern:
 
 ```go
 func exponentBits(bits uint64) uint16 {
+    // Equivalent to (bits >> 52) & 0x7FF, but expressed as byte-level
+    // extraction to mirror the IEEE 754 layout diagram above.
     hi := byte((bits >> 56) & 0xFF)
     lo := byte((bits >> 48) & 0xFF)
     return (uint16(hi&0x7F) << 4) | uint16(lo>>4)
 }
 ```
 
-This reconstructs the 11-bit biased exponent by extracting the relevant bytes and masking away the sign bit.
+This reconstructs the 11-bit biased exponent from the raw byte layout. The conventional one-liner `(bits >> 52) & 0x7FF` is equivalent; the byte-level form is used here to make the bit-field boundaries explicit.
 
 ## The Core Insight: Why You Need Multiprecision Arithmetic
 
@@ -82,7 +84,7 @@ The Burger-Dybvig algorithm answers this question: what is the shortest decimal 
 
 To answer it, you need to compute *exact* boundaries. Every float `f` has two adjacent representable values. The "shortest round-trip" string must map back to `f` and not to either neighbor. This means computing the midpoints between `f` and its neighbors with *exact* arithmetic — not floating-point arithmetic, which would introduce the very imprecision you're trying to eliminate.
 
-The algorithm represents the value and its boundaries as ratios of big integers. For a float with fractional mantissa `fMant` and exponent `fExp`, the value is `fMant × 2^fExp`. The boundaries M- and M+ define the interval within which any decimal representation will round back to `f`.
+The algorithm represents the value and its boundaries as ratios of big integers. For a float with integer significand `fMant` and exponent `fExp`, the value is `fMant × 2^fExp`. The boundaries M- and M+ define the interval within which any decimal representation will round back to `f`.
 
 ## State Initialization: R, S, M+, M-
 
@@ -197,7 +199,7 @@ func pow10Big(n int) *big.Int {
 }
 ```
 
-The defensive copy on line 487 is critical — without it, callers that mutate the returned `*big.Int` would corrupt the cache. IEEE 754 binary64 ranges from approximately 10^-324 to 10^308, so the 700-entry cache covers all practical `k` values.
+The defensive copy is critical — without it, callers that mutate the returned `*big.Int` would corrupt the cache. IEEE 754 binary64 ranges from approximately 10^-324 to 10^308 (a span of ~632), so the 700-entry cache covers all practical `k` values with headroom.
 
 ## Digit Generation: The Main Loop
 
@@ -412,7 +414,7 @@ These three examples are sufficient to establish the core point: ECMA-262 render
 
 **Upstream algorithm drift risk.** Go's shortest-mode internals are not static over time. As of **Go 1.26.0 (February 2026)**, shortest mode in [`internal/strconv/ftoa.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.0/src/internal/strconv/ftoa.go) explicitly says "Use the Dragonbox algorithm" and calls `dboxFtoa`; the Dragonbox implementation in [`ftoadbox.go`](https://go.googlesource.com/go/+/refs/tags/go1.26.0/src/internal/strconv/ftoadbox.go) states round-to-nearest, ties-to-even behavior. Older Go releases used different internals. That evolution is normal for a standard library, but it is exactly why canonicalization code should not outsource its normative behavior to implementation details of an external runtime.
 
-Building from scratch eliminates these issues. The Burger-Dybvig path always uses exact multiprecision arithmetic, applies explicit midpoint handling, and formats according to ECMA-262 branch rules. The cost is performance, but for canonicalization, correctness is the constraint.
+Building from scratch eliminates these issues. The Burger-Dybvig path always uses exact multiprecision arithmetic, applies explicit midpoint handling, and formats according to ECMA-262 branch rules. The cost is performance — multiprecision arithmetic is meaningfully slower than `strconv.FormatFloat`'s optimized Dragonbox path — but for canonicalization, correctness is the constraint. Benchmarks and performance analysis are covered in a later article in this series.
 
 ## Special Values
 
@@ -435,7 +437,7 @@ func FormatDouble(f float64) (string, *jcserr.Error) {
 }
 ```
 
-NaN and Infinity are errors — JSON has no representation for them. Negative zero is normalized to `"0"` because IEEE 754's -0 and +0 are *mathematically* equal, and canonical JSON should not distinguish them. (Note: lexical `-0` in JSON *input* is a separate concern, rejected at parse time as a policy violation — the two requirements are independent.)
+NaN and Infinity are errors — JSON has no representation for them. Negative zero is normalized to `"0"` because IEEE 754's -0 and +0 are *mathematically* equal, and canonical JSON should not distinguish them. (Note: lexical `-0` in JSON *input* is a separate concern. RFC 8259 permits it, but json-canon rejects it as a library policy violation to enforce stricter numeric hygiene — the two requirements are independent.)
 
 ## Validation: 286,362 Oracle Vectors
 
