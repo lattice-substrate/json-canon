@@ -1,0 +1,4 @@
+bundle: /tmp/json-canon-release-v0.2.4-20260228T030222Z/offline/runs/releases/v0.2.4/x86_64/offline-bundle.tgz
+binary_sha256: 36dc409fbc246f4eabc42145c687fdec9fb49528df05be9340f7420c78118fbf
+worker_sha256: eb78a28826390b726517ca41842e5d293fe8955ec77f1600d0be1805b19f4f4f
+vector_set_sha256: 4e944d8f5eec849c55f7fc4152a06c30af9907212bb98dd2128256287b906ee1
