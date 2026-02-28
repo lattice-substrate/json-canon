@@ -295,4 +295,4 @@ A project without an ABI manifest accumulates undocumented behavioral changes. E
 
 Getting these details right is not the interesting part of the engineering. But it's the part that determines whether your downstream can depend on you.
 
-The implementation discussed here is from [json-canon](https://github.com/nicholasgasior/json-canon), an RFC 8785 JSON canonicalization library written in Go.
+The implementation discussed here is from [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library written in Go.
