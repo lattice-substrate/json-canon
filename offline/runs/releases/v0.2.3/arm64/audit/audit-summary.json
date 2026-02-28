@@ -1,0 +1,148 @@
+{
+  "generated_at_utc": "2026-02-28T02:37:45.465916192Z",
+  "matrix_path": "offline/matrix.arm64.yaml",
+  "profile_path": "offline/profiles/maximal.arm64.yaml",
+  "evidence_path": "offline/runs/releases/v0.2.3/arm64/offline-evidence.json",
+  "schema_version": "evidence.v1",
+  "profile_name": "maximal-offline-linux-arm64",
+  "architecture": "arm64",
+  "hard_release_gate": true,
+  "node_count": 12,
+  "run_count": 60,
+  "required_suites": [
+    "canonical-byte-stability",
+    "verify-parity",
+    "failure-class-parity",
+    "bounds-limit-parity",
+    "binary-identity",
+    "env-independence",
+    "evidence-completeness"
+  ],
+  "aggregate": {
+    "canonical": "2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6",
+    "exit_code": "73d91ef3f2fd6d709fd8491bb9c547290a1b3a13c234423ca96432f4258235d2",
+    "failure_class": "af58643f979138dadd16e4c78fd6d60d44d0818a5ce5269696ac3966f1d3306b",
+    "verify": "66d329b3bd829da527feb00eb97fdb681a0e15c28ac14d8bfed29ecae13e70f6"
+  },
+  "digest_sets": {
+    "canonical_unique": [
+      "2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6"
+    ],
+    "exit_code_unique": [
+      "73d91ef3f2fd6d709fd8491bb9c547290a1b3a13c234423ca96432f4258235d2"
+    ],
+    "failure_class_unique": [
+      "af58643f979138dadd16e4c78fd6d60d44d0818a5ce5269696ac3966f1d3306b"
+    ],
+    "verify_unique": [
+      "66d329b3bd829da527feb00eb97fdb681a0e15c28ac14d8bfed29ecae13e70f6"
+    ]
+  },
+  "node_replay_counts": {
+    "alpine320-container-arm64": 5,
+    "debian12-container-arm64": 5,
+    "debian12-vm-arm64": 5,
+    "fedora40-container-arm64": 5,
+    "fedora40-vm-arm64": 5,
+    "lts-legacy-kernel-vm-arm64": 5,
+    "opensuse-container-arm64": 5,
+    "rocky9-container-arm64": 5,
+    "rocky9-vm-arm64": 5,
+    "ubuntu2204-container-arm64": 5,
+    "ubuntu2204-vm-ga-arm64": 5,
+    "ubuntu2204-vm-hwe-arm64": 5
+  },
+  "node_replay_case_counts": {
+    "alpine320-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "debian12-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "debian12-vm-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "fedora40-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "fedora40-vm-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "lts-legacy-kernel-vm-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "opensuse-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "rocky9-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "rocky9-vm-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "ubuntu2204-container-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "ubuntu2204-vm-ga-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ],
+    "ubuntu2204-vm-hwe-arm64": [
+      74,
+      74,
+      74,
+      74,
+      74
+    ]
+  },
+  "parity": {
+    "canonical_single_digest": true,
+    "exit_code_single_digest": true,
+    "failure_class_single_digest": true,
+    "verify_single_digest": true
+  },
+  "result": "PASS"
+}

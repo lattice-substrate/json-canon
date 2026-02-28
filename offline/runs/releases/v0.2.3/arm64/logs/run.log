@@ -1,0 +1,3 @@
+evidence: /tmp/json-canon-release-v0.2.3-20260228T022701Z/offline/runs/releases/v0.2.3/arm64/offline-evidence.json
+runs: 60
+aggregate_canonical_sha256: 2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6

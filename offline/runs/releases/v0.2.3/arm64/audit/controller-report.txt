@@ -1,0 +1,19 @@
+schema: evidence.v1
+profile: maximal-offline-linux-arm64
+architecture: arm64
+source git commit: 9ab381dee837a149f2a73c2e86e77d1b039261a3
+source git tag: v0.2.3
+runs: 60
+aggregate canonical: 2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6
+node alpine320-container-arm64: 5 replays
+node debian12-container-arm64: 5 replays
+node debian12-vm-arm64: 5 replays
+node fedora40-container-arm64: 5 replays
+node fedora40-vm-arm64: 5 replays
+node lts-legacy-kernel-vm-arm64: 5 replays
+node opensuse-container-arm64: 5 replays
+node rocky9-container-arm64: 5 replays
+node rocky9-vm-arm64: 5 replays
+node ubuntu2204-container-arm64: 5 replays
+node ubuntu2204-vm-ga-arm64: 5 replays
+node ubuntu2204-vm-hwe-arm64: 5 replays
