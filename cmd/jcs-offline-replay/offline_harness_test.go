@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,23 @@ import (
 
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
+
+func readFileWithinRoot(root, path string) ([]byte, error) {
+	cleanRoot := filepath.Clean(root)
+	cleanPath := filepath.Clean(path)
+	rel, err := filepath.Rel(cleanRoot, cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolve relative path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return nil, os.ErrPermission
+	}
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("read file %s: %w", cleanPath, err)
+	}
+	return data, nil
+}
 
 func TestParseBoolToken(t *testing.T) {
 	tests := []struct {
@@ -126,7 +144,7 @@ func TestWriteChecksumFile_RepoRelativePaths(t *testing.T) {
 	if err := writeChecksumFile(checksumPath, artifactPath, repoRoot); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(checksumPath)
+	data, err := readFileWithinRoot(repoRoot, checksumPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +176,7 @@ func TestWriteRunIndex_RepoRelativePaths(t *testing.T) {
 	if err := writeRunIndex(indexPath, artifacts, repoRoot); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(indexPath)
+	data, err := readFileWithinRoot(repoRoot, indexPath)
 	if err != nil {
 		t.Fatal(err)
 	}
