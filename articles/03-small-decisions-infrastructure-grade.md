@@ -15,7 +15,7 @@ This article examines three categories of these decisions through the lens of a 
 
 ## Correctness Detail: UTF-16 vs UTF-8 Key Sorting
 
-RFC 8785 (JSON Canonicalization Scheme) requires that object keys be sorted. The specification references the key sorting order defined in ECMAScript, which sorts by UTF-16 code unit values — not by UTF-8 byte values, and not by Unicode code point values.
+[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) requires that object keys be sorted by lexicographic order of UTF-16 code units. That is not UTF-8 byte order, and it is not Unicode scalar-value order.
 
 For most strings, these orderings are identical. They diverge when you have characters above U+FFFF (the Basic Multilingual Plane). Here's why.
 
@@ -30,7 +30,7 @@ In UTF-8 byte order: U+E000 (`EE`) < U+10000 (`F0`). The three-byte UTF-8 prefix
 
 The two orderings disagree. RFC 8785 mandates UTF-16 code-unit order. Most canonicalization implementations get this wrong because they use byte-order comparison, which works for UTF-8 strings but produces a different order than the specification requires.
 
-Why does RFC 8785 use UTF-16 code-unit order instead of the more natural (for modern systems) Unicode code-point order? Because RFC 8785 mandates compatibility with ECMAScript's `String.prototype.localeCompare` behavior, and ECMAScript strings are internally represented as sequences of 16-bit code units. The sort order is defined in terms of the language's native string representation, not in terms of abstract Unicode code points.
+Why does RFC 8785 use UTF-16 code-unit order instead of the more natural (for modern systems) Unicode code-point order? Because JCS is defined for interoperability with ECMAScript string serialization rules, and ECMAScript strings are sequences of 16-bit code units. The required sort is a pure lexicographic code-unit comparison, not locale-aware collation (`localeCompare` is locale-sensitive and is not the JCS rule).
 
 This means every implementation in a language with UTF-8 native strings (Go, Rust, Python 3) must explicitly convert to UTF-16 for comparison. Implementations that skip this conversion will produce correct output for the BMP (U+0000 to U+FFFF) and incorrect output for supplementary-plane characters. Since supplementary-plane characters are rare in practice — emoji, historic scripts, mathematical symbols — the bug is unlikely to surface in casual testing. It will surface when a production system encounters a key containing an emoji or a CJK Extension B character.
 

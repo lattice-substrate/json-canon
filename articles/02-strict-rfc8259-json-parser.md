@@ -7,28 +7,33 @@ series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 
 Most JSON parsers are lenient by design. They accept input that RFC 8259 forbids, because lenient parsing is convenient and rarely causes visible problems. But when your downstream depends on deterministic processing — canonical signatures, content-addressed storage, reproducible builds — leniency is a defect. A value silently accepted by one parser and rejected by another breaks your contract.
 
-I built a strict JSON parser in 809 lines of Go. It enforces every constraint in RFC 8259 and adds the RFC 7493 (I-JSON) restrictions that RFC 8785 requires. This article walks through the design and implementation, focusing on the parts where strictness requires real work: surrogate pairs, noncharacter detection, duplicate keys after escape decoding, and resource bounds.
+I built a strict JSON parser in 809 lines of Go. It enforces every constraint in [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259) and adds the [RFC 7493](https://www.rfc-editor.org/rfc/rfc7493) (I-JSON) restrictions that [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) requires. This article walks through the design and implementation, focusing on the parts where strictness requires real work: surrogate pairs, noncharacter detection, duplicate keys after escape decoding, and resource bounds.
 
-## The Gap: What encoding/json Accepts
+## The Gap: What Canonicalization Cannot Accept
 
-Go's `encoding/json` is a fine general-purpose parser. It is also wrong for strict applications. Here's a sample of what it accepts that RFC 8259 forbids:
+Go's `encoding/json` is a solid general-purpose parser. For canonicalization, some of its documented behaviors are intentionally too permissive. On Go 1.25.6, representative examples look like this:
 
-| Input | encoding/json | Strict parser | Why it matters |
-|-------|---------------|---------------|----------------|
-| `01` | Parses as `1` | Rejected: leading zero | Grammar violation (§6) |
-| `+1` | Parses as `1` | Rejected: no `+` prefix | Grammar violation (§6) |
-| `1.` | Parses as `1` | Rejected: digit required after `.` | Grammar violation (§6) |
-| `"\uD800\u0041"` | Replaces with U+FFFD | Rejected: lone surrogate | RFC 7493 §2.1 violation |
-| `"\uFDD0"` | Accepts silently | Rejected: noncharacter | RFC 7493 §2.1 violation |
-| `{"a":1,"a":2}` | Last value wins | Rejected: duplicate key | RFC 7493 §2.3 violation |
-| `0xFF bytes` | Passes through | Rejected: invalid UTF-8 | RFC 8259 §8.1 violation |
-| `-0` | Parses as `float64(-0)` | Rejected: negative zero | RFC 7493 policy violation |
-| `1e999` | Returns `+Inf` | Rejected: overflow | Precision loss |
-| `1e-400` | Returns `0` | Rejected: underflow | Non-zero token → zero value |
-| `{"a":1}  ` (trailing space) | Parses fine | Accepted (whitespace is allowed) | Not a gap — included for completeness |
-| Unescaped `\t` in string | Accepts | Rejected: control character | RFC 8259 §7 violation |
+| Input | `encoding/json` result | Strict parser | Why it matters |
+|-------|-------------------------|---------------|----------------|
+| `"\uD800\u0041"` | Decodes as `"�A"` (invalid surrogate replaced) | Rejected: lone surrogate | RFC 7493 §2.1 forbids surrogates |
+| `"\uFDD0"` | Accepts noncharacter | Rejected: noncharacter | RFC 7493 §2.1 forbids noncharacters |
+| `{"a":1,"a":2}` | Later key wins (`a=2`) | Rejected: duplicate key | RFC 7493 §2.3 requires unique names |
+| raw bytes `22 ff 22` | Decodes as `"�"` | Rejected: invalid UTF-8 | silent byte substitution changes meaning |
+| `-0` | Accepts lexical `-0` | Rejected: negative zero token | policy profile forbids lexical ambiguity |
+| `1e-400` | Parses to `0` | Rejected: underflow | non-zero token collapses to zero |
 
-None of these are `encoding/json` bugs. Go's parser is designed for maximum interoperability with real-world JSON, which is often technically malformed. For application code, accepting `01` as `1` or replacing lone surrogates with U+FFFD is pragmatic. But a canonicalization engine needs to reject ambiguous input, not silently interpret it. If two parsers disagree on how to interpret an input, the canonical output of that input is undefined. Rejection is the only safe response.
+These are not bugs in `encoding/json`; they are compatibility choices. The [Go package documentation for `Unmarshal`](https://pkg.go.dev/encoding/json#Unmarshal) explicitly states that invalid UTF-8 / invalid UTF-16 surrogates are replaced by U+FFFD, and duplicate object keys are processed in order with later values replacing earlier ones.
+
+Minimal reproduction (Go 1.25.6):
+
+```go
+var v any
+_ = json.Unmarshal([]byte(`"\uD800\u0041"`), &v) // v == "�A"
+_ = json.Unmarshal([]byte(`{"a":1,"a":2}`), &v)  // v == map[string]any{"a": float64(2)}
+_ = json.Unmarshal([]byte("1e-400"), &v)         // v == float64(0)
+```
+
+For application code, replacement and merge behavior is pragmatic. A canonicalization engine has a different contract: reject ambiguous or lossy inputs so every accepted value has a single deterministic canonical form. If two parsers disagree on interpretation, canonical output is undefined. Rejection is the safe outcome.
 
 ## Parser Architecture
 
@@ -312,7 +317,7 @@ func (p *parser) parseUnicodeEscape(sourceOffset int) (rune, *jcserr.Error) {
 
 The 2-character lookahead on line 522 checks for `\u` without consuming input. This is the only lookahead in the parser beyond single-byte dispatch. If the two bytes aren't `\u`, the high surrogate is lone and the error points to the *first* escape's offset. If the second escape exists but decodes to a non-low surrogate (like `\uD800\u0041`), the error points to the *second* escape's offset — because that's where the violation occurs.
 
-Compare with `encoding/json`: it silently replaces lone surrogates with U+FFFD (the replacement character). This is convenient for displaying malformed data, but it silently changes the input. A canonicalization engine cannot do this — changing input bytes means the canonical output no longer represents the original data.
+Compare with `encoding/json`: it replaces lone surrogates with U+FFFD (documented behavior in the `Unmarshal` docs). This is convenient for display pipelines, but it silently changes semantic content. A canonicalization engine cannot do this — changing input bytes means the canonical output no longer represents the original data.
 
 ## Noncharacter Rejection: 66 Forbidden Code Points
 
@@ -371,7 +376,7 @@ func (p *parser) parseObject() (*Value, error) {
 
 The `seen` map uses the decoded string as the key. When the parser encounters `"\u0061"`, it decodes the escape to produce "a", and the map lookup finds a match with a previously seen raw `"a"`. The error message includes the byte offset of *both* occurrences, enabling precise diagnostics.
 
-This is a design choice that some parsers skip entirely (`encoding/json` has no duplicate-key detection) or implement on raw bytes (which misses the escape-decoded equivalence). For canonicalization, the decoded comparison is the only correct approach, because canonical output normalizes all escape sequences.
+This is a design choice that some parsers skip entirely (`encoding/json` processes duplicate keys in input order, with later values replacing or merging earlier ones) or implement on raw bytes (which misses escape-decoded equivalence). For canonicalization, decoded comparison is the only correct approach, because canonical output normalizes escape sequences.
 
 ## Resource Bounds: Seven Independent Limits
 
