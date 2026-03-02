@@ -37,11 +37,14 @@ Write-Host "`n[STEP 1] Verifying Prerequisites..." -ForegroundColor Yellow
 
 # Check Go installation
 try {
-    $goVersion = & go version
-    if ($LASTEXITCODE -ne 0) { throw "Go is not installed or not in PATH" }
-    Write-Host "  ✓ Go installed: $goVersion" -ForegroundColor Green
-} catch {
-    Write-Host "  ✗ Go is not installed. Please install Go 1.22+ from https://go.dev/dl/" -ForegroundColor Red
+    $goVersion = & go version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Go is not installed or not in PATH"
+    }
+    Write-Host "  OK: Go installed: $goVersion" -ForegroundColor Green
+}
+catch {
+    Write-Host "  ERROR: Go is not installed. Please install Go 1.22+ from https://go.dev/dl/" -ForegroundColor Red
     exit 1
 }
 
@@ -62,10 +65,11 @@ foreach ($path in $gitBashPaths) {
 
 if ($bashPath) {
     $bashVersion = & $bashPath --version 2>&1 | Select-Object -First 1
-    Write-Host "  ✓ Git for Windows bash found: $bashPath" -ForegroundColor Green
+    Write-Host "  OK: Git for Windows bash found: $bashPath" -ForegroundColor Green
     Write-Host "    Version: $bashVersion" -ForegroundColor Gray
-} else {
-    Write-Host "  ✗ Git for Windows is not installed. Please install from https://gitforwindows.org/" -ForegroundColor Red
+}
+else {
+    Write-Host "  ERROR: Git for Windows is not installed. Please install from https://gitforwindows.org/" -ForegroundColor Red
     exit 1
 }
 
@@ -76,50 +80,39 @@ Set-Location $GitRepoPath
 # Check current branch
 $currentBranch = & git branch --show-current
 if ($currentBranch -ne "feat/windows-cross-arch-testing-ldSsm") {
-    Write-Host "  ✗ Not on correct branch. Expected: feat/windows-cross-arch-testing-ldSsm, Current: $currentBranch" -ForegroundColor Red
+    Write-Host "  ERROR: Not on correct branch. Expected: feat/windows-cross-arch-testing-ldSsm, Current: $currentBranch" -ForegroundColor Red
     exit 1
 }
-Write-Host "  ✓ On correct branch: $currentBranch" -ForegroundColor Green
+Write-Host "  OK: On correct branch: $currentBranch" -ForegroundColor Green
 
 # Verify commit A exists
 $commitA = & git log --oneline | Select-String "12c5162"
 if (-not $commitA) {
-    Write-Host "  ✗ Commit A (12c5162) not found in history" -ForegroundColor Red
+    Write-Host "  ERROR: Commit A (12c5162) not found in history" -ForegroundColor Red
     exit 1
 }
-Write-Host "  ✓ Commit A found: $commitA" -ForegroundColor Green
+Write-Host "  OK: Commit A found: $commitA" -ForegroundColor Green
 
 # Verify Linux evidence exists
 $linuxEvidencePath = "offline\runs\releases\$RCTag\x86_64\offline-evidence.json"
 if (-not (Test-Path $linuxEvidencePath)) {
-    Write-Host "  ✗ Linux evidence not found at: $linuxEvidencePath" -ForegroundColor Red
+    Write-Host "  ERROR: Linux evidence not found at: $linuxEvidencePath" -ForegroundColor Red
     Write-Host "    Have you copied the Linux evidence from WSL2?" -ForegroundColor Yellow
     exit 1
 }
-Write-Host "  ✓ Linux evidence present" -ForegroundColor Green
+Write-Host "  OK: Linux evidence present" -ForegroundColor Green
 
 # Step 3: Create Windows-compatible matrix files if needed
 Write-Host "`n[STEP 3] Preparing Windows Matrix Files..." -ForegroundColor Yellow
 
-# Function to create batch wrapper for bash scripts
-function New-BatchWrapper {
-    param(
-        [string]$ScriptPath,
-        [string]$BashPath
-    )
-
-    $batPath = $ScriptPath -replace '\.sh$', '.bat'
-    if (-not (Test-Path $batPath)) {
-        $scriptName = Split-Path -Leaf $ScriptPath
-        $batContent = "@echo off`n`"$BashPath`" `"%~dp0$scriptName`" %*"
-        $batContent | Out-File -FilePath $batPath -Encoding ASCII
-        Write-Host "  Created batch wrapper: $batPath" -ForegroundColor Gray
-    }
-    return $batPath
-}
-
 # Create batch wrapper for replay-direct.sh
-$replayBatPath = New-BatchWrapper -ScriptPath "offline\scripts\replay-direct.sh" -BashPath $bashPath
+$replayBatPath = "offline\scripts\replay-direct.bat"
+if (-not (Test-Path $replayBatPath)) {
+    $scriptName = "replay-direct.sh"
+    $batContent = "@echo off`r`n`"$bashPath`" `"%~dp0$scriptName`" %*"
+    $batContent | Out-File -FilePath $replayBatPath -Encoding ASCII
+    Write-Host "  Created batch wrapper: $replayBatPath" -ForegroundColor Gray
+}
 
 # Create temporary Windows matrix files that use .bat instead of .sh
 function New-WindowsMatrix {
@@ -136,28 +129,26 @@ function New-WindowsMatrix {
     }
 }
 
-New-WindowsMatrix -SourceMatrix "offline\matrix.windows-amd64.yaml" `
-                  -TargetMatrix "offline\matrix.windows-amd64-native.yaml"
-
-New-WindowsMatrix -SourceMatrix "offline\matrix.windows-arm64.yaml" `
-                  -TargetMatrix "offline\matrix.windows-arm64-native.yaml"
+New-WindowsMatrix -SourceMatrix "offline\matrix.windows-amd64.yaml" -TargetMatrix "offline\matrix.windows-amd64-native.yaml"
+New-WindowsMatrix -SourceMatrix "offline\matrix.windows-arm64.yaml" -TargetMatrix "offline\matrix.windows-arm64-native.yaml"
 
 # Step 4: Build jcs-offline-replay.exe
 Write-Host "`n[STEP 4] Building jcs-offline-replay.exe..." -ForegroundColor Yellow
 $env:CGO_ENABLED = "0"
 & go build -trimpath -o .tmp\jcs-offline-replay.exe .\cmd\jcs-offline-replay
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ✗ Build failed" -ForegroundColor Red
+    Write-Host "  ERROR: Build failed" -ForegroundColor Red
     exit 1
 }
-Write-Host "  ✓ Build successful" -ForegroundColor Green
+Write-Host "  OK: Build successful" -ForegroundColor Green
 
 # Step 5: Generate Windows amd64 evidence
 Write-Host "`n[STEP 5] Generating Windows amd64 Evidence..." -ForegroundColor Yellow
 $env:JCS_OFFLINE_SOURCE_GIT_TAG = $RCTag
 
 # Ensure Git for Windows bash is in PATH
-$env:PATH = [System.IO.Path]::GetDirectoryName($bashPath) + ";" + $env:PATH
+$bashDir = [System.IO.Path]::GetDirectoryName($bashPath)
+$env:PATH = "$bashDir;$env:PATH"
 
 $amd64Output = "offline\runs\releases\$RCTag\windows_amd64"
 Write-Host "  Output directory: $amd64Output" -ForegroundColor Gray
@@ -169,12 +160,12 @@ Write-Host "  Output directory: $amd64Output" -ForegroundColor Gray
     --skip-preflight
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  ✗ Windows amd64 evidence generation failed" -ForegroundColor Red
+    Write-Host "  ERROR: Windows amd64 evidence generation failed" -ForegroundColor Red
     Write-Host "  Check error messages above for details" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "  ✓ Windows amd64 evidence generated" -ForegroundColor Green
+Write-Host "  OK: Windows amd64 evidence generated" -ForegroundColor Green
 
 # Verify digests match Linux reference
 Write-Host "`n  Verifying Windows amd64 digests..." -ForegroundColor Cyan
@@ -190,9 +181,10 @@ if ($LinuxReferenceDigests.ContainsKey($RCTag)) {
         $expectedDigest = $refDigests.$digestType
 
         if ($actualDigest -eq $expectedDigest) {
-            Write-Host "    ✓ $digestType : $actualDigest" -ForegroundColor Green
-        } else {
-            Write-Host "    ✗ $digestType mismatch!" -ForegroundColor Red
+            Write-Host "    OK: $digestType : $actualDigest" -ForegroundColor Green
+        }
+        else {
+            Write-Host "    ERROR: $digestType mismatch!" -ForegroundColor Red
             Write-Host "      Expected: $expectedDigest" -ForegroundColor Red
             Write-Host "      Actual  : $actualDigest" -ForegroundColor Red
             $digestsMatch = $false
@@ -200,12 +192,13 @@ if ($LinuxReferenceDigests.ContainsKey($RCTag)) {
     }
 
     if (-not $digestsMatch) {
-        Write-Host "`n  ✗ CRITICAL: Windows digests do not match Linux reference values!" -ForegroundColor Red
+        Write-Host "`n  CRITICAL: Windows digests do not match Linux reference values!" -ForegroundColor Red
         Write-Host "  This indicates a determinism issue between Linux and Windows builds." -ForegroundColor Red
         exit 1
     }
-} else {
-    Write-Host "  ⚠ No reference digests for $RCTag - manual verification required" -ForegroundColor Yellow
+}
+else {
+    Write-Host "  WARNING: No reference digests for $RCTag - manual verification required" -ForegroundColor Yellow
 }
 
 # Step 6: Generate Windows arm64 evidence (if not skipped)
@@ -223,11 +216,12 @@ if (-not $SkipArm64) {
         --skip-preflight
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "  ⚠ Windows arm64 evidence generation failed" -ForegroundColor Yellow
+        Write-Host "  WARNING: Windows arm64 evidence generation failed" -ForegroundColor Yellow
         Write-Host "  This is expected on x64 hosts without arm64 emulation." -ForegroundColor Yellow
         Write-Host "  Continuing without arm64 evidence..." -ForegroundColor Yellow
-    } else {
-        Write-Host "  ✓ Windows arm64 evidence generated" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  OK: Windows arm64 evidence generated" -ForegroundColor Green
 
         # Verify arm64 digests if successful
         if (Test-Path "$arm64Output\offline-evidence.json") {
@@ -235,7 +229,8 @@ if (-not $SkipArm64) {
             # Similar verification logic as amd64
         }
     }
-} else {
+}
+else {
     Write-Host "`n[STEP 6] Skipping Windows arm64 evidence generation (-SkipArm64 specified)" -ForegroundColor Yellow
 }
 
@@ -245,7 +240,7 @@ Write-Host "Windows Phase 2 Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Generated evidence:" -ForegroundColor Yellow
-Get-ChildItem -Path "offline\runs\releases\$RCTag\windows*" -Directory | ForEach-Object {
+Get-ChildItem -Path "offline\runs\releases\$RCTag\windows*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
     Write-Host "  - $($_.Name)" -ForegroundColor Gray
 }
 
@@ -253,6 +248,6 @@ Write-Host "`nNext steps:" -ForegroundColor Yellow
 Write-Host "  1. Review the evidence files" -ForegroundColor Gray
 Write-Host "  2. Commit the Windows evidence (Step 7):" -ForegroundColor Gray
 Write-Host "     git add -f offline/runs/releases/$RCTag/windows_*/" -ForegroundColor White
-Write-Host '     git commit -m "evidence: add Windows offline replay evidence for ' + $RCTag + '"' -ForegroundColor White
+Write-Host ("     git commit -m `"evidence: add Windows offline replay evidence for " + $RCTag + "`"") -ForegroundColor White
 Write-Host "     git push origin feat/windows-cross-arch-testing-ldSsm" -ForegroundColor White
 Write-Host "  3. Return to WSL2/Linux for Phase 3 finalization" -ForegroundColor Gray
