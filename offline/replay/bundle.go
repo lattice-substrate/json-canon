@@ -271,6 +271,68 @@ func writeBundleTarGz(path string, entries []bundleEntry) error {
 	return nil
 }
 
+// ExtractWorkerBinary extracts the worker binary from a bundle archive to destDir.
+// It reads the bundle manifest to locate the worker path, then extracts that single
+// entry to destDir. Returns the absolute path to the extracted worker binary.
+//
+//nolint:gocyclo,cyclop,gosec // REQ:OFFLINE-EVIDENCE-001 bundle extraction uses operator-controlled paths.
+func ExtractWorkerBinary(bundlePath, destDir string) (string, error) {
+	manifest, err := ReadBundleManifest(bundlePath)
+	if err != nil {
+		return "", fmt.Errorf("read bundle manifest: %w", err)
+	}
+	if manifest.WorkerPath == "" {
+		return "", fmt.Errorf("bundle manifest has no worker path")
+	}
+
+	f, err := os.Open(bundlePath)
+	if err != nil {
+		return "", fmt.Errorf("open bundle: %w", err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", fmt.Errorf("open bundle gzip stream: %w", err)
+	}
+	defer func() {
+		_ = gz.Close()
+	}()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, nextErr := tr.Next()
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return "", fmt.Errorf("read bundle tar entry: %w", nextErr)
+		}
+		if hdr.Typeflag != tar.TypeReg {
+			continue
+		}
+		if hdr.Name != manifest.WorkerPath {
+			continue
+		}
+		outPath := filepath.Join(destDir, filepath.Base(manifest.WorkerPath))
+		out, createErr := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
+		if createErr != nil {
+			return "", fmt.Errorf("create worker binary: %w", createErr)
+		}
+		if _, copyErr := io.Copy(out, tr); copyErr != nil {
+			_ = out.Close()
+			return "", fmt.Errorf("write worker binary: %w", copyErr)
+		}
+		if closeErr := out.Close(); closeErr != nil {
+			return "", fmt.Errorf("close worker binary: %w", closeErr)
+		}
+		return outPath, nil
+	}
+	return "", fmt.Errorf("worker binary %q not found in bundle", manifest.WorkerPath)
+}
+
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])

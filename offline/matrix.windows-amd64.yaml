@@ -8,9 +8,9 @@
       "mode": "direct",
       "replays": 5,
       "runner": {
-        "kind": "direct_command",
+        "kind": "direct_go",
         "replay": [
-          "./offline/scripts/replay-direct.sh"
+          "go:builtin"
         ]
       }
     }
