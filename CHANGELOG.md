@@ -6,6 +6,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.0-rc.1] - 2026-03-01
+
 ### Added
 - Optional pre-push git hook (`.githooks/pre-push`) that validates vet and lint before tag pushes.
 - CI test matrix expanded to include `windows-latest` for native Windows test execution across all Go versions.
