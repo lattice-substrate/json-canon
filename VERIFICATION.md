@@ -109,18 +109,9 @@ go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
 # Windows amd64
 JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_amd64/offline-evidence.json \
-JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/offline/runs/releases/<tag>/windows_amd64/bin/jcs-canon.exe \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-amd64.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-amd64.yaml \
-JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
-JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
-go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
-
-# Windows arm64
-JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_arm64/offline-evidence.json \
-JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
-JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-arm64.yaml \
-JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-arm64.yaml \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1

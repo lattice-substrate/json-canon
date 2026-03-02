@@ -25,7 +25,8 @@ by execution.
 - Add a `Windows Pre-Release Validation` job in the release workflow that runs
   vet, unit tests, and race tests on a Windows runner.
 - Add `build_windows` jobs in the release workflow that produce
-  `jcs-canon-windows-amd64.zip` and `jcs-canon-windows-arm64.zip` artifacts.
+  `jcs-canon-windows-amd64.zip` artifacts. Windows arm64 artifacts are deferred
+  to a future release.
 - Include Windows artifacts in release checksums and build provenance
   attestation.
 

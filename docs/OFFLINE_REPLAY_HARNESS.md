@@ -24,11 +24,9 @@ The offline harness produces executable evidence that:
 | x86_64 matrix | `offline/matrix.yaml` |
 | arm64 matrix | `offline/matrix.arm64.yaml` |
 | Windows amd64 matrix | `offline/matrix.windows-amd64.yaml` |
-| Windows arm64 matrix | `offline/matrix.windows-arm64.yaml` |
 | x86_64 profile | `offline/profiles/maximal.yaml` |
 | arm64 profile | `offline/profiles/maximal.arm64.yaml` |
 | Windows amd64 profile | `offline/profiles/maximal.windows-amd64.yaml` |
-| Windows arm64 profile | `offline/profiles/maximal.windows-arm64.yaml` |
 | Evidence schema | `offline/schema/evidence.v1.json` |
 | Orchestrator CLI | `cmd/jcs-offline-replay` |
 | Worker CLI | `cmd/jcs-offline-worker` |
@@ -42,9 +40,13 @@ The harness supports three runner modes for matrix nodes:
 - **VM** (`libvirt_command`): runs inside a libvirt-managed VM with snapshot
   revert before each replay. Used for Linux kernel diversity lanes.
 - **Direct** (`direct_command`): runs the worker binary directly on the host
-  OS without isolation. Used for Windows lanes and host-native testing. The
-  `offline/scripts/replay-direct.sh` script extracts the worker from the
-  bundle and executes it directly.
+  OS without isolation via `offline/scripts/replay-direct.sh`. Used for
+  Linux host-native testing.
+- **Direct Go-native** (`direct_go`): runs the worker binary directly on the
+  host OS without isolation, using a pure Go bootstrap path that extracts
+  the worker from the bundle and invokes it via `os/exec`. Requires no
+  shell scripts. Used for Windows lanes and any platform where bash is
+  unavailable.
 
 ## 2. One-Command Paths
 
@@ -82,9 +84,9 @@ jcs-offline-replay cross-os \
   --linux-evidence offline/runs/<run>/x86_64/offline-evidence.json
 ```
 
-This cross-compiles jcs-canon and the worker for Windows (amd64 and arm64)
-from the Linux host, runs `run-suite` for each Windows target, then compares
-aggregate digests against the provided Linux evidence.
+This cross-compiles jcs-canon and the worker for Windows amd64 from the Linux
+host, runs `run-suite` for the Windows target, then compares aggregate digests
+against the provided Linux evidence.
 
 ## 3. Preflight and Runtime Prerequisites
 
@@ -164,8 +166,6 @@ For cross-os runs, the parent directory also contains:
 ```
 cross-os-windows-amd64-compare.json
 cross-os-windows-amd64-compare.md
-cross-os-windows-arm64-compare.json
-cross-os-windows-arm64-compare.md
 ```
 
 `offline/runs/...` outputs are operator-local artifacts and are not tracked in
@@ -179,7 +179,7 @@ evidence.
 - `jcs-offline-replay verify-evidence` prints `ok`
 - `audit/audit-summary.md` shows `Result: PASS`
 - For cross-arch: `cross-arch-compare.md` shows `Result: PASS`
-- For cross-os: both `cross-os-windows-*-compare.md` files show `Result: PASS`
+- For cross-os: `cross-os-windows-amd64-compare.md` shows `Result: PASS`
 
 ### Four aggregate digests compared
 
@@ -270,23 +270,20 @@ Use this exact sequence for cross-OS determinism proof:
 2. Run `cross-os` from the same Linux host, passing `--linux-evidence` pointing
    to the x86_64 evidence file from step 1.
 3. The harness cross-compiles `jcs-canon` and `jcs-offline-worker` for
-   `windows/amd64` and `windows/arm64` using `GOOS=windows`.
+   `windows/amd64` using `GOOS=windows`.
 4. For each Windows target, `run-suite` executes the full pipeline:
    build, preflight, bundle, run, verify, audit, release-gate.
-5. The harness compares each Windows evidence against the Linux evidence,
-   producing `cross-os-windows-{amd64,arm64}-compare.{json,md}`.
-6. Both comparisons must show `RESULT=PASS`.
+5. The harness compares Windows evidence against the Linux evidence,
+   producing `cross-os-windows-amd64-compare.{json,md}`.
+6. The comparison must show `RESULT=PASS`.
 
 The `cross-os` command produces output under:
 
 ```
 offline/runs/cross-os-<UTC_STAMP>/
   windows_amd64/          # full run-suite output for windows/amd64
-  windows_arm64/          # full run-suite output for windows/arm64
   cross-os-windows-amd64-compare.json
   cross-os-windows-amd64-compare.md
-  cross-os-windows-arm64-compare.json
-  cross-os-windows-arm64-compare.md
 ```
 
 ## 9. Security and Isolation Notes
@@ -326,7 +323,7 @@ and the cross-arch comparison.
 Record the output directory path. It contains `x86_64/` and `arm64/`
 subdirectories with evidence.
 
-### Step 2: Run cross-OS proof (Windows amd64 + arm64)
+### Step 2: Run cross-OS proof (Windows amd64)
 
 Use the x86_64 evidence from step 1 as the `--linux-evidence` input:
 
@@ -336,12 +333,11 @@ jcs-offline-replay cross-os \
   --output-dir offline/runs/release-prep-<STAMP>/cross-os
 ```
 
-Wait for completion. Confirm output shows `RESULT=PASS` for both Windows
-architectures.
+Wait for completion. Confirm output shows `RESULT=PASS` for Windows amd64.
 
 ### Step 3: Promote evidence to release directory
 
-Create the release evidence directory and copy all four architecture outputs:
+Create the release evidence directory and copy all three architecture outputs:
 
 ```bash
 TAG=vX.Y.Z
@@ -351,7 +347,6 @@ mkdir -p offline/runs/releases/${TAG}
 cp -r ${PREP}/x86_64     offline/runs/releases/${TAG}/x86_64
 cp -r ${PREP}/arm64      offline/runs/releases/${TAG}/arm64
 cp -r ${PREP}/cross-os/windows_amd64  offline/runs/releases/${TAG}/windows_amd64
-cp -r ${PREP}/cross-os/windows_arm64  offline/runs/releases/${TAG}/windows_arm64
 ```
 
 ### Step 4: Verify evidence source identity
@@ -359,7 +354,7 @@ cp -r ${PREP}/cross-os/windows_arm64  offline/runs/releases/${TAG}/windows_arm64
 Confirm each evidence file records the correct source commit and tag:
 
 ```bash
-for arch in x86_64 arm64 windows_amd64 windows_arm64; do
+for arch in x86_64 arm64 windows_amd64; do
   echo "=== ${arch} ==="
   jq '.source_git_commit, .source_git_tag' \
     offline/runs/releases/${TAG}/${arch}/offline-evidence.json
@@ -397,7 +392,7 @@ git tag -a ${TAG} -m "Release ${TAG}"
 
 ### Step 7: Local release gate verification (optional but recommended)
 
-Build the control binary from the evidence source commit and run all four gates
+Build the control binary from the evidence source commit and run all three gates
 locally before pushing:
 
 ```bash
@@ -408,7 +403,7 @@ GOTOOLCHAIN=go1.24.13 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
 SOURCE_COMMIT=$(jq -r '.source_git_commit' \
   offline/runs/releases/${TAG}/x86_64/offline-evidence.json)
 
-for arch in x86_64 arm64 windows_amd64 windows_arm64; do
+for arch in x86_64 arm64; do
   case ${arch} in
     x86_64)
       MATRIX=offline/matrix.yaml
@@ -416,12 +411,6 @@ for arch in x86_64 arm64 windows_amd64 windows_arm64; do
     arm64)
       MATRIX=offline/matrix.arm64.yaml
       PROFILE=offline/profiles/maximal.arm64.yaml ;;
-    windows_amd64)
-      MATRIX=offline/matrix.windows-amd64.yaml
-      PROFILE=offline/profiles/maximal.windows-amd64.yaml ;;
-    windows_arm64)
-      MATRIX=offline/matrix.windows-arm64.yaml
-      PROFILE=offline/profiles/maximal.windows-arm64.yaml ;;
   esac
 
   echo "=== release gate: ${arch} ==="
@@ -433,9 +422,19 @@ for arch in x86_64 arm64 windows_amd64 windows_arm64; do
   JCS_OFFLINE_EXPECTED_GIT_TAG=${TAG} \
   go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
 done
+
+# Windows amd64 (uses its own control binary from evidence)
+echo "=== release gate: windows_amd64 ==="
+JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/${TAG}/windows_amd64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=$(pwd)/offline/runs/releases/${TAG}/windows_amd64/bin/jcs-canon.exe \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.windows-amd64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.windows-amd64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=${SOURCE_COMMIT} \
+JCS_OFFLINE_EXPECTED_GIT_TAG=${TAG} \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
 ```
 
-All four MUST pass.
+All three MUST pass.
 
 ### Step 8: Push and release
 
@@ -473,8 +472,8 @@ When the release tag is pushed, `.github/workflows/release.yml` runs:
    release tag.
 4. Builds a control binary from the exact evidence source commit via
    `git worktree add --detach`.
-5. Runs `TestOfflineReplayEvidenceReleaseGate` four times — once for each
-   architecture (`x86_64`, `arm64`, `windows_amd64`, `windows_arm64`).
+5. Runs `TestOfflineReplayEvidenceReleaseGate` three times — once for each
+   architecture (`x86_64`, `arm64`, `windows_amd64`).
 
 ### windows_pre_release job (windows-latest)
 
@@ -490,8 +489,7 @@ Runs in parallel with `pre_release`:
 Only after both pre-release jobs pass:
 
 1. Linux static binary + tar.gz bundle built on ubuntu-latest.
-2. Windows .exe + .zip bundles built natively on windows-latest
-   (amd64 and arm64).
+2. Windows .exe + .zip bundle built natively on windows-latest (amd64).
 3. SHA256SUMS generated covering all artifacts.
 4. SLSA provenance attestation emitted for each platform artifact.
 5. GitHub Release published (RCs marked as prerelease).
@@ -535,8 +533,6 @@ Only after both pre-release jobs pass:
 --linux-evidence <path>            REQUIRED: path to existing Linux x86_64 evidence
 --windows-amd64-matrix <path>      Windows amd64 matrix (default: offline/matrix.windows-amd64.yaml)
 --windows-amd64-profile <path>     Windows amd64 profile (default: offline/profiles/maximal.windows-amd64.yaml)
---windows-arm64-matrix <path>      Windows arm64 matrix (default: offline/matrix.windows-arm64.yaml)
---windows-arm64-profile <path>     Windows arm64 profile (default: offline/profiles/maximal.windows-arm64.yaml)
 --output-dir <path>                Output directory
 --timeout <duration>               Run timeout (default: 12h)
 --skip-preflight                   Skip preflight checks

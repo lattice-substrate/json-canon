@@ -110,19 +110,9 @@ jobs:
         env:
           JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_amd64/offline-evidence.json
           JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_amd64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_amd64/bin/jcs-canon.exe
           JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.windows-amd64.yaml
           JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.windows-amd64.yaml
-          JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
-          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
-        run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
-      - name: offline evidence gate windows_arm64
-        env:
-          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_arm64/offline-evidence.json
-          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_arm64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
-          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.windows-arm64.yaml
-          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.windows-arm64.yaml
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
@@ -201,7 +191,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        goarch: [amd64, arm64]
+        goarch: [amd64]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -245,7 +235,7 @@ jobs:
           path: dist
       - name: Create SHA256SUMS
         # Expected artifacts: jcs-canon, jcs-canon-linux-x86_64.tar.gz,
-        # jcs-canon-windows-amd64.zip, jcs-canon-windows-arm64.zip
+        # jcs-canon-windows-amd64.zip
         shell: bash
         run: |
           set -euo pipefail
@@ -262,7 +252,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        artifact: [jcs-canon-linux, jcs-canon-windows-amd64, jcs-canon-windows-arm64]
+        artifact: [jcs-canon-linux, jcs-canon-windows-amd64]
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

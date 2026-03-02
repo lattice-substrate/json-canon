@@ -13,7 +13,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - CI test matrix expanded to include `windows-latest` for native Windows test execution across all Go versions.
 - CI now includes a Windows Native Reproducible Build job that builds twice on a Windows runner and compares SHA-256 hashes.
 - Release workflow now includes a Windows Pre-Release Validation job (`go vet`, `go test`, `go test -race` on `windows-latest`).
-- Release workflow now produces `jcs-canon-windows-amd64.zip` and `jcs-canon-windows-arm64.zip` artifacts with build provenance attestation.
+- Release workflow now produces `jcs-canon-windows-amd64.zip` artifact with build provenance attestation. Windows arm64 artifact deferred to a future release.
 - Windows release artifacts included in `SHA256SUMS` and provenance attestation matrix.
 - New policy requirement `CI-WINDOWS-001` for native Windows CI gate enforcement.
 - ADR-0005: cross-platform CI and release expansion (supersedes ADR-0003 on platform scope).

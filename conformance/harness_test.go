@@ -2066,7 +2066,6 @@ func checkReleaseWorkflowVerificationArtifacts(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "attestations: write", "release workflow permissions")
 	assertContains(t, releaseWorkflow, "id-token: write", "release workflow permissions")
 	assertContains(t, releaseWorkflow, "jcs-canon-windows-amd64.zip", "release workflow windows amd64 artifact")
-	assertContains(t, releaseWorkflow, "jcs-canon-windows-arm64.zip", "release workflow windows arm64 artifact")
 }
 
 // TestCIReproducibleBuildCheckPresent verifies CI includes deterministic-build validation.
@@ -2093,7 +2092,6 @@ func checkCIWindowsNativeGate(t *testing.T, h *harness) {
 	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
 	assertContains(t, releaseWorkflow, "Windows Pre-Release Validation", "release workflow windows pre-release job")
 	assertContains(t, releaseWorkflow, "jcs-canon-windows-amd64.zip", "release workflow windows amd64 artifact")
-	assertContains(t, releaseWorkflow, "jcs-canon-windows-arm64.zip", "release workflow windows arm64 artifact")
 }
 
 // TestCILintGateEnforced verifies CI includes a pinned and explicit lint gate.
