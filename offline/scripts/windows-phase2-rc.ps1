@@ -110,10 +110,8 @@ function New-BatchWrapper {
 
     $batPath = $ScriptPath -replace '\.sh$', '.bat'
     if (-not (Test-Path $batPath)) {
-        $batContent = @"
-@echo off
-"$BashPath" "%~dp0$(Split-Path -Leaf $ScriptPath)" %*
-"@
+        $scriptName = Split-Path -Leaf $ScriptPath
+        $batContent = "@echo off`n`"$BashPath`" `"%~dp0$scriptName`" %*"
         $batContent | Out-File -FilePath $batPath -Encoding ASCII
         Write-Host "  Created batch wrapper: $batPath" -ForegroundColor Gray
     }
@@ -238,7 +236,7 @@ if (-not $SkipArm64) {
         }
     }
 } else {
-    Write-Host "`n[STEP 6] Skipping Windows arm64 evidence generation (--SkipArm64 specified)" -ForegroundColor Yellow
+    Write-Host "`n[STEP 6] Skipping Windows arm64 evidence generation (-SkipArm64 specified)" -ForegroundColor Yellow
 }
 
 # Summary
