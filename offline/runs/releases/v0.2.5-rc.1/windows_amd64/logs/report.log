@@ -1,0 +1,8 @@
+schema: evidence.v1
+profile: maximal-offline-windows-amd64
+architecture: windows_amd64
+source git commit: a25f18aded136f57b2f36c460f5684db12a33fb0
+source git tag: v0.2.5-rc.1
+runs: 5
+aggregate canonical: 2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6
+node windows-ltsc2022-direct: 5 replays

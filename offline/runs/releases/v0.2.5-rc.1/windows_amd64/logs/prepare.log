@@ -1,0 +1,4 @@
+bundle: C:\Users\lenny\temp\json-canon\offline\runs\releases\v0.2.5-rc.1\windows_amd64\offline-bundle.tgz
+binary_sha256: b323c610da053b5e63093382715bf4e41b931b8f0c40b375978333ee49eb40e2
+worker_sha256: 921cb6fe8ff3687853656f53c16d534880af4cc619858a027c23a417f2b0ca79
+vector_set_sha256: a784e17fc83ff56ab70735884f63ebe356d31064c788db917e738dc9b0e459a3
