@@ -112,8 +112,8 @@ foreach ($vector in $allVectors) {
         $currentTest++
         Write-Progress -Activity "Running tests" -Status "Test $currentTest of $totalTests" -PercentComplete (($currentTest / $totalTests) * 100)
 
-        # Test canonical output - use stdin redirection
-        $canonicalOutput = $inputContent | & .\.tmp\jcs-canon.exe canonical - 2>&1
+        # Test canonicalize output - use stdin redirection
+        $canonicalOutput = $inputContent | & .\.tmp\jcs-canon.exe canonicalize - 2>&1
         $canonicalExitCode = $LASTEXITCODE
 
         if ($canonicalExitCode -eq 0) {
