@@ -16,17 +16,22 @@ import (
 )
 
 const (
-	defaultMatrixPath       = "offline/matrix.yaml"
-	defaultProfilePath      = "offline/profiles/maximal.yaml"
-	defaultARMMatrixPath    = "offline/matrix.arm64.yaml"
-	defaultARMProfilePath   = "offline/profiles/maximal.arm64.yaml"
-	defaultRunTimeout       = 12 * time.Hour
-	defaultBuildVersion     = "v0.0.0-dev"
-	defaultCrossArchTimeout = 12 * time.Hour
-	dirPerm                 = 0o750
-	filePerm                = 0o600
-	resultPass              = "PASS"
-	resultFail              = "FAIL"
+	defaultMatrixPath              = "offline/matrix.yaml"
+	defaultProfilePath             = "offline/profiles/maximal.yaml"
+	defaultARMMatrixPath           = "offline/matrix.arm64.yaml"
+	defaultARMProfilePath          = "offline/profiles/maximal.arm64.yaml"
+	defaultWindowsAMD64MatrixPath  = "offline/matrix.windows-amd64.yaml"
+	defaultWindowsAMD64ProfilePath = "offline/profiles/maximal.windows-amd64.yaml"
+	defaultWindowsARM64MatrixPath  = "offline/matrix.windows-arm64.yaml"
+	defaultWindowsARM64ProfilePath = "offline/profiles/maximal.windows-arm64.yaml"
+	defaultRunTimeout              = 12 * time.Hour
+	defaultBuildVersion            = "v0.0.0-dev"
+	defaultCrossArchTimeout        = 12 * time.Hour
+	defaultCrossOSTimeout          = 12 * time.Hour
+	dirPerm                        = 0o750
+	filePerm                       = 0o600
+	resultPass                     = "PASS"
+	resultFail                     = "FAIL"
 )
 
 type runSuiteOptions struct {
@@ -85,6 +90,23 @@ type crossArchReport struct {
 	Arm64Evidence  string           `json:"arm64_evidence"`
 	Result         string           `json:"result"`
 	Checks         []crossArchCheck `json:"checks"`
+}
+
+type crossOSCheck struct {
+	Field   string `json:"field"`
+	Label   string `json:"label"`
+	Linux   string `json:"linux"`
+	Windows string `json:"windows"`
+	Match   bool   `json:"match"`
+}
+
+type crossOSReport struct {
+	GeneratedAtUTC  string         `json:"generated_at_utc"`
+	LinuxEvidence   string         `json:"linux_evidence"`
+	WindowsEvidence string         `json:"windows_evidence"`
+	WindowsArch     string         `json:"windows_architecture"`
+	Result          string         `json:"result"`
+	Checks          []crossOSCheck `json:"checks"`
 }
 
 type preflightReporter struct {
@@ -223,6 +245,112 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 		return writeErr
 	}
 	if writeErr := writef(stdout, "[cross-arch] RESULT=%s\n", report.Result); writeErr != nil {
+		return writeErr
+	}
+	return nil
+}
+
+//nolint:gocognit,gocyclo,cyclop,funlen // REQ:OFFLINE-LOCAL-001 cross-os workflow intentionally keeps each gate explicit for auditability.
+func cmdCrossOS(flags map[string]string, stdout io.Writer) error {
+	skipPreflight, err := parseBoolFlag(flags, "--skip-preflight")
+	if err != nil {
+		return err
+	}
+	skipReleaseGate, err := parseBoolFlag(flags, "--skip-release-gate")
+	if err != nil {
+		return err
+	}
+
+	linuxEvidencePath := strings.TrimSpace(flags["--linux-evidence"])
+	if linuxEvidencePath == "" {
+		return fmt.Errorf("cross-os requires --linux-evidence pointing to existing Linux x86_64 evidence")
+	}
+
+	winAMD64Matrix := defaultString(flags, "--windows-amd64-matrix", defaultWindowsAMD64MatrixPath)
+	winAMD64Profile := defaultString(flags, "--windows-amd64-profile", defaultWindowsAMD64ProfilePath)
+	winARM64Matrix := defaultString(flags, "--windows-arm64-matrix", defaultWindowsARM64MatrixPath)
+	winARM64Profile := defaultString(flags, "--windows-arm64-profile", defaultWindowsARM64ProfilePath)
+
+	timeout := defaultCrossOSTimeout
+	if raw := strings.TrimSpace(flags["--timeout"]); raw != "" {
+		parsed, parseErr := time.ParseDuration(raw)
+		if parseErr != nil || parsed <= 0 {
+			return fmt.Errorf("invalid --timeout value %q", raw)
+		}
+		timeout = parsed
+	}
+
+	version := defaultString(flags, "--version", defaultBuildVersion)
+	outDir := strings.TrimSpace(flags["--output-dir"])
+	if outDir == "" {
+		outDir = filepath.Join("offline", "runs", "cross-os-"+utcStamp())
+	}
+	outDirAbs, err := filepath.Abs(outDir)
+	if err != nil {
+		return fmt.Errorf("resolve output dir: %w", err)
+	}
+	if err = os.MkdirAll(outDirAbs, dirPerm); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+
+	if writeErr := writef(stdout, "[cross-os] running windows_amd64 harness\n"); writeErr != nil {
+		return writeErr
+	}
+	winAMD64Run, err := runSuite(runSuiteOptions{
+		MatrixPath:      winAMD64Matrix,
+		ProfilePath:     winAMD64Profile,
+		OutputDir:       filepath.Join(outDirAbs, "windows_amd64"),
+		Timeout:         timeout,
+		Version:         version,
+		SkipPreflight:   skipPreflight,
+		SkipReleaseGate: skipReleaseGate,
+	}, stdout)
+	if err != nil {
+		return err
+	}
+
+	if writeErr := writef(stdout, "[cross-os] running windows_arm64 harness\n"); writeErr != nil {
+		return writeErr
+	}
+	winARM64Run, err := runSuite(runSuiteOptions{
+		MatrixPath:      winARM64Matrix,
+		ProfilePath:     winARM64Profile,
+		OutputDir:       filepath.Join(outDirAbs, "windows_arm64"),
+		Timeout:         timeout,
+		Version:         version,
+		SkipPreflight:   skipPreflight,
+		SkipReleaseGate: skipReleaseGate,
+	}, stdout)
+	if err != nil {
+		return err
+	}
+
+	repoRoot := resolveRepoRoot()
+
+	amd64CompareJSON := filepath.Join(outDirAbs, "cross-os-windows-amd64-compare.json")
+	amd64CompareMD := filepath.Join(outDirAbs, "cross-os-windows-amd64-compare.md")
+	amd64Report, err := compareCrossOSEvidence(linuxEvidencePath, winAMD64Run.EvidencePath, "windows_amd64", amd64CompareJSON, amd64CompareMD, repoRoot)
+	if err != nil {
+		return err
+	}
+
+	arm64CompareJSON := filepath.Join(outDirAbs, "cross-os-windows-arm64-compare.json")
+	arm64CompareMD := filepath.Join(outDirAbs, "cross-os-windows-arm64-compare.md")
+	arm64Report, err := compareCrossOSEvidence(linuxEvidencePath, winARM64Run.EvidencePath, "windows_arm64", arm64CompareJSON, arm64CompareMD, repoRoot)
+	if err != nil {
+		return err
+	}
+
+	if writeErr := writef(stdout, "[cross-os] windows_amd64 report: %s\n", amd64CompareMD); writeErr != nil {
+		return writeErr
+	}
+	if writeErr := writef(stdout, "[cross-os] windows_arm64 report: %s\n", arm64CompareMD); writeErr != nil {
+		return writeErr
+	}
+	if writeErr := writef(stdout, "[cross-os] windows_amd64 RESULT=%s\n", amd64Report.Result); writeErr != nil {
+		return writeErr
+	}
+	if writeErr := writef(stdout, "[cross-os] windows_arm64 RESULT=%s\n", arm64Report.Result); writeErr != nil {
 		return writeErr
 	}
 	return nil
@@ -602,6 +730,7 @@ func runPreflight(matrixPath string, strict bool, out io.Writer) error {
 	r.checkBaseTooling()
 	r.checkContainerLanes(matrix.Nodes)
 	r.checkVMLanes(matrix.Nodes)
+	r.checkDirectLanes(matrix.Nodes)
 
 	if writeErr := writef(out, "[preflight] failures=%d warnings=%d\n", r.failures, r.warnings); writeErr != nil {
 		return writeErr
@@ -721,6 +850,31 @@ func (r *preflightReporter) checkVMLanes(nodes []replay.NodeSpec) {
 			r.failf("vm ssh unreachable: %s -> %s (%s)", lane.NodeID, lane.SSHTarget, out)
 		} else {
 			r.passf("vm ssh reachable: %s -> %s", lane.NodeID, lane.SSHTarget)
+		}
+	}
+}
+
+func (r *preflightReporter) checkDirectLanes(nodes []replay.NodeSpec) {
+	directNodes := make([]replay.NodeSpec, 0)
+	for _, node := range nodes {
+		if node.Mode == replay.NodeModeDirect {
+			directNodes = append(directNodes, node)
+		}
+	}
+	if len(directNodes) == 0 {
+		return
+	}
+	r.info("[preflight] checking direct execution lanes")
+	for _, node := range directNodes {
+		if len(node.Runner.Replay) == 0 {
+			r.failf("direct node %s has empty replay command", node.ID)
+			continue
+		}
+		replayCmd := node.Runner.Replay[0]
+		if _, err := os.Stat(replayCmd); err != nil {
+			r.warnf("direct node %s replay script not found locally: %s (may be present on target host)", node.ID, replayCmd)
+		} else {
+			r.passf("direct node %s replay script present: %s", node.ID, replayCmd)
 		}
 	}
 }
@@ -1113,6 +1267,80 @@ func writeCrossArchReport(report *crossArchReport, jsonPath, mdPath string) erro
 	lines = append(lines, "")
 	if err := os.WriteFile(mdPath, []byte(strings.Join(lines, "\n")), filePerm); err != nil {
 		return fmt.Errorf("write cross-arch markdown report: %w", err)
+	}
+	return nil
+}
+
+func compareCrossOSEvidence(linuxEvidencePath, windowsEvidencePath, windowsArch, jsonPath, mdPath, repoRoot string) (*crossOSReport, error) {
+	linuxEvidence, err := replay.LoadEvidence(linuxEvidencePath)
+	if err != nil {
+		return nil, fmt.Errorf("load linux evidence: %w", err)
+	}
+	windowsEvidence, err := replay.LoadEvidence(windowsEvidencePath)
+	if err != nil {
+		return nil, fmt.Errorf("load windows evidence: %w", err)
+	}
+	report := buildCrossOSReport(linuxEvidence, windowsEvidence, windowsArch, toRepoRelative(repoRoot, linuxEvidencePath), toRepoRelative(repoRoot, windowsEvidencePath), wallClockNowUTC())
+	if err := writeCrossOSReport(report, jsonPath, mdPath); err != nil {
+		return nil, err
+	}
+	if report.Result != resultPass {
+		return report, fmt.Errorf("cross-os digest comparison failed for %s", windowsArch)
+	}
+	return report, nil
+}
+
+func buildCrossOSReport(linuxEvidence, windowsEvidence *replay.EvidenceBundle, windowsArch, linuxPath, windowsPath string, now time.Time) *crossOSReport {
+	checks := []crossOSCheck{
+		{Field: "aggregate_canonical_sha256", Label: "canonical", Linux: linuxEvidence.AggregateCanonical, Windows: windowsEvidence.AggregateCanonical},
+		{Field: "aggregate_verify_sha256", Label: "verify", Linux: linuxEvidence.AggregateVerify, Windows: windowsEvidence.AggregateVerify},
+		{Field: "aggregate_failure_class_sha256", Label: "failure_class", Linux: linuxEvidence.AggregateClass, Windows: windowsEvidence.AggregateClass},
+		{Field: "aggregate_exit_code_sha256", Label: "exit_code", Linux: linuxEvidence.AggregateExitCode, Windows: windowsEvidence.AggregateExitCode},
+	}
+	allMatch := true
+	for i := range checks {
+		checks[i].Match = checks[i].Linux == checks[i].Windows
+		allMatch = allMatch && checks[i].Match
+	}
+	result := resultFail
+	if allMatch {
+		result = resultPass
+	}
+	return &crossOSReport{
+		GeneratedAtUTC:  now.Format(time.RFC3339Nano),
+		LinuxEvidence:   linuxPath,
+		WindowsEvidence: windowsPath,
+		WindowsArch:     windowsArch,
+		Result:          result,
+		Checks:          checks,
+	}
+}
+
+func writeCrossOSReport(report *crossOSReport, jsonPath, mdPath string) error {
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal cross-os report: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	if err := os.WriteFile(jsonPath, encoded, filePerm); err != nil {
+		return fmt.Errorf("write cross-os json report: %w", err)
+	}
+	lines := make([]string, 0, len(report.Checks)+8)
+	lines = append(lines, "# Cross-OS Replay Comparison")
+	lines = append(lines, "")
+	lines = append(lines, fmt.Sprintf("- Result: **%s**", report.Result))
+	lines = append(lines, fmt.Sprintf("- Windows architecture: `%s`", report.WindowsArch))
+	lines = append(lines, fmt.Sprintf("- Linux evidence: `%s`", report.LinuxEvidence))
+	lines = append(lines, fmt.Sprintf("- Windows evidence: `%s`", report.WindowsEvidence))
+	lines = append(lines, "")
+	lines = append(lines, "| Field | Linux | Windows | Match |")
+	lines = append(lines, "|---|---|---|---|")
+	for _, check := range report.Checks {
+		lines = append(lines, fmt.Sprintf("| %s | `%s` | `%s` | `%t` |", check.Field, check.Linux, check.Windows, check.Match))
+	}
+	lines = append(lines, "")
+	if err := os.WriteFile(mdPath, []byte(strings.Join(lines, "\n")), filePerm); err != nil {
+		return fmt.Errorf("write cross-os markdown report: %w", err)
 	}
 	return nil
 }

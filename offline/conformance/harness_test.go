@@ -38,6 +38,16 @@ func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.arm64.yaml"),
 			architecture: "arm64",
 		},
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.windows-amd64.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.windows-amd64.yaml"),
+			architecture: "windows_amd64",
+		},
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.windows-arm64.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.windows-arm64.yaml"),
+			architecture: "windows_arm64",
+		},
 	}
 
 	for _, tc := range tests {

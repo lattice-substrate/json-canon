@@ -1,0 +1,19 @@
+{
+  "architecture": "windows_amd64",
+  "nodes": [
+    {
+      "distro": "windows-ltsc2022",
+      "id": "windows-ltsc2022-direct",
+      "kernel_family": "ntkernel",
+      "mode": "direct",
+      "replays": 5,
+      "runner": {
+        "kind": "direct_command",
+        "replay": [
+          "./offline/scripts/replay-direct.sh"
+        ]
+      }
+    }
+  ],
+  "version": "v1"
+}

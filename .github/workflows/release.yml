@@ -106,6 +106,26 @@ jobs:
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
+      - name: offline evidence gate windows_amd64
+        env:
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_amd64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_amd64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
+          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.windows-amd64.yaml
+          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.windows-amd64.yaml
+          JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
+        run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
+      - name: offline evidence gate windows_arm64
+        env:
+          JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_arm64/offline-evidence.json
+          JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/windows_arm64/offline-bundle.tgz
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
+          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.windows-arm64.yaml
+          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.windows-arm64.yaml
+          JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
+          JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
+        run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:

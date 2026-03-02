@@ -47,7 +47,8 @@ Maintainers and consumers verify integrity and provenance using `VERIFICATION.md
 
 A release is incomplete if verification steps are missing or invalid.
 
-For offline cold-replay assurance, release validation MUST include both architecture gates:
+For offline cold-replay assurance, release validation MUST include all
+architecture gates (Linux x86_64, Linux arm64, Windows amd64, Windows arm64):
 
 Build the release-gate control binary with the exact release workflow Go patch
 version and release tag version string:
@@ -59,6 +60,7 @@ GOTOOLCHAIN=go1.24.13 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
 ```
 
 ```bash
+# Linux x86_64
 JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.yaml \
@@ -67,10 +69,29 @@ JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
+# Linux arm64
 JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/arm64/offline-evidence.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+# Windows amd64
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_amd64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-amd64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-amd64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+# Windows arm64
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_arm64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-arm64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-arm64.yaml \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
@@ -92,10 +113,19 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
-For release tagging, move the validated cross-arch output under:
+For Windows cross-OS determinism verification (requires existing Linux evidence):
+
+```bash
+jcs-offline-replay cross-os \
+  --linux-evidence offline/runs/<run>/x86_64/offline-evidence.json
+```
+
+For release tagging, move the validated cross-arch and cross-os output under:
 
 - `offline/runs/releases/<tag>/x86_64/...`
 - `offline/runs/releases/<tag>/arm64/...`
+- `offline/runs/releases/<tag>/windows_amd64/...`
+- `offline/runs/releases/<tag>/windows_arm64/...`
 
 and ensure `offline-evidence.json` records:
 
@@ -139,7 +169,7 @@ the release workflow resolves source identity directly from archived evidence
 1. Confirm CI status for target commit/tag.
 2. Confirm ABI-impact classification for this version.
 3. Confirm changelog accuracy and migration guidance (if applicable).
-4. Validate offline replay evidence gates for both `x86_64` and `arm64` release matrices.
+4. Validate offline replay evidence gates for all release matrices (`x86_64`, `arm64`, `windows_amd64`, `windows_arm64`).
 5. Validate official ES6 100,000,000-line checksum gate.
 6. Run `go run ./cmd/jcs-gate` or confirm pre-push hook is active.
 7. Publish tag and release.

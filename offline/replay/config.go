@@ -34,6 +34,8 @@ const (
 	NodeModeContainer NodeMode = "container"
 	// NodeModeVM executes a node via VM/libvirt runtime commands.
 	NodeModeVM NodeMode = "vm"
+	// NodeModeDirect executes a node by running the binary directly on the host OS.
+	NodeModeDirect NodeMode = "direct"
 )
 
 const architectureARM64 = "arm64"
@@ -115,6 +117,16 @@ func ensureSingleJSONDocument(dec *json.Decoder) error {
 	return nil
 }
 
+// IsWindowsArchitecture reports whether the architecture identifier represents a Windows target.
+func IsWindowsArchitecture(arch string) bool {
+	switch arch {
+	case "windows_amd64", "windows_arm64":
+		return true
+	default:
+		return false
+	}
+}
+
 // ValidateMatrix validates replay matrix semantics and release-policy requirements.
 //
 //nolint:gocyclo,cyclop,gocognit // REQ:OFFLINE-MATRIX-001 matrix policy validation is explicit to keep release-gate failures actionable.
@@ -132,9 +144,12 @@ func ValidateMatrix(m *Matrix) error {
 		return fmt.Errorf("matrix must include at least one node")
 	}
 
+	isWindows := IsWindowsArchitecture(m.Architecture)
+
 	seen := make(map[string]struct{}, len(m.Nodes))
 	hasContainer := false
 	hasVM := false
+	hasDirect := false
 	for i := range m.Nodes {
 		n := &m.Nodes[i]
 		if n.ID == "" {
@@ -150,6 +165,8 @@ func ValidateMatrix(m *Matrix) error {
 			hasContainer = true
 		case NodeModeVM:
 			hasVM = true
+		case NodeModeDirect:
+			hasDirect = true
 		default:
 			return fmt.Errorf("node %s: invalid mode %q", n.ID, n.Mode)
 		}
@@ -169,11 +186,21 @@ func ValidateMatrix(m *Matrix) error {
 			return fmt.Errorf("node %s: runner.kind is required", n.ID)
 		}
 	}
-	if !hasContainer {
-		return fmt.Errorf("matrix must include at least one container node")
-	}
-	if !hasVM {
-		return fmt.Errorf("matrix must include at least one vm node")
+
+	if isWindows {
+		if !hasDirect {
+			return fmt.Errorf("windows matrix must include at least one direct node")
+		}
+		if hasContainer || hasVM {
+			return fmt.Errorf("windows matrix must not include container or vm nodes")
+		}
+	} else {
+		if !hasContainer {
+			return fmt.Errorf("matrix must include at least one container node")
+		}
+		if !hasVM {
+			return fmt.Errorf("matrix must include at least one vm node")
+		}
 	}
 	return nil
 }
@@ -207,10 +234,10 @@ func ValidateReleaseArchitecture(m *Matrix) error {
 		return fmt.Errorf("matrix is nil")
 	}
 	switch m.Architecture {
-	case "x86_64", architectureARM64:
+	case "x86_64", architectureARM64, "windows_amd64", "windows_arm64":
 		return nil
 	default:
-		return fmt.Errorf("release architecture must be one of x86_64, %s, got %q", architectureARM64, m.Architecture)
+		return fmt.Errorf("release architecture must be one of x86_64, %s, windows_amd64, windows_arm64, got %q", architectureARM64, m.Architecture)
 	}
 }
 

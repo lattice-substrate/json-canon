@@ -19,6 +19,7 @@ import (
 
 	"github.com/lattice-substrate/json-canon/offline/replay"
 	"github.com/lattice-substrate/json-canon/offline/runtime/container"
+	"github.com/lattice-substrate/json-canon/offline/runtime/direct"
 	"github.com/lattice-substrate/json-canon/offline/runtime/executil"
 	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
 )
@@ -67,6 +68,8 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		return 0, cmdRunSuite(flags, stdout)
 	case "cross-arch":
 		return 0, cmdCrossArch(flags, stdout)
+	case "cross-os":
+		return 0, cmdCrossOS(flags, stdout)
 	case "verify-evidence":
 		return 0, cmdVerifyEvidence(flags, stdout)
 	case "report":
@@ -405,6 +408,7 @@ func adapterFactory() replay.AdapterFactory {
 	baseRunner := executil.OSRunner{}
 	containerAdapter := container.NewAdapter(baseRunner)
 	libvirtAdapter := libvirt.NewAdapter(baseRunner)
+	directAdapter := direct.NewAdapter(baseRunner)
 
 	return func(node replay.NodeSpec) (replay.NodeAdapter, error) {
 		switch node.Mode {
@@ -418,6 +422,11 @@ func adapterFactory() replay.AdapterFactory {
 				return nil, fmt.Errorf("node %s mode=vm requires runner.kind prefix libvirt or vm", node.ID)
 			}
 			return libvirtAdapter, nil
+		case replay.NodeModeDirect:
+			if !strings.HasPrefix(node.Runner.Kind, "direct") {
+				return nil, fmt.Errorf("node %s mode=direct requires runner.kind prefix direct", node.ID)
+			}
+			return directAdapter, nil
 		default:
 			return nil, fmt.Errorf("node %s unsupported mode %q", node.ID, node.Mode)
 		}
@@ -525,7 +534,7 @@ func fileSHA256(path string) (string, error) {
 }
 
 func writeUsage(w io.Writer) error {
-	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
+	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|cross-os|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
@@ -544,6 +553,9 @@ func writeUsage(w io.Writer) error {
 		return err
 	}
 	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  cross-os --linux-evidence <path> [--windows-amd64-matrix <path>] [--windows-amd64-profile <path>] [--windows-arm64-matrix <path>] [--windows-arm64-profile <path>] [--output-dir <path>] [--timeout 12h] [--skip-preflight] [--skip-release-gate]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
