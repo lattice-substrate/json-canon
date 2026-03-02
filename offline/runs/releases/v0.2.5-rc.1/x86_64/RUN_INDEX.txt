@@ -1,0 +1,9 @@
+offline_cold_replay_run_dir=offline/runs/release-prep-v0.2.5-rc.1/x86_64
+matrix=offline/matrix.yaml
+profile=offline/profiles/maximal.yaml
+bundle=offline/runs/release-prep-v0.2.5-rc.1/x86_64/offline-bundle.tgz
+evidence=offline/runs/release-prep-v0.2.5-rc.1/x86_64/offline-evidence.json
+controller=offline/runs/release-prep-v0.2.5-rc.1/x86_64/bin/jcs-offline-replay
+canonicalizer=offline/runs/release-prep-v0.2.5-rc.1/x86_64/bin/jcs-canon
+audit_markdown=offline/runs/release-prep-v0.2.5-rc.1/x86_64/audit/audit-summary.md
+audit_json=offline/runs/release-prep-v0.2.5-rc.1/x86_64/audit/audit-summary.json
