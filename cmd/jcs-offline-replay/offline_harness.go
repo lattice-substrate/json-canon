@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -504,11 +505,18 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		return nil, fmt.Errorf("resolve profile path: %w", err)
 	}
 
+	effectiveGOOS := opts.TargetGOOS
+	if effectiveGOOS == "" {
+		effectiveGOOS = runtime.GOOS
+	}
 	canonBinName := "jcs-canon"
-	if opts.TargetGOOS == "windows" {
-		canonBinName = "jcs-canon.exe"
+	workerBinName := "jcs-offline-worker"
+	if effectiveGOOS == "windows" {
+		canonBinName += ".exe"
+		workerBinName += ".exe"
 	}
 	canonBin := filepath.Join(outDirAbs, "bin", canonBinName)
+	workerBin := filepath.Join(outDirAbs, "bin", workerBinName)
 	controllerBin := filepath.Join(outDirAbs, "bin", "jcs-offline-replay")
 	bundlePath := filepath.Join(outDirAbs, "offline-bundle.tgz")
 	evidencePath := filepath.Join(outDirAbs, "offline-evidence.json")
@@ -528,6 +536,9 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}
 
 	if buildErr := buildCanonicalizer(canonBin, opts.Version, opts.TargetGOOS, opts.TargetGOARCH, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
+		return nil, buildErr
+	}
+	if buildErr := buildWorkerForSuite(workerBin, opts.TargetGOOS, opts.TargetGOARCH, filepath.Join(outDirAbs, "logs", "build-jcs-offline-worker.log"), stdout); buildErr != nil {
 		return nil, buildErr
 	}
 	if buildErr := buildController(controllerBin, filepath.Join(outDirAbs, "logs", "build-jcs-offline-replay.log"), stdout); buildErr != nil {
@@ -550,6 +561,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		"--matrix":  opts.MatrixPath,
 		"--profile": opts.ProfilePath,
 		"--binary":  canonBin,
+		"--worker":  workerBin,
 		"--bundle":  bundlePath,
 	}
 	if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "prepare.log"), stdout, func(w io.Writer) error {
@@ -668,6 +680,21 @@ func buildController(outputPath, logPath string, stdout io.Writer) error {
 	}
 	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-replay")
+}
+
+func buildWorkerForSuite(outputPath, targetGOOS, targetGOARCH, logPath string, stdout io.Writer) error {
+	if err := writeLine(stdout, "[run] build jcs-offline-worker"); err != nil {
+		return err
+	}
+	env := map[string]string{"CGO_ENABLED": "0"}
+	if targetGOOS != "" {
+		env["GOOS"] = targetGOOS
+	}
+	if targetGOARCH != "" {
+		env["GOARCH"] = targetGOARCH
+	}
+	return runGoCommandLogged(logPath, stdout, env,
+		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-worker")
 }
 
 func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSourceGitCommit, expectedSourceGitTag, logPath string, stdout io.Writer) error {

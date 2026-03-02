@@ -98,9 +98,9 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 	manifest := &BundleManifest{
 		Version:       opts.Version,
 		CreatedAtUTC:  wallClockNowUTC().Format(time.RFC3339Nano),
-		BinaryPath:    "bundle/jcs-canon",
+		BinaryPath:    "bundle/" + filepath.Base(opts.BinaryPath),
 		BinarySHA256:  sha256Hex(binaryBytes),
-		WorkerPath:    "bundle/jcs-offline-worker",
+		WorkerPath:    "bundle/" + filepath.Base(opts.WorkerPath),
 		WorkerSHA256:  sha256Hex(workerBytes),
 		MatrixPath:    "bundle/matrix.yaml",
 		MatrixSHA256:  sha256Hex(matrixBytes),

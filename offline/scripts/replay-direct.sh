@@ -28,11 +28,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! tar -xzf "$JCS_BUNDLE_PATH" -C "$tmpdir" bundle/jcs-offline-worker >/dev/null 2>&1; then
-  echo "failed to extract worker from bundle" >&2
+if ! tar -xzf "$JCS_BUNDLE_PATH" -C "$tmpdir" >/dev/null 2>&1; then
+  echo "failed to extract bundle" >&2
   exit 2
 fi
-worker="$tmpdir/bundle/jcs-offline-worker"
+if [[ -f "$tmpdir/bundle/jcs-offline-worker.exe" ]]; then
+  worker="$tmpdir/bundle/jcs-offline-worker.exe"
+elif [[ -f "$tmpdir/bundle/jcs-offline-worker" ]]; then
+  worker="$tmpdir/bundle/jcs-offline-worker"
+else
+  echo "worker binary not found in bundle" >&2
+  exit 2
+fi
 chmod +x "$worker"
 
 export LC_ALL=C

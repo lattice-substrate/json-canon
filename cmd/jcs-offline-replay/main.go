@@ -104,7 +104,7 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 		return fmt.Errorf("load profile: %w", loadErr)
 	}
 
-	workerPath, cleanupWorker, err := resolveWorkerPath(flags)
+	workerPath, cleanupWorker, err := resolveWorkerPath(flags, "", "")
 	if err != nil {
 		return err
 	}
@@ -192,12 +192,12 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	return writeRunSummary(stdout, evidencePath, evidence)
 }
 
-func resolveWorkerPath(flags map[string]string) (string, func(), error) {
+func resolveWorkerPath(flags map[string]string, targetGOOS, targetGOARCH string) (string, func(), error) {
 	workerPath := requireFlag(flags, "--worker")
 	if workerPath != "" {
 		return workerPath, func() {}, nil
 	}
-	workerPath, err := buildWorkerBinary()
+	workerPath, err := buildWorkerBinary(targetGOOS, targetGOARCH)
 	if err != nil {
 		return "", func() {}, err
 	}
@@ -585,15 +585,26 @@ func writeErrorLine(stderr io.Writer, err error) int {
 	return 2
 }
 
-func buildWorkerBinary() (string, error) {
+func buildWorkerBinary(targetGOOS, targetGOARCH string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "jcs-offline-worker-*")
 	if err != nil {
 		return "", fmt.Errorf("create worker temp dir: %w", err)
 	}
-	out := filepath.Join(tmpDir, "jcs-offline-worker")
+	binName := "jcs-offline-worker"
+	if targetGOOS == "windows" {
+		binName += ".exe"
+	}
+	out := filepath.Join(tmpDir, binName)
 	// #nosec G204 -- fixed go tool invocation with controlled arguments.
 	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", out, "./cmd/jcs-offline-worker")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	env := append(os.Environ(), "CGO_ENABLED=0")
+	if targetGOOS != "" {
+		env = append(env, "GOOS="+targetGOOS)
+	}
+	if targetGOARCH != "" {
+		env = append(env, "GOARCH="+targetGOARCH)
+	}
+	cmd.Env = env
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf

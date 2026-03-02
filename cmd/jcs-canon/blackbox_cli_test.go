@@ -37,7 +37,11 @@ func blackboxBinary(t *testing.T) string {
 			errBlackboxBuild = err
 			return
 		}
-		blackboxBin = filepath.Join(dir, "jcs-canon")
+		binName := "jcs-canon"
+		if runtime.GOOS == "windows" {
+			binName = "jcs-canon.exe"
+		}
+		blackboxBin = filepath.Join(dir, binName)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()

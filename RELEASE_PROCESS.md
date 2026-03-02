@@ -28,9 +28,9 @@ Before creating a release tag, all MUST be true:
 ## Tagging and Build
 
 1. Maintainer creates annotated tag `vX.Y.Z`.
-2. CI release workflow builds Linux static artifact with deterministic flags.
-3. Workflow publishes artifact bundle and `SHA256SUMS`.
-4. Workflow emits build provenance attestation.
+2. CI release workflow builds Linux static artifact and Windows artifacts with deterministic flags.
+3. Workflow publishes artifact bundles and `SHA256SUMS`.
+4. Workflow emits build provenance attestation for all platform artifacts.
 
 ## Release Artifacts
 
@@ -38,8 +38,9 @@ Each release SHOULD include:
 
 1. compressed Linux release bundle: `jcs-canon-linux-x86_64.tar.gz` (contains `jcs-canon`, `LICENSE`, `NOTICE`, `README.md`, `CHANGELOG.md`),
 2. raw `jcs-canon` binary,
-3. `SHA256SUMS`,
-4. provenance attestation.
+3. compressed Windows release bundles: `jcs-canon-windows-amd64.zip` and `jcs-canon-windows-arm64.zip` (each contains `jcs-canon.exe`, `LICENSE`, `NOTICE`, `README.md`, `CHANGELOG.md`),
+4. `SHA256SUMS`,
+5. provenance attestation for all platform artifacts.
 
 ## Verification Requirements
 

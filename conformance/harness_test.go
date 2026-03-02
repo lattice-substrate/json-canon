@@ -281,6 +281,8 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
 		"OFFLINE-ARCH-001":     checkOfflineArchScopeDualArch,
 		"OFFLINE-LOCAL-001":    checkOfflineLocalProofCLI,
+		// CI-WINDOWS
+		"CI-WINDOWS-001": checkCIWindowsNativeGate,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -367,7 +369,11 @@ func buildConformanceBinary(root string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create conformance temp dir: %w", err)
 	}
-	bin := filepath.Join(binDir, "jcs-canon")
+	binName := "jcs-canon"
+	if runtime.GOOS == "windows" {
+		binName = "jcs-canon.exe"
+	}
+	bin := filepath.Join(binDir, binName)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -2059,6 +2065,8 @@ func checkReleaseWorkflowVerificationArtifacts(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "actions/attest-build-provenance@", "release workflow provenance")
 	assertContains(t, releaseWorkflow, "attestations: write", "release workflow permissions")
 	assertContains(t, releaseWorkflow, "id-token: write", "release workflow permissions")
+	assertContains(t, releaseWorkflow, "jcs-canon-windows-amd64.zip", "release workflow windows amd64 artifact")
+	assertContains(t, releaseWorkflow, "jcs-canon-windows-arm64.zip", "release workflow windows arm64 artifact")
 }
 
 // TestCIReproducibleBuildCheckPresent verifies CI includes deterministic-build validation.
@@ -2068,6 +2076,24 @@ func TestCIReproducibleBuildCheckPresent(t *testing.T) {
 	assertContains(t, ciWorkflow, "build twice and compare sha256", "ci reproducible build gate")
 	assertContains(t, ciWorkflow, "-buildid=", "ci deterministic build flags")
 	assertContains(t, ciWorkflow, "CGO_ENABLED=0 go build", "ci static build gate")
+}
+
+// TestCIWindowsNativeGate verifies CI and release include native Windows execution.
+func TestCIWindowsNativeGate(t *testing.T) {
+	h := testHarness(t)
+	checkCIWindowsNativeGate(t, h)
+}
+
+func checkCIWindowsNativeGate(t *testing.T, h *harness) {
+	t.Helper()
+	ciWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "ci.yml"))
+	assertContains(t, ciWorkflow, "windows-latest", "ci test matrix windows runner")
+	assertContains(t, ciWorkflow, "Windows Native Reproducible Build", "ci windows reproducible build job")
+
+	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
+	assertContains(t, releaseWorkflow, "Windows Pre-Release Validation", "release workflow windows pre-release job")
+	assertContains(t, releaseWorkflow, "jcs-canon-windows-amd64.zip", "release workflow windows amd64 artifact")
+	assertContains(t, releaseWorkflow, "jcs-canon-windows-arm64.zip", "release workflow windows arm64 artifact")
 }
 
 // TestCILintGateEnforced verifies CI includes a pinned and explicit lint gate.
@@ -2328,6 +2354,7 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT", "release workflow expected git commit env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG", "release workflow expected git tag env")
+	assertContains(t, releaseWorkflow, "Windows Pre-Release Validation", "release workflow windows pre-release gate")
 }
 
 // TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.

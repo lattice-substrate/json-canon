@@ -105,6 +105,12 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | LINT-CONFIG-001 | golangci.yml | Lint Policy | MUST | Lint configuration MUST enforce strict suppression governance (`nolintlint` require-specific/explanation/used) and include determinism/supply-hardening linters (`forbidigo`, `depguard`, `bidichk`, `asciicheck`, `gocognit`, `copyloopvar`, `durationcheck`, `makezero`). |
 | LINT-NOLINT-001 | golangci.yml + source tree | Suppression Discipline | MUST | Every `//nolint` directive MUST be linter-specific, MUST NOT use blanket `all`, and MUST include an explicit requirement-ID rationale. |
 
+## CI-WINDOWS — Native Windows CI Gate
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| CI-WINDOWS-001 | .github/workflows/ci.yml + .github/workflows/release.yml | CI Gates | MUST | CI test matrix MUST include `windows-latest` with native test execution, CI MUST include a Windows native reproducible build job, and release workflow MUST include a Windows pre-release validation job and Windows release artifacts. |
+
 ## OFFLINE — Cold Replay Assurance
 
 | ID | Spec | Section | Level | Requirement |

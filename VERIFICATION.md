@@ -6,7 +6,7 @@ This document describes how to verify the authenticity and integrity of
 ## Prerequisites
 
 - [GitHub CLI](https://cli.github.com/) (`gh`) version 2.49+ for attestation verification
-- `sha256sum` (Linux)
+- `sha256sum` (Linux) or `Get-FileHash` (Windows PowerShell)
 
 ## 1. Download Artifacts
 
@@ -32,7 +32,12 @@ Each binary has a GitHub-signed build attestation proving it was built by the
 repository's CI workflow from the tagged source commit.
 
 ```bash
+# Linux
 gh attestation verify ./jcs-canon-linux-x86_64.tar.gz \
+  --repo lattice-substrate/json-canon
+
+# Windows
+gh attestation verify ./jcs-canon-windows-amd64.zip \
   --repo lattice-substrate/json-canon
 ```
 
@@ -41,9 +46,9 @@ Successful output confirms:
 - The build used the repository's release workflow
 - The source commit matches the tagged release
 
-## 4. Verify Reproducible Build
+## 4. Verify Reproducible Build (Linux)
 
-To independently verify the binary is reproducible from source:
+To independently verify the Linux binary is reproducible from source:
 
 ```bash
 git clone https://github.com/lattice-substrate/json-canon.git
@@ -59,6 +64,26 @@ sha256sum jcs-canon
 
 Compare the resulting checksum against the `SHA256SUMS` file for your platform.
 Note: reproducibility requires the same Go version and OS/arch used in CI.
+
+## 4a. Verify Reproducible Build (Windows)
+
+To independently verify the Windows binary is reproducible from source using
+PowerShell:
+
+```pwsh
+git clone https://github.com/lattice-substrate/json-canon.git
+cd json-canon
+git checkout vX.Y.Z
+
+$env:CGO_ENABLED = "0"
+go build -trimpath -buildvcs=false `
+  '-ldflags=-s -w -buildid= -X main.version=vX.Y.Z' `
+  -o jcs-canon.exe ./cmd/jcs-canon
+
+(Get-FileHash -Algorithm SHA256 jcs-canon.exe).Hash
+```
+
+Compare the resulting checksum against the `SHA256SUMS` file.
 
 ## 5. Verify Offline Cold-Replay Evidence
 
@@ -78,6 +103,24 @@ JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/arm64/offline-evid
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.arm64.yaml \
 JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.arm64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+# Windows amd64
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_amd64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-amd64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-amd64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+
+# Windows arm64
+JCS_OFFLINE_EVIDENCE=/abs/path/to/offline/runs/releases/<tag>/windows_arm64/offline-evidence.json \
+JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_MATRIX=/abs/path/to/offline/matrix.windows-arm64.yaml \
+JCS_OFFLINE_PROFILE=/abs/path/to/offline/profiles/maximal.windows-arm64.yaml \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1

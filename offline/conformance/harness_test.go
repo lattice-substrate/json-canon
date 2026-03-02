@@ -125,6 +125,19 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if !strings.Contains(releaseWorkflow, "offline evidence gate arm64") {
 		t.Fatal("release workflow missing explicit arm64 offline evidence gate")
 	}
+	ciWorkflow := mustReadText(t, filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if !strings.Contains(ciWorkflow, "windows-latest") {
+		t.Fatal("ci workflow missing windows-latest in test matrix")
+	}
+	if !strings.Contains(ciWorkflow, "Windows Native Reproducible Build") {
+		t.Fatal("ci workflow missing Windows Native Reproducible Build job")
+	}
+	if !strings.Contains(releaseWorkflow, "Windows Pre-Release Validation") {
+		t.Fatal("release workflow missing Windows Pre-Release Validation job")
+	}
+	if !strings.Contains(releaseWorkflow, "jcs-canon-windows-amd64.zip") {
+		t.Fatal("release workflow missing jcs-canon-windows-amd64.zip artifact")
+	}
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")
 	}
