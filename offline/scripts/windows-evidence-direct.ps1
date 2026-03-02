@@ -104,7 +104,8 @@ foreach ($vector in $allVectors) {
         $vector | ConvertTo-Json -Compress
     }
 
-    $inputContent | Out-File -FilePath $tempInput -Encoding UTF8NoBOM
+    # Write UTF8 without BOM
+    [System.IO.File]::WriteAllText($tempInput, $inputContent, [System.Text.UTF8Encoding]::new($false))
 
     # Run 5 replays for determinism verification
     for ($replay = 1; $replay -le 5; $replay++) {
