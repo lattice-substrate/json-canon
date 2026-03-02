@@ -549,7 +549,7 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "  audit-summary --matrix <path> --profile <path> --evidence <path> [--output-dir <path>]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]"); err != nil {
+	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate] [--target-goos <os>] [--target-goarch <arch>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {

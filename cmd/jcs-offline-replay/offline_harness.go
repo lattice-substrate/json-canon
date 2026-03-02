@@ -42,6 +42,8 @@ type runSuiteOptions struct {
 	Version         string
 	SkipPreflight   bool
 	SkipReleaseGate bool
+	TargetGOOS      string
+	TargetGOARCH    string
 }
 
 type runSuiteArtifacts struct {
@@ -304,6 +306,8 @@ func cmdCrossOS(flags map[string]string, stdout io.Writer) error {
 		Version:         version,
 		SkipPreflight:   skipPreflight,
 		SkipReleaseGate: skipReleaseGate,
+		TargetGOOS:      "windows",
+		TargetGOARCH:    "amd64",
 	}, stdout)
 	if err != nil {
 		return err
@@ -320,6 +324,8 @@ func cmdCrossOS(flags map[string]string, stdout io.Writer) error {
 		Version:         version,
 		SkipPreflight:   skipPreflight,
 		SkipReleaseGate: skipReleaseGate,
+		TargetGOOS:      "windows",
+		TargetGOARCH:    "arm64",
 	}, stdout)
 	if err != nil {
 		return err
@@ -460,6 +466,8 @@ func parseRunSuiteOptions(flags map[string]string) (runSuiteOptions, error) {
 		Version:         defaultString(flags, "--version", defaultBuildVersion),
 		SkipPreflight:   skipPreflight,
 		SkipReleaseGate: skipReleaseGate,
+		TargetGOOS:      strings.TrimSpace(flags["--target-goos"]),
+		TargetGOARCH:    strings.TrimSpace(flags["--target-goarch"]),
 	}, nil
 }
 
@@ -496,7 +504,11 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		return nil, fmt.Errorf("resolve profile path: %w", err)
 	}
 
-	canonBin := filepath.Join(outDirAbs, "bin", "jcs-canon")
+	canonBinName := "jcs-canon"
+	if opts.TargetGOOS == "windows" {
+		canonBinName = "jcs-canon.exe"
+	}
+	canonBin := filepath.Join(outDirAbs, "bin", canonBinName)
 	controllerBin := filepath.Join(outDirAbs, "bin", "jcs-offline-replay")
 	bundlePath := filepath.Join(outDirAbs, "offline-bundle.tgz")
 	evidencePath := filepath.Join(outDirAbs, "offline-evidence.json")
@@ -515,7 +527,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		return nil, err
 	}
 
-	if buildErr := buildCanonicalizer(canonBin, opts.Version, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
+	if buildErr := buildCanonicalizer(canonBin, opts.Version, opts.TargetGOOS, opts.TargetGOARCH, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
 		return nil, buildErr
 	}
 	if buildErr := buildController(controllerBin, filepath.Join(outDirAbs, "logs", "build-jcs-offline-replay.log"), stdout); buildErr != nil {
@@ -635,11 +647,18 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}, nil
 }
 
-func buildCanonicalizer(outputPath, version, logPath string, stdout io.Writer) error {
+func buildCanonicalizer(outputPath, version, targetGOOS, targetGOARCH, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] build jcs-canon"); err != nil {
 		return err
 	}
-	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
+	env := map[string]string{"CGO_ENABLED": "0"}
+	if targetGOOS != "" {
+		env["GOOS"] = targetGOOS
+	}
+	if targetGOARCH != "" {
+		env["GOARCH"] = targetGOARCH
+	}
+	return runGoCommandLogged(logPath, stdout, env,
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid= -X main.version="+version, "-o", outputPath, "./cmd/jcs-canon")
 }
 

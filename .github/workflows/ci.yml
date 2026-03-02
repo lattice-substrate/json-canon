@@ -132,3 +132,33 @@ jobs:
           echo "first : $sha1"
           echo "second: $sha2"
           test "$sha1" = "$sha2"
+
+  windows_cross_compile:
+    name: Windows Cross-Compile (${{ matrix.goarch }})
+    needs: [conformance, race, fuzz]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.24.x'
+      - name: cross-compile and verify reproducibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmpdir=$(mktemp -d)
+          out1="$tmpdir/jcs-canon-a.exe"
+          out2="$tmpdir/jcs-canon-b.exe"
+          GOOS=windows GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=v0.0.0-dev" -o "$out1" ./cmd/jcs-canon
+          GOOS=windows GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w -buildid= -X main.version=v0.0.0-dev" -o "$out2" ./cmd/jcs-canon
+          sha1=$(sha256sum "$out1" | awk '{print $1}')
+          sha2=$(sha256sum "$out2" | awk '{print $1}')
+          echo "windows/${{ matrix.goarch }} first : $sha1"
+          echo "windows/${{ matrix.goarch }} second: $sha2"
+          test "$sha1" = "$sha2"
+      - name: validate windows matrix and profile
+        run: go test ./offline/replay -run TestLoadWindows -count=1 -v
