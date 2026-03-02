@@ -124,7 +124,8 @@ function New-WindowsMatrix {
     if (Test-Path $SourceMatrix) {
         $content = Get-Content $SourceMatrix -Raw
         $content = $content -replace './offline/scripts/replay-direct\.sh', './offline/scripts/replay-direct.bat'
-        $content | Out-File -FilePath $TargetMatrix -Encoding UTF8
+        # Use ASCII encoding to avoid UTF-8 BOM issues with JSON parser
+        $content | Out-File -FilePath $TargetMatrix -Encoding ASCII
         Write-Host "  Created Windows matrix: $TargetMatrix" -ForegroundColor Gray
     }
 }
