@@ -205,7 +205,18 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 
 func defaultEvidenceArtifactPaths(evidencePath string) (string, string) {
 	base := filepath.Dir(evidencePath)
-	return filepath.Join(base, "offline-bundle.tgz"), filepath.Join(base, "bin", "jcs-canon")
+	canonPath := filepath.Join(base, "bin", "jcs-canon")
+	if _, err := os.Stat(canonPath); err != nil {
+		if exePath := canonPath + ".exe"; fileExists(exePath) {
+			canonPath = exePath
+		}
+	}
+	return filepath.Join(base, "offline-bundle.tgz"), canonPath
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func lookupEnvTrimmed(name string) string {
