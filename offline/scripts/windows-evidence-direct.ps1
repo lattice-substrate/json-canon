@@ -37,20 +37,44 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "  OK: jcs-canon.exe built" -ForegroundColor Green
 
-# Step 2: Get test vectors
-Write-Host "`n[STEP 2] Loading test vectors..." -ForegroundColor Yellow
-$vectorPaths = @(
-    "offline/vectors/official-es256k.json",
-    "offline/vectors/official-float-corner.json",
-    "offline/vectors/official-test-vectors.json"
+# Step 2: Extract and load test vectors from bundle
+Write-Host "`n[STEP 2] Loading test vectors from bundle..." -ForegroundColor Yellow
+
+# The bundle was already created during the Linux phase
+$bundlePath = "offline\runs\releases\$RCTag\x86_64\offline-bundle.tgz"
+if (-not (Test-Path $bundlePath)) {
+    Write-Host "  ERROR: Bundle not found at $bundlePath" -ForegroundColor Red
+    Write-Host "  Make sure Linux evidence was generated first" -ForegroundColor Red
+    exit 1
+}
+
+# Extract bundle to temp directory
+$tempDir = Join-Path $env:TEMP "json-canon-windows-test"
+Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $tempDir | Out-Null
+
+# Use tar to extract (available on Windows 10+)
+& tar -xzf $bundlePath -C $tempDir 2>&1 | Out-Null
+
+# Load test vectors from JSONL files
+$vectorFiles = @(
+    "$tempDir\bundle\vectors\core.jsonl",
+    "$tempDir\bundle\vectors\offsets.jsonl",
+    "$tempDir\bundle\vectors\reject.jsonl",
+    "$tempDir\bundle\vectors\verify.jsonl"
 )
 
 $allVectors = @()
-foreach ($path in $vectorPaths) {
-    if (Test-Path $path) {
-        $content = Get-Content $path -Raw | ConvertFrom-Json
-        $allVectors += $content
-        Write-Host "  Loaded: $path" -ForegroundColor Gray
+foreach ($file in $vectorFiles) {
+    if (Test-Path $file) {
+        $lines = Get-Content $file
+        foreach ($line in $lines) {
+            if ($line.Trim()) {
+                $vector = $line | ConvertFrom-Json
+                $allVectors += $vector
+            }
+        }
+        Write-Host "  Loaded: $(Split-Path -Leaf $file)" -ForegroundColor Gray
     }
 }
 Write-Host "  OK: Loaded $($allVectors.Count) test vectors" -ForegroundColor Green
@@ -68,21 +92,33 @@ $totalTests = $allVectors.Count * 5  # 5 replays per vector
 $currentTest = 0
 
 foreach ($vector in $allVectors) {
-    # Save vector to temp file
+    # Save vector input to temp file
     $tempInput = [System.IO.Path]::GetTempFileName()
-    $vector.input | Out-File -FilePath $tempInput -Encoding UTF8NoBOM
+
+    # Handle different vector formats
+    $inputContent = if ($vector.PSObject.Properties['input']) {
+        $vector.input
+    } elseif ($vector.PSObject.Properties['json']) {
+        $vector.json
+    } else {
+        $vector | ConvertTo-Json -Compress
+    }
+
+    $inputContent | Out-File -FilePath $tempInput -Encoding UTF8NoBOM
 
     # Run 5 replays for determinism verification
     for ($replay = 1; $replay -le 5; $replay++) {
         $currentTest++
         Write-Progress -Activity "Running tests" -Status "Test $currentTest of $totalTests" -PercentComplete (($currentTest / $totalTests) * 100)
 
-        # Test canonical output
-        $canonicalOutput = & .\.tmp\jcs-canon.exe canonical $tempInput 2>&1
+        # Test canonical output - use stdin redirection
+        $canonicalOutput = $inputContent | & .\.tmp\jcs-canon.exe canonical - 2>&1
         $canonicalExitCode = $LASTEXITCODE
 
         if ($canonicalExitCode -eq 0) {
-            $canonicalBytes = [System.Text.Encoding]::UTF8.GetBytes($canonicalOutput -join "`n")
+            # Only hash the actual output, not error messages
+            $outputStr = ($canonicalOutput | Where-Object { $_ -is [string] }) -join ""
+            $canonicalBytes = [System.Text.Encoding]::UTF8.GetBytes($outputStr)
             $sha256 = [System.Security.Cryptography.SHA256]::Create()
             $hash = $sha256.ComputeHash($canonicalBytes)
             $hashHex = [System.BitConverter]::ToString($hash).Replace("-", "").ToLower()
@@ -91,7 +127,7 @@ foreach ($vector in $allVectors) {
         $results.exit_code += $canonicalExitCode
 
         # Test verify command
-        $verifyOutput = & .\.tmp\jcs-canon.exe verify $tempInput 2>&1
+        $verifyOutput = $inputContent | & .\.tmp\jcs-canon.exe verify - 2>&1
         $verifyExitCode = $LASTEXITCODE
         $results.verify += $verifyExitCode
 
@@ -105,11 +141,14 @@ foreach ($vector in $allVectors) {
         $results.failure_class += $failureClass
     }
 
-    Remove-Item $tempInput -Force
+    Remove-Item $tempInput -Force -ErrorAction SilentlyContinue
 }
 
 Write-Progress -Activity "Running tests" -Completed
 Write-Host "  OK: Completed $totalTests tests" -ForegroundColor Green
+
+# Clean up temp directory
+Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # Step 4: Calculate aggregate digests
 Write-Host "`n[STEP 4] Calculating aggregate digests..." -ForegroundColor Yellow
