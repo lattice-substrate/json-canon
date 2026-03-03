@@ -30,7 +30,9 @@ func BenchmarkSerialize(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(tc.input)))
 			for i := 0; i < b.N; i++ {
-				_, _ = jcs.Serialize(v)
+				if _, err := jcs.Serialize(v); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
@@ -51,11 +53,9 @@ func BenchmarkCanonicalize(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(tc.input)))
 			for i := 0; i < b.N; i++ {
-				v, err := jcstoken.Parse(tc.input)
-				if err != nil {
+				if _, err := jcs.Canonicalize(tc.input); err != nil {
 					b.Fatal(err)
 				}
-				_, _ = jcs.Serialize(v)
 			}
 		})
 	}

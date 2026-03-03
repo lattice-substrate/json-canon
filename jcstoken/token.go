@@ -82,13 +82,48 @@ func resolveOption(val, def int) int {
 	return def
 }
 
-func (o *Options) maxDepth() int         { if o == nil { return DefaultMaxDepth }; return resolveOption(o.MaxDepth, DefaultMaxDepth) }
-func (o *Options) maxInputSize() int     { if o == nil { return DefaultMaxInputSize }; return resolveOption(o.MaxInputSize, DefaultMaxInputSize) }
-func (o *Options) maxValues() int        { if o == nil { return DefaultMaxValues }; return resolveOption(o.MaxValues, DefaultMaxValues) }
-func (o *Options) maxObjectMembers() int { if o == nil { return DefaultMaxObjectMembers }; return resolveOption(o.MaxObjectMembers, DefaultMaxObjectMembers) }
-func (o *Options) maxArrayElements() int { if o == nil { return DefaultMaxArrayElements }; return resolveOption(o.MaxArrayElements, DefaultMaxArrayElements) }
-func (o *Options) maxStringBytes() int   { if o == nil { return DefaultMaxStringBytes }; return resolveOption(o.MaxStringBytes, DefaultMaxStringBytes) }
-func (o *Options) maxNumberChars() int   { if o == nil { return DefaultMaxNumberChars }; return resolveOption(o.MaxNumberChars, DefaultMaxNumberChars) }
+func (o *Options) maxDepth() int {
+	if o == nil {
+		return DefaultMaxDepth
+	}
+	return resolveOption(o.MaxDepth, DefaultMaxDepth)
+}
+func (o *Options) maxInputSize() int {
+	if o == nil {
+		return DefaultMaxInputSize
+	}
+	return resolveOption(o.MaxInputSize, DefaultMaxInputSize)
+}
+func (o *Options) maxValues() int {
+	if o == nil {
+		return DefaultMaxValues
+	}
+	return resolveOption(o.MaxValues, DefaultMaxValues)
+}
+func (o *Options) maxObjectMembers() int {
+	if o == nil {
+		return DefaultMaxObjectMembers
+	}
+	return resolveOption(o.MaxObjectMembers, DefaultMaxObjectMembers)
+}
+func (o *Options) maxArrayElements() int {
+	if o == nil {
+		return DefaultMaxArrayElements
+	}
+	return resolveOption(o.MaxArrayElements, DefaultMaxArrayElements)
+}
+func (o *Options) maxStringBytes() int {
+	if o == nil {
+		return DefaultMaxStringBytes
+	}
+	return resolveOption(o.MaxStringBytes, DefaultMaxStringBytes)
+}
+func (o *Options) maxNumberChars() int {
+	if o == nil {
+		return DefaultMaxNumberChars
+	}
+	return resolveOption(o.MaxNumberChars, DefaultMaxNumberChars)
+}
 
 // parser holds the state for parsing.
 type parser struct {
@@ -418,11 +453,8 @@ func (p *parser) parseString() (*Value, error) {
 
 	// General path: pre-seed buffer with any ASCII prefix already validated,
 	// then handle escapes, non-ASCII runes, and control characters byte-by-byte.
-	var buf []byte
-	if p.pos > start {
-		buf = make([]byte, p.pos-start)
-		copy(buf, p.data[start:p.pos])
-	}
+	buf := make([]byte, 0, p.pos-start+32) //nolint:mnd // REQ:PARSE-GRAM-004 reasonable initial capacity for mixed-content strings.
+	buf = append(buf, p.data[start:p.pos]...)
 	for {
 		if p.pos >= len(p.data) {
 			return nil, p.newError("unterminated string")

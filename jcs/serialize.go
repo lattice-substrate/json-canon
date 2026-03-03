@@ -25,7 +25,7 @@ import (
 func Canonicalize(input []byte) ([]byte, error) {
 	v, err := jcstoken.Parse(input)
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // API-CANON-001: pass through jcstoken parse errors unchanged.
 	}
 	return Serialize(v)
 }
@@ -36,7 +36,7 @@ func Canonicalize(input []byte) ([]byte, error) {
 func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, error) {
 	v, err := jcstoken.ParseWithOptions(input, opts)
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck // API-CANON-002: pass through jcstoken parse errors unchanged.
 	}
 	return Serialize(v)
 }

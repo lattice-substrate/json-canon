@@ -26,7 +26,9 @@ func BenchmarkParse(b *testing.B) {
 			b.ReportAllocs()
 			b.SetBytes(int64(len(tc.input)))
 			for i := 0; i < b.N; i++ {
-				_, _ = jcstoken.Parse(tc.input)
+				if _, err := jcstoken.Parse(tc.input); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}
