@@ -354,3 +354,57 @@ func TestSerializeNonObjectTopLevel(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+// === API-CANON-001: Canonicalize produces output identical to Parse+Serialize ===
+
+func TestCanonicalize_API_CANON_001(t *testing.T) {
+	inputs := []string{
+		`{"b":2,"a":1}`,
+		`{ "z" : true , "a" : null }`,
+		`[3, 1, 2]`,
+		`"hello"`,
+		`42`,
+		`true`,
+		`null`,
+		`{"nested":{"b":2,"a":1},"outer":1}`,
+	}
+	for _, in := range inputs {
+		want := canon(t, in)
+		got, err := jcs.Canonicalize([]byte(in))
+		if err != nil {
+			t.Fatalf("Canonicalize(%q): %v", in, err)
+		}
+		if string(got) != want {
+			t.Fatalf("Canonicalize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// === API-CANON-002: CanonicalizeWithOptions passes options to ParseWithOptions ===
+
+func TestCanonicalizeWithOptions_API_CANON_002(t *testing.T) {
+	// Verify options are passed through: restrict depth to 1 and check rejection.
+	deep := []byte(`{"a":{"b":1}}`)
+	opts := &jcstoken.Options{MaxDepth: 1}
+	_, err := jcs.CanonicalizeWithOptions(deep, opts)
+	if err == nil {
+		t.Fatal("expected depth error with MaxDepth=1")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) {
+		t.Fatalf("expected *jcserr.Error, got %T", err)
+	}
+	if je.Class != jcserr.BoundExceeded {
+		t.Fatalf("expected BoundExceeded, got %s", je.Class)
+	}
+
+	// Verify nil options works (uses defaults).
+	got, err := jcs.CanonicalizeWithOptions([]byte(`{"b":1,"a":2}`), nil)
+	if err != nil {
+		t.Fatalf("CanonicalizeWithOptions with nil opts: %v", err)
+	}
+	want := canon(t, `{"b":1,"a":2}`)
+	if string(got) != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

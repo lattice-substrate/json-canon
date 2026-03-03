@@ -169,7 +169,7 @@ func checkOfficialES6100MReleaseGatePolicy(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "JCS_OFFICIAL_ES6_ENABLE_100M", "release workflow official 100M gate env")
 	assertContains(t, releaseWorkflow, "TestOfficialES6CorpusChecksums100M", "release workflow official 100M gate invocation")
 
-	releaseDoc := mustReadText(t, filepath.Join(h.root, "RELEASE_PROCESS.md"))
+	releaseDoc := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
 	assertContains(t, releaseDoc, "JCS_OFFICIAL_ES6_ENABLE_100M=1", "release process 100M command")
 	assertContains(t, releaseDoc, "TestOfficialES6CorpusChecksums100M", "release process 100M test name")
 }

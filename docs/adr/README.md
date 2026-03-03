@@ -24,4 +24,4 @@ Create/update an ADR when a change affects:
 1. Create ADR from `docs/adr/ADR-TEMPLATE.md`.
 2. Link related requirements and affected docs.
 3. Mark status and date.
-4. Update references in `GOVERNANCE.md` and release notes.
+4. Update references in `CONTRIBUTING.md` and release notes.

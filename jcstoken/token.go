@@ -75,53 +75,54 @@ type Options struct {
 	MaxNumberChars   int
 }
 
+func resolveOption(val, def int) int {
+	if val > 0 {
+		return val
+	}
+	return def
+}
+
 func (o *Options) maxDepth() int {
-	if o != nil && o.MaxDepth > 0 {
-		return o.MaxDepth
+	if o == nil {
+		return DefaultMaxDepth
 	}
-	return DefaultMaxDepth
+	return resolveOption(o.MaxDepth, DefaultMaxDepth)
 }
-
 func (o *Options) maxInputSize() int {
-	if o != nil && o.MaxInputSize > 0 {
-		return o.MaxInputSize
+	if o == nil {
+		return DefaultMaxInputSize
 	}
-	return DefaultMaxInputSize
+	return resolveOption(o.MaxInputSize, DefaultMaxInputSize)
 }
-
 func (o *Options) maxValues() int {
-	if o != nil && o.MaxValues > 0 {
-		return o.MaxValues
+	if o == nil {
+		return DefaultMaxValues
 	}
-	return DefaultMaxValues
+	return resolveOption(o.MaxValues, DefaultMaxValues)
 }
-
 func (o *Options) maxObjectMembers() int {
-	if o != nil && o.MaxObjectMembers > 0 {
-		return o.MaxObjectMembers
+	if o == nil {
+		return DefaultMaxObjectMembers
 	}
-	return DefaultMaxObjectMembers
+	return resolveOption(o.MaxObjectMembers, DefaultMaxObjectMembers)
 }
-
 func (o *Options) maxArrayElements() int {
-	if o != nil && o.MaxArrayElements > 0 {
-		return o.MaxArrayElements
+	if o == nil {
+		return DefaultMaxArrayElements
 	}
-	return DefaultMaxArrayElements
+	return resolveOption(o.MaxArrayElements, DefaultMaxArrayElements)
 }
-
 func (o *Options) maxStringBytes() int {
-	if o != nil && o.MaxStringBytes > 0 {
-		return o.MaxStringBytes
+	if o == nil {
+		return DefaultMaxStringBytes
 	}
-	return DefaultMaxStringBytes
+	return resolveOption(o.MaxStringBytes, DefaultMaxStringBytes)
 }
-
 func (o *Options) maxNumberChars() int {
-	if o != nil && o.MaxNumberChars > 0 {
-		return o.MaxNumberChars
+	if o == nil {
+		return DefaultMaxNumberChars
 	}
-	return DefaultMaxNumberChars
+	return resolveOption(o.MaxNumberChars, DefaultMaxNumberChars)
 }
 
 // parser holds the state for parsing.
@@ -429,7 +430,31 @@ func (p *parser) parseString() (*Value, error) {
 		return nil, err
 	}
 
-	var buf []byte
+	// Fast path: scan for closing quote over pure printable ASCII (0x20..0x7F)
+	// with no backslash escapes. Bytes in that range cannot be surrogates,
+	// noncharacters, or control characters, so validateStringRune is not needed.
+	start := p.pos
+	for p.pos < len(p.data) {
+		b := p.data[p.pos]
+		if b == '"' {
+			s := p.data[start:p.pos]
+			if len(s) > p.maxStringBytes {
+				return nil, p.newErrorf(jcserr.BoundExceeded,
+					"string decoded length exceeds maximum %d bytes", p.maxStringBytes)
+			}
+			p.pos++
+			return &Value{Kind: KindString, Str: string(s)}, nil
+		}
+		if b < 0x20 || b == '\\' || b >= 0x80 {
+			break
+		}
+		p.pos++
+	}
+
+	// General path: pre-seed buffer with any ASCII prefix already validated,
+	// then handle escapes, non-ASCII runes, and control characters byte-by-byte.
+	buf := make([]byte, 0, p.pos-start+32) //nolint:mnd // REQ:PARSE-GRAM-004 reasonable initial capacity for mixed-content strings.
+	buf = append(buf, p.data[start:p.pos]...)
 	for {
 		if p.pos >= len(p.data) {
 			return nil, p.newError("unterminated string")

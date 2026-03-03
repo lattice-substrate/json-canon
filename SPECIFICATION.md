@@ -1,43 +1,8 @@
 # Specification
 
-## Status
-
-This document defines the product-level normative behavior contract for
-`json-canon`.
-
-Normative requirement IDs remain the executable source of truth in:
-
-- `REQ_REGISTRY_NORMATIVE.md`
-- `REQ_REGISTRY_POLICY.md`
-- `REQ_ENFORCEMENT_MATRIX.md`
-
-This specification describes required behavior in cohesive form and must remain
-consistent with those registries.
-
-## RFC 2119 Language
-
-The keywords `MUST`, `MUST NOT`, `SHALL`, `SHALL NOT`, `SHOULD`, `SHOULD NOT`,
-`MAY`, and `OPTIONAL` are normative.
-
-## Normative References
-
-- RFC 8785 (JCS)
-- RFC 8259 (JSON)
-- RFC 7493 (I-JSON)
-- RFC 3629 (UTF-8)
-- ECMA-262 `Number::toString`
-- IEEE 754 binary64 semantics
-
-Clause-level mappings are recorded in `standards/CITATION_INDEX.md`.
-
-## Conformance Targets
-
-A conforming implementation of this project MUST:
-
-1. accept and reject JSON according to RFC and profile constraints,
-2. emit canonical bytes according to RFC 8785,
-3. provide stable CLI ABI behavior,
-4. satisfy all requirement IDs and conformance tests.
+Normative behavior contract for `json-canon`. Requirement IDs in
+`REQ_REGISTRY_NORMATIVE.md` and `REQ_REGISTRY_POLICY.md` are the executable
+source of truth. Clause-level mappings are in `standards/CITATION_INDEX.md`.
 
 ## Input Domain
 
@@ -158,3 +123,18 @@ All normative and policy requirements MUST be:
 4. validated by conformance gates.
 
 Required checks and parity rules are described in `docs/TRACEABILITY_MODEL.md`.
+
+## Interpretation Rules
+
+When specification text is ambiguous, use this precedence:
+
+1. External normative spec clauses (RFC 8785, RFC 8259, RFC 7493, RFC 3629, ECMA-262, IEEE 754).
+2. Requirement registries and `standards/CITATION_INDEX.md`.
+3. Accepted ADR decisions in `docs/adr/`.
+4. Other project documentation.
+
+Numeric canonicalization uses ECMA-262 `Number::toString` behavior over IEEE 754
+binary64 values, with project policy constraints for lexical negative zero,
+overflow, and underflow rejection. Input validity is enforced on UTF-8 byte
+streams. Key sort order is based on UTF-16 code units of raw property names. No
+Unicode normalization is applied.

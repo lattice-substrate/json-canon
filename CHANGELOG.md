@@ -7,9 +7,16 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `jcs.Canonicalize` and `jcs.CanonicalizeWithOptions` convenience functions (parse + serialize in one call).
+- Benchmark suites for `jcsfloat.FormatDouble`, `jcstoken.Parse`, `jcs.Serialize`, and end-to-end canonicalization.
 - Optional pre-push git hook (`.githooks/pre-push`) that validates vet and lint before tag pushes.
 
+### Changed
+- Reduced `big.Int` allocations in Burger-Dybvig digit generation (scratch values reused across iterations).
+- Added ASCII fast path in `parseString` — pure ASCII strings with no escapes parse with a single allocation instead of per-byte appends.
+
 ### Fixed
+- `--version` now reports the Go module version when installed via `go install` without explicit `-ldflags`.
 - Release workflow offline evidence gate now derives `source_git_commit`/`source_git_tag` from archived evidence and builds the control binary from that commit, preventing false failures when a tag is not exactly one commit after evidence generation.
 - CI and Coverage workflows now ignore `articles/**`-only changes so docs/article release commits do not trigger full runtime gates.
 

@@ -18,6 +18,29 @@ import (
 	"github.com/lattice-substrate/json-canon/jcstoken"
 )
 
+// Canonicalize parses JSON input and produces the RFC 8785 JCS canonical byte
+// sequence. It is equivalent to calling jcstoken.Parse followed by Serialize.
+//
+// API-CANON-001: Output is identical to Parse followed by Serialize.
+func Canonicalize(input []byte) ([]byte, error) {
+	v, err := jcstoken.Parse(input)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // API-CANON-001: pass through jcstoken parse errors unchanged.
+	}
+	return Serialize(v)
+}
+
+// CanonicalizeWithOptions is like Canonicalize but accepts parser options.
+//
+// API-CANON-002: Options are passed through to ParseWithOptions.
+func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, error) {
+	v, err := jcstoken.ParseWithOptions(input, opts)
+	if err != nil {
+		return nil, err //nolint:wrapcheck // API-CANON-002: pass through jcstoken parse errors unchanged.
+	}
+	return Serialize(v)
+}
+
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed
 // JSON value.
 //

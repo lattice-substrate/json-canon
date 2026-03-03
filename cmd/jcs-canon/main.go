@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"github.com/lattice-substrate/json-canon/jcs"
@@ -116,12 +117,7 @@ func cmdCanonicalize(args []string, stdin io.Reader, stdout io.Writer, stderr io
 		return writeClassifiedError(stderr, err)
 	}
 
-	parsed, err := jcstoken.Parse(input)
-	if err != nil {
-		return writeClassifiedError(stderr, err)
-	}
-
-	canonical, err := jcs.Serialize(parsed)
+	canonical, err := jcs.Canonicalize(input)
 	if err != nil {
 		return writeClassifiedError(stderr, err)
 	}
@@ -308,3 +304,11 @@ func writef(w io.Writer, format string, args ...any) error {
 }
 
 var version = "v0.0.0-dev"
+
+func init() {
+	if version == "v0.0.0-dev" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+	}
+}
