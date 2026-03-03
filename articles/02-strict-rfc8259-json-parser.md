@@ -1,6 +1,7 @@
 ---
 title: "What Your JSON Parser Doesn't Reject: Building a Strict RFC 8259 Parser in Go"
 published: true
+updated: 2026-03-03
 tags: go, programming, parsing, json
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -462,6 +463,13 @@ There's a useful way to think about parser strictness: it's an error budget. A l
 
 Neither is wrong. They serve different purposes. But when you build infrastructure that sits between systems — processing input from one machine and producing output consumed by another — spending the error budget on convenience is spending it on the wrong consumer. The machine downstream doesn't benefit from leniency. It benefits from guarantees.
 
-The 809 lines of parser code in the `jcstoken` package exist to provide one guarantee: if the parser returns a value, that value has a single, unambiguous, deterministic canonical representation. Every rejection — leading zeros, lone surrogates, duplicate keys, noncharacters, overflow, underflow, negative zero — eliminates a case where two consumers might disagree.
+The parser code in the `jcstoken` package exists to provide one guarantee: if the parser returns a value, that value has a single, unambiguous, deterministic canonical representation. Every rejection — leading zeros, lone surrogates, duplicate keys, noncharacters, overflow, underflow, negative zero — eliminates a case where two consumers might disagree.
 
-The implementation lives in the `jcstoken` package of [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library.
+The implementation lives in the `jcstoken` package of [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library. For callers who want a single parse-and-serialize call, `jcs.Canonicalize(input)` wraps this parser with the RFC 8785 serializer.
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| 2026-03-03 | Removed line-count claim; added `jcs.Canonicalize` API reference |
+| 2025-02-XX | Initial publication |

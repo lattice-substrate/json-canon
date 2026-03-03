@@ -1,6 +1,7 @@
 ---
 title: "Proving Determinism: Evidence-Based Release Engineering"
 published: true
+updated: 2026-03-03
 tags: go, devops, programming, testing
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -400,3 +401,10 @@ For most projects, this is overkill. A well-written test suite with good coverag
 For infrastructure that downstream systems depend on for correctness — not just convenience — this is the minimum required to make the claim credible.
 
 The implementation described here is from [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library written in Go.
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| 2026-03-03 | Reviewed against documentation restructure; no substantive changes required |
+| 2025-02-XX | Initial publication |

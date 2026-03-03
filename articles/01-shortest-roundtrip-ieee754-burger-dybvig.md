@@ -1,6 +1,7 @@
 ---
 title: "Shortest Round-Trip: Implementing IEEE 754 to Decimal Conversion in Go"
 published: true
+updated: 2026-03-03
 tags: go, programming, algorithms, ieee754
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -15,7 +16,7 @@ The joke is that floating-point arithmetic is broken. It isn't. IEEE 754 is doin
 
 This is what [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) requires: byte-deterministic JSON output. And the hardest part of that requirement is number formatting. You need the *shortest* decimal string that, when parsed back, recovers the original IEEE 754 bits. You need to agree on tie-breaking when two representations are equally short. And you need to match the exact output format specified by [ECMA-262 Number serialization](https://tc39.es/ecma262/#sec-numeric-types-number-tostring), because that's what RFC 8785 mandates.
 
-Go's `strconv.FormatFloat` is a high-quality shortest-round-trip formatter, but it is not an ECMA-262 conformance contract. So I implemented the [Burger-Dybvig algorithm](https://legacy.cs.indiana.edu/~dyb/pubs/FP-Printing-PLDI96.pdf) from scratch in 490 lines of Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
+Go's `strconv.FormatFloat` is a high-quality shortest-round-trip formatter, but it is not an ECMA-262 conformance contract. So I implemented the [Burger-Dybvig algorithm](https://legacy.cs.indiana.edu/~dyb/pubs/FP-Printing-PLDI96.pdf) from scratch in Go, validated against 286,362 oracle test vectors. This article walks through the entire implementation.
 
 ## IEEE 754 Anatomy: 64 Bits of Structure
 
@@ -561,6 +562,13 @@ Putting it all together, the conversion from IEEE 754 bits to canonical decimal 
 9. **Propagate carries** if rounding up causes overflow
 10. **Format** using the appropriate ECMA-262 branch based on the exponent
 
-The entire implementation is 490 lines of Go with zero external dependencies (only `math`, `math/big`, and the project's own error package). It is deterministic, locale-independent, and produces identical output regardless of platform or Go runtime version.
+The entire implementation has zero external dependencies (only `math`, `math/big`, and the project's own error package). It is deterministic, locale-independent, and produces identical output regardless of platform or Go runtime version.
 
 The implementation lives in the `jcsfloat` package of [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library.
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| 2026-03-03 | Removed line-count claims from introduction and conclusion |
+| 2025-02-XX | Initial publication |
