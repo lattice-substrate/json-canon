@@ -14,11 +14,18 @@ package jcsfloat
 import (
 	"math"
 	"math/big"
+	"sync"
 
 	"github.com/lattice-substrate/json-canon/jcserr"
 )
 
 var bigTen = big.NewInt(10)
+
+var digitStatePool = sync.Pool{
+	New: func() any {
+		return &digitState{}
+	},
+}
 
 // FormatDouble formats an IEEE 754 double-precision value exactly as specified
 // by the ECMAScript Number::toString algorithm (ECMA-262, radix 10).
@@ -157,7 +164,8 @@ func appendInt(buf []byte, v int) []byte {
 // Returns (digits, n) where value = 0.<digits> × 10^n.
 func generateDigits(f float64) (string, int) {
 	parts := decodeFloatParts(f)
-	state := initScaledState(parts)
+	state, _ := digitStatePool.Get().(*digitState) //nolint:errcheck // Pool.New always returns *digitState.
+	initScaledState(state, parts)
 
 	k := estimateK(f)
 	scaleByPower10(state, k)
@@ -166,7 +174,9 @@ func generateDigits(f float64) (string, int) {
 	n = applyHighFixup(state, parts.isEven, n)
 	n = applyLowFixup(state, parts.isEven, n)
 
-	return extractDigits(state, parts.isEven, n)
+	digits, n := extractDigits(state, parts.isEven, n)
+	digitStatePool.Put(state)
+	return digits, n
 }
 
 type floatParts struct {
@@ -179,14 +189,18 @@ type floatParts struct {
 }
 
 type digitState struct {
-	r      *big.Int
-	s      *big.Int
-	mPlus  *big.Int
-	mMinus *big.Int
-	// Scratch values reused across applyHighFixup, applyLowFixup, and
-	// terminationConditions to avoid per-call big.Int allocations.
+	r      big.Int
+	s      big.Int
+	mPlus  big.Int
+	mMinus big.Int
+	// Scratch values reused across applyHighFixup, applyLowFixup,
+	// terminationConditions, extractDigits, and midpointDigit
+	// to avoid per-call big.Int allocations.
 	scratch1 big.Int
 	scratch2 big.Int
+	scratch3 big.Int // midpointDigit twoR
+	quot     big.Int // extractDigits quotient
+	rem      big.Int // extractDigits remainder
 }
 
 func decodeFloatParts(f float64) floatParts {
@@ -214,56 +228,49 @@ func decodeFloatParts(f float64) floatParts {
 	}
 }
 
-func initScaledState(parts floatParts) *digitState {
-	state := &digitState{
-		r:      new(big.Int),
-		s:      new(big.Int),
-		mPlus:  new(big.Int),
-		mMinus: new(big.Int),
-	}
+func initScaledState(state *digitState, parts floatParts) {
 	if parts.fExp >= 0 {
 		initScaledPositiveExp(state, parts)
-		return state
+		return
 	}
 	initScaledNegativeExp(state, parts)
-	return state
 }
 
 func initScaledPositiveExp(state *digitState, parts floatParts) {
 	if !parts.lowerBoundary {
 		state.r.SetUint64(parts.fMant)
-		lshByInt(state.r, parts.fExp+1)
+		lshByInt(&state.r, parts.fExp+1)
 		state.s.SetInt64(2)
 		state.mPlus.SetInt64(1)
-		lshByInt(state.mPlus, parts.fExp)
-		state.mMinus.Set(state.mPlus)
+		lshByInt(&state.mPlus, parts.fExp)
+		state.mMinus.Set(&state.mPlus)
 		return
 	}
 
 	state.r.SetUint64(parts.fMant)
-	lshByInt(state.r, parts.fExp+2)
+	lshByInt(&state.r, parts.fExp+2)
 	state.s.SetInt64(4)
 	state.mPlus.SetInt64(1)
-	lshByInt(state.mPlus, parts.fExp+1)
+	lshByInt(&state.mPlus, parts.fExp+1)
 	state.mMinus.SetInt64(1)
-	lshByInt(state.mMinus, parts.fExp)
+	lshByInt(&state.mMinus, parts.fExp)
 }
 
 func initScaledNegativeExp(state *digitState, parts floatParts) {
 	if !parts.lowerBoundary {
 		state.r.SetUint64(parts.fMant)
-		lshByInt(state.r, 1)
+		lshByInt(&state.r, 1)
 		state.s.SetInt64(1)
-		lshByInt(state.s, -parts.fExp+1)
+		lshByInt(&state.s, -parts.fExp+1)
 		state.mPlus.SetInt64(1)
 		state.mMinus.SetInt64(1)
 		return
 	}
 
 	state.r.SetUint64(parts.fMant)
-	lshByInt(state.r, 2)
+	lshByInt(&state.r, 2)
 	state.s.SetInt64(1)
-	lshByInt(state.s, -parts.fExp+2)
+	lshByInt(&state.s, -parts.fExp+2)
 	state.mPlus.SetInt64(2)
 	state.mMinus.SetInt64(1)
 }
@@ -272,19 +279,19 @@ func scaleByPower10(state *digitState, k int) {
 	switch {
 	case k > 0:
 		p := pow10Big(k)
-		state.s.Mul(state.s, p)
+		state.s.Mul(&state.s, p)
 	case k < 0:
 		p := pow10Big(-k)
-		state.r.Mul(state.r, p)
-		state.mPlus.Mul(state.mPlus, p)
-		state.mMinus.Mul(state.mMinus, p)
+		state.r.Mul(&state.r, p)
+		state.mPlus.Mul(&state.mPlus, p)
+		state.mMinus.Mul(&state.mMinus, p)
 	}
 }
 
 func applyHighFixup(state *digitState, isEven bool, n int) int {
-	state.scratch1.Add(state.r, state.mPlus)
-	if cmpHigh(&state.scratch1, state.s, isEven) {
-		state.s.Mul(state.s, bigTen)
+	state.scratch1.Add(&state.r, &state.mPlus)
+	if cmpHigh(&state.scratch1, &state.s, isEven) {
+		state.s.Mul(&state.s, bigTen)
 		return n + 1
 	}
 	return n
@@ -292,20 +299,20 @@ func applyHighFixup(state *digitState, isEven bool, n int) int {
 
 func applyLowFixup(state *digitState, isEven bool, n int) int {
 	for {
-		state.scratch1.Mul(state.r, bigTen)
-		if !cmpLow(&state.scratch1, state.s, isEven) {
+		state.scratch1.Mul(&state.r, bigTen)
+		if !cmpLow(&state.scratch1, &state.s, isEven) {
 			return n
 		}
 
-		state.scratch2.Add(state.r, state.mPlus)
+		state.scratch2.Add(&state.r, &state.mPlus)
 		state.scratch2.Mul(&state.scratch2, bigTen)
-		if !cmpLow(&state.scratch2, state.s, isEven) {
+		if !cmpLow(&state.scratch2, &state.s, isEven) {
 			return n
 		}
 
-		state.r.Mul(state.r, bigTen)
-		state.mPlus.Mul(state.mPlus, bigTen)
-		state.mMinus.Mul(state.mMinus, bigTen)
+		state.r.Mul(&state.r, bigTen)
+		state.mPlus.Mul(&state.mPlus, bigTen)
+		state.mMinus.Mul(&state.mMinus, bigTen)
 		n--
 	}
 }
@@ -338,12 +345,10 @@ func extractDigits(state *digitState, isEven bool, n int) (string, int) {
 	// and FuzzFormatDoubleRoundTrip.
 	var digitBuf [30]byte
 	dIdx := 0
-	quot := new(big.Int)
-	rem := new(big.Int)
 
 	for {
 		scaleDigitState(state)
-		d := divideAndRemainder(state, quot, rem)
+		d := divideAndRemainder(state)
 
 		tc1, tc2 := terminationConditions(state, isEven)
 		if !tc1 && !tc2 {
@@ -352,7 +357,7 @@ func extractDigits(state *digitState, isEven bool, n int) (string, int) {
 			continue
 		}
 
-		digitBuf[dIdx] = finalDigit(d, tc1, tc2, state.r, state.s)
+		digitBuf[dIdx] = finalDigit(d, tc1, tc2, state)
 		dIdx++
 		break
 	}
@@ -362,22 +367,22 @@ func extractDigits(state *digitState, isEven bool, n int) (string, int) {
 }
 
 func scaleDigitState(state *digitState) {
-	state.r.Mul(state.r, bigTen)
-	state.mPlus.Mul(state.mPlus, bigTen)
-	state.mMinus.Mul(state.mMinus, bigTen)
+	state.r.Mul(&state.r, bigTen)
+	state.mPlus.Mul(&state.mPlus, bigTen)
+	state.mMinus.Mul(&state.mMinus, bigTen)
 }
 
-func divideAndRemainder(state *digitState, quot, rem *big.Int) int {
-	quot.DivMod(state.r, state.s, rem)
-	d := int(quot.Int64())
-	state.r.Set(rem)
+func divideAndRemainder(state *digitState) int {
+	state.quot.DivMod(&state.r, &state.s, &state.rem)
+	d := int(state.quot.Int64())
+	state.r.Set(&state.rem)
 	return d
 }
 
 func terminationConditions(state *digitState, isEven bool) (bool, bool) {
-	tc1 := cmpRoundDown(state.r, state.mMinus, isEven)
-	state.scratch1.Add(state.r, state.mPlus)
-	tc2 := cmpHigh(&state.scratch1, state.s, isEven)
+	tc1 := cmpRoundDown(&state.r, &state.mMinus, isEven)
+	state.scratch1.Add(&state.r, &state.mPlus)
+	tc2 := cmpHigh(&state.scratch1, &state.s, isEven)
 	return tc1, tc2
 }
 
@@ -390,20 +395,20 @@ func cmpRoundDown(lhs, rhs *big.Int, isEven bool) bool {
 
 // finalDigit resolves the last digit when at least one termination condition
 // fires. ECMA-FMT-009: even-digit tie-breaking in midpointDigit.
-func finalDigit(d int, tc1, tc2 bool, r, s *big.Int) byte {
+func finalDigit(d int, tc1, tc2 bool, state *digitState) byte {
 	switch {
 	case tc1 && !tc2:
 		return byte('0' + d)
 	case !tc1 && tc2:
 		return byte('0' + d + 1)
 	default:
-		return midpointDigit(d, r, s)
+		return midpointDigit(d, state)
 	}
 }
 
-func midpointDigit(d int, r, s *big.Int) byte {
-	twoR := new(big.Int).Lsh(r, 1)
-	cmp := twoR.Cmp(s)
+func midpointDigit(d int, state *digitState) byte {
+	state.scratch3.Lsh(&state.r, 1)
+	cmp := state.scratch3.Cmp(&state.s)
 	if cmp < 0 {
 		return byte('0' + d)
 	}

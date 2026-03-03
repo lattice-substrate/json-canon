@@ -27,7 +27,8 @@ func Canonicalize(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err //nolint:wrapcheck // API-CANON-001: pass through jcstoken parse errors unchanged.
 	}
-	return Serialize(v)
+	// Pre-allocate: canonical output is typically similar in size to input.
+	return serializeInto(make([]byte, 0, len(input)), v)
 }
 
 // CanonicalizeWithOptions is like Canonicalize but accepts parser options.
@@ -38,7 +39,8 @@ func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, erro
 	if err != nil {
 		return nil, err //nolint:wrapcheck // API-CANON-002: pass through jcstoken parse errors unchanged.
 	}
-	return Serialize(v)
+	// Pre-allocate: canonical output is typically similar in size to input.
+	return serializeInto(make([]byte, 0, len(input)), v)
 }
 
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed
@@ -47,6 +49,10 @@ func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, erro
 // CANON-ENC-001: Output is UTF-8.
 // CANON-WS-001: No insignificant whitespace.
 func Serialize(v *jcstoken.Value) ([]byte, error) {
+	return serializeInto(nil, v)
+}
+
+func serializeInto(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	if v == nil {
 		return nil, jcserr.New(jcserr.InternalError, -1, "jcs: nil value")
 	}
@@ -55,7 +61,6 @@ func Serialize(v *jcstoken.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	var buf []byte
 	var err error
 	buf, err = serializeValue(buf, v)
 	if err != nil {
@@ -203,13 +208,15 @@ func serializeArray(buf []byte, v *jcstoken.Value) ([]byte, error) {
 func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
 	sorted := make([]sortableMember, len(v.Members))
 	for i := range v.Members {
-		sorted[i] = sortableMember{
-			member: v.Members[i],
-			key16:  utf16.Encode([]rune(v.Members[i].Key)),
+		sorted[i].member = v.Members[i]
+		// Fast path: ASCII keys need no UTF-16 encoding since byte order
+		// equals UTF-16 code-unit order for U+0000..U+007F.
+		if !isASCII(v.Members[i].Key) {
+			sorted[i].key16 = utf16.Encode([]rune(v.Members[i].Key))
 		}
 	}
 	sort.Slice(sorted, func(i, j int) bool {
-		return compareUTF16Units(sorted[i].key16, sorted[j].key16) < 0
+		return compareSortKeys(&sorted[i], &sorted[j]) < 0
 	})
 
 	buf = append(buf, '{')
@@ -232,6 +239,41 @@ func serializeObject(buf []byte, v *jcstoken.Value) ([]byte, error) {
 type sortableMember struct {
 	member jcstoken.Member
 	key16  []uint16
+}
+
+// isASCII reports whether s contains only ASCII bytes (0x00..0x7F).
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+// compareSortKeys compares two sortable members using UTF-16 code-unit ordering.
+// When both keys are ASCII (key16 == nil), it uses direct string comparison
+// which produces identical ordering since byte values equal UTF-16 code units
+// for U+0000..U+007F.
+func compareSortKeys(a, b *sortableMember) int {
+	if a.key16 == nil && b.key16 == nil {
+		if a.member.Key < b.member.Key {
+			return -1
+		}
+		if a.member.Key > b.member.Key {
+			return 1
+		}
+		return 0
+	}
+	ak := a.key16
+	if ak == nil {
+		ak = utf16.Encode([]rune(a.member.Key))
+	}
+	bk := b.key16
+	if bk == nil {
+		bk = utf16.Encode([]rune(b.member.Key))
+	}
+	return compareUTF16Units(ak, bk)
 }
 
 func compareUTF16Units(ua, ub []uint16) int {

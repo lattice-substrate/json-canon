@@ -599,13 +599,31 @@ func (p *parser) readHex4(sourceOffset int) (rune, *jcserr.Error) {
 	if p.pos+4 > len(p.data) {
 		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, "incomplete \\u escape")
 	}
-	hex := string(p.data[p.pos : p.pos+4])
-	p.pos += 4
-	val, err := strconv.ParseUint(hex, 16, 16)
-	if err != nil {
-		return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, fmt.Sprintf("invalid hex in \\u escape: %q", hex))
+	var val rune
+	for i := 0; i < 4; i++ {
+		d, ok := hexVal(p.data[p.pos+i])
+		if !ok {
+			hex := string(p.data[p.pos : p.pos+4])
+			return 0, jcserr.New(jcserr.InvalidGrammar, sourceOffset, fmt.Sprintf("invalid hex in \\u escape: %q", hex))
+		}
+		val = val<<4 | rune(d)
 	}
-	return rune(val), nil
+	p.pos += 4
+	return val, nil
+}
+
+// hexVal returns the numeric value of a hex digit and whether it was valid.
+func hexVal(b byte) (byte, bool) {
+	switch {
+	case b >= '0' && b <= '9':
+		return b - '0', true
+	case b >= 'a' && b <= 'f':
+		return b - 'a' + 10, true
+	case b >= 'A' && b <= 'F':
+		return b - 'A' + 10, true
+	default:
+		return 0, false
+	}
 }
 
 // validateStringRune enforces scalar policy with source-byte offsets.
