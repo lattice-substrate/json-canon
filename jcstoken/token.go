@@ -75,54 +75,20 @@ type Options struct {
 	MaxNumberChars   int
 }
 
-func (o *Options) maxDepth() int {
-	if o != nil && o.MaxDepth > 0 {
-		return o.MaxDepth
+func resolveOption(val, def int) int {
+	if val > 0 {
+		return val
 	}
-	return DefaultMaxDepth
+	return def
 }
 
-func (o *Options) maxInputSize() int {
-	if o != nil && o.MaxInputSize > 0 {
-		return o.MaxInputSize
-	}
-	return DefaultMaxInputSize
-}
-
-func (o *Options) maxValues() int {
-	if o != nil && o.MaxValues > 0 {
-		return o.MaxValues
-	}
-	return DefaultMaxValues
-}
-
-func (o *Options) maxObjectMembers() int {
-	if o != nil && o.MaxObjectMembers > 0 {
-		return o.MaxObjectMembers
-	}
-	return DefaultMaxObjectMembers
-}
-
-func (o *Options) maxArrayElements() int {
-	if o != nil && o.MaxArrayElements > 0 {
-		return o.MaxArrayElements
-	}
-	return DefaultMaxArrayElements
-}
-
-func (o *Options) maxStringBytes() int {
-	if o != nil && o.MaxStringBytes > 0 {
-		return o.MaxStringBytes
-	}
-	return DefaultMaxStringBytes
-}
-
-func (o *Options) maxNumberChars() int {
-	if o != nil && o.MaxNumberChars > 0 {
-		return o.MaxNumberChars
-	}
-	return DefaultMaxNumberChars
-}
+func (o *Options) maxDepth() int         { if o == nil { return DefaultMaxDepth }; return resolveOption(o.MaxDepth, DefaultMaxDepth) }
+func (o *Options) maxInputSize() int     { if o == nil { return DefaultMaxInputSize }; return resolveOption(o.MaxInputSize, DefaultMaxInputSize) }
+func (o *Options) maxValues() int        { if o == nil { return DefaultMaxValues }; return resolveOption(o.MaxValues, DefaultMaxValues) }
+func (o *Options) maxObjectMembers() int { if o == nil { return DefaultMaxObjectMembers }; return resolveOption(o.MaxObjectMembers, DefaultMaxObjectMembers) }
+func (o *Options) maxArrayElements() int { if o == nil { return DefaultMaxArrayElements }; return resolveOption(o.MaxArrayElements, DefaultMaxArrayElements) }
+func (o *Options) maxStringBytes() int   { if o == nil { return DefaultMaxStringBytes }; return resolveOption(o.MaxStringBytes, DefaultMaxStringBytes) }
+func (o *Options) maxNumberChars() int   { if o == nil { return DefaultMaxNumberChars }; return resolveOption(o.MaxNumberChars, DefaultMaxNumberChars) }
 
 // parser holds the state for parsing.
 type parser struct {
@@ -429,7 +395,34 @@ func (p *parser) parseString() (*Value, error) {
 		return nil, err
 	}
 
+	// Fast path: scan for closing quote over pure printable ASCII (0x20..0x7F)
+	// with no backslash escapes. Bytes in that range cannot be surrogates,
+	// noncharacters, or control characters, so validateStringRune is not needed.
+	start := p.pos
+	for p.pos < len(p.data) {
+		b := p.data[p.pos]
+		if b == '"' {
+			s := p.data[start:p.pos]
+			if len(s) > p.maxStringBytes {
+				return nil, p.newErrorf(jcserr.BoundExceeded,
+					"string decoded length exceeds maximum %d bytes", p.maxStringBytes)
+			}
+			p.pos++
+			return &Value{Kind: KindString, Str: string(s)}, nil
+		}
+		if b < 0x20 || b == '\\' || b >= 0x80 {
+			break
+		}
+		p.pos++
+	}
+
+	// General path: pre-seed buffer with any ASCII prefix already validated,
+	// then handle escapes, non-ASCII runes, and control characters byte-by-byte.
 	var buf []byte
+	if p.pos > start {
+		buf = make([]byte, p.pos-start)
+		copy(buf, p.data[start:p.pos])
+	}
 	for {
 		if p.pos >= len(p.data) {
 			return nil, p.newError("unterminated string")
