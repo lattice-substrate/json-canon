@@ -83,12 +83,12 @@ func TestOfflineEvidenceSchemaPresent(t *testing.T) {
 
 func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	root := repoRoot(t)
-	releaseDoc := mustReadText(t, filepath.Join(root, "RELEASE_PROCESS.md"))
+	releaseDoc := mustReadText(t, filepath.Join(root, "CONTRIBUTING.md"))
 	if !strings.Contains(releaseDoc, "offline") {
-		t.Fatal("RELEASE_PROCESS.md missing offline gate section")
+		t.Fatal("CONTRIBUTING.md missing offline gate section")
 	}
 	if !strings.Contains(releaseDoc, "go test ./offline/conformance") {
-		t.Fatal("RELEASE_PROCESS.md missing offline conformance gate command")
+		t.Fatal("CONTRIBUTING.md missing offline conformance gate command")
 	}
 	releaseWorkflow := mustReadText(t, filepath.Join(root, ".github", "workflows", "release.yml"))
 	if !strings.Contains(releaseWorkflow, "TestOfflineReplayEvidenceReleaseGate") {

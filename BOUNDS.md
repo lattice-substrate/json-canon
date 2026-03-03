@@ -1,9 +1,5 @@
 # Resource Bounds and Memory Behavior
 
-This document describes the parser's resource limits, memory behavior, and
-amplification characteristics for operators deploying `json-canon` in
-security-sensitive or resource-constrained environments.
-
 ## Default Bounds
 
 | Bound | Default | Constant |

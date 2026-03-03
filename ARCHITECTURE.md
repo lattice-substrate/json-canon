@@ -1,33 +1,6 @@
 # Architecture
 
-## Purpose
-
-This document defines the architecture contract for `json-canon`.
-It is the system-level source of truth for component boundaries, data flow,
-determinism properties, and long-term compatibility constraints.
-
-## Scope
-
-This architecture covers:
-
-- parsing and validation domain,
-- canonical serialization domain,
-- CLI/runtime behavior and failure mapping,
-- conformance and evidence system integration,
-- interoperability differential evidence against external implementations,
-- release-time build and trust constraints.
-
-## Architectural Goals
-
-1. Correct RFC 8785 canonicalization and verification.
-2. Strict-domain JSON acceptance with explicit policy constraints.
-3. Deterministic output and stable machine-facing behavior.
-4. Audit-grade traceability from requirements to code and tests.
-5. Minimal operational attack surface for infra deployment.
-
-## Layered System Model
-
-`json-canon` is intentionally split into small packages with one-way dependencies.
+`json-canon` is split into small packages with one-way dependencies.
 
 | Layer | Package | Responsibility | Must Not Depend On |
 |------|---------|----------------|--------------------|
@@ -37,15 +10,11 @@ This architecture covers:
 | L2 | `jcsfloat` | ECMA-262-compatible binary64 to string formatting | CLI/runtime dependencies |
 | L1 | `jcserr` | Stable error classes and exit code mapping | higher-level logic |
 
-Dependency direction is inward only (L5 -> L1).
+Dependency direction is inward only (L5 -> L1). Higher-level concerns cannot
+contaminate lower-level guarantees, and each layer's correctness is provable
+in isolation.
 
-One-way layering is a determinism-preservation constraint: higher-level
-concerns (CLI flags, I/O policies) cannot contaminate lower-level guarantees
-(number formatting, key sorting, error classification). Each layer's
-correctness is provable in isolation, which means a refactor at one layer
-cannot silently break invariants at another.
-
-## Primary Execution Flows
+## Execution Flows
 
 ### Canonicalize Flow
 
@@ -84,16 +53,12 @@ Determinism is an architectural property, not a test-only property.
 
 ## Number Formatting Subsystem
 
-`jcsfloat` exists because `strconv.FormatFloat` and `encoding/json` are not
-contractually bound to ECMA-262 Number::toString semantics. Their output can
-change across Go versions without notice. A canonicalization primitive that
-delegates number formatting to stdlib inherits that instability — any
-formatting drift produces different canonical bytes, breaking every downstream
-signature and hash. `jcsfloat` uses a hand-written Burger-Dybvig algorithm with
-even-digit tie-breaking, validated against 286,000+ oracle vectors, to eliminate
-this dependency.
+`jcsfloat` uses a hand-written Burger-Dybvig algorithm with even-digit
+tie-breaking, validated against 286,000+ oracle vectors. It exists because
+`strconv.FormatFloat` output can change across Go versions — any formatting
+drift produces different canonical bytes.
 
-Subsystem invariants:
+Invariants:
 
 1. NaN and Infinity are rejected by profile.
 2. `-0` is normalized to `0` at formatting level; lexical negative zero is rejected by parser policy.
@@ -124,19 +89,12 @@ Breaking this boundary requires a major version and migration documentation.
 
 ## Security and Runtime Surface
 
-Runtime surface is intentionally narrow:
-
 1. Linux-only supported runtime.
 2. Static release binary (`CGO_ENABLED=0`).
 3. No outbound network calls in core runtime.
 4. No subprocess execution in core runtime.
-
-These constraints exist because canonicalization primitives operate at trust
-boundaries. When a system uses canonical bytes as the basis for signatures,
-hashes, or determinism proofs, the canonicalizer's runtime surface is part of
-the system's attack surface. Network calls, subprocess execution, and dynamic
-linking introduce vectors that can alter output bytes in ways that are
-difficult to audit and impossible to replay offline.
+5. Failures classify predictably into stable classes.
+6. Canonicalization is deterministic for identical input/options.
 
 ## Architecture Change Policy
 

@@ -183,6 +183,10 @@ type digitState struct {
 	s      *big.Int
 	mPlus  *big.Int
 	mMinus *big.Int
+	// Scratch values reused across applyHighFixup, applyLowFixup, and
+	// terminationConditions to avoid per-call big.Int allocations.
+	scratch1 big.Int
+	scratch2 big.Int
 }
 
 func decodeFloatParts(f float64) floatParts {
@@ -278,8 +282,8 @@ func scaleByPower10(state *digitState, k int) {
 }
 
 func applyHighFixup(state *digitState, isEven bool, n int) int {
-	high := new(big.Int).Add(state.r, state.mPlus)
-	if cmpHigh(high, state.s, isEven) {
+	state.scratch1.Add(state.r, state.mPlus)
+	if cmpHigh(&state.scratch1, state.s, isEven) {
 		state.s.Mul(state.s, bigTen)
 		return n + 1
 	}
@@ -288,13 +292,14 @@ func applyHighFixup(state *digitState, isEven bool, n int) int {
 
 func applyLowFixup(state *digitState, isEven bool, n int) int {
 	for {
-		tenR := new(big.Int).Mul(state.r, bigTen)
-		if !cmpLow(tenR, state.s, isEven) {
+		state.scratch1.Mul(state.r, bigTen)
+		if !cmpLow(&state.scratch1, state.s, isEven) {
 			return n
 		}
 
-		tenHigh := new(big.Int).Mul(new(big.Int).Add(state.r, state.mPlus), bigTen)
-		if !cmpLow(tenHigh, state.s, isEven) {
+		state.scratch2.Add(state.r, state.mPlus)
+		state.scratch2.Mul(&state.scratch2, bigTen)
+		if !cmpLow(&state.scratch2, state.s, isEven) {
 			return n
 		}
 
@@ -371,8 +376,8 @@ func divideAndRemainder(state *digitState, quot, rem *big.Int) int {
 
 func terminationConditions(state *digitState, isEven bool) (bool, bool) {
 	tc1 := cmpRoundDown(state.r, state.mMinus, isEven)
-	high := new(big.Int).Add(state.r, state.mPlus)
-	tc2 := cmpHigh(high, state.s, isEven)
+	state.scratch1.Add(state.r, state.mPlus)
+	tc2 := cmpHigh(&state.scratch1, state.s, isEven)
 	return tc1, tc2
 }
 
