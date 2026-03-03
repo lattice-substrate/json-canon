@@ -1,6 +1,7 @@
 ---
 title: "The Small Decisions That Make Software Infrastructure-Grade"
 published: true
+updated: 2026-03-03
 tags: go, programming, architecture, softwareengineering
 series: "Building Infrastructure-Grade JSON Canonicalization in Go"
 ---
@@ -273,13 +274,7 @@ Any ABI-impacting change must update *four artifacts in the same commit series*:
 
 ## The Compound Effect
 
-Each of these decisions is individually minor:
-
-- UTF-16 key sorting: ~30 lines of code, ~5 lines of test
-- Failure classification: 88 lines of code, one type and 13 constants
-- ABI manifest: 69 lines of JSON
-
-None of them requires novel engineering. None of them is exciting. A project that omits all three still works — it parses JSON, it serializes JSON, it runs from the command line.
+Each of these decisions is individually minor. None of them requires novel engineering. None of them is exciting. A project that omits all three still works — it parses JSON, it serializes JSON, it runs from the command line.
 
 But the project that includes all three communicates something different to its consumers. It says: "We have thought about the cases you will encounter. The sort order is correct, not just close. The exit codes mean what we say they mean, and we won't change them without a major version. The error you get for a missing file is classified by root cause, not by which system call failed."
 
@@ -296,3 +291,10 @@ A project without an ABI manifest accumulates undocumented behavioral changes. E
 Getting these details right is not the interesting part of the engineering. But it's the part that determines whether your downstream can depend on you.
 
 The implementation discussed here is from [json-canon](https://github.com/lattice-substrate/json-canon), an RFC 8785 JSON canonicalization library written in Go.
+
+## Revision History
+
+| Date | Change |
+|------|--------|
+| 2026-03-03 | Removed line-count metrics from compound-effect section |
+| 2025-02-XX | Initial publication |
