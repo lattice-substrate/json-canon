@@ -28,7 +28,9 @@ func BenchmarkFormatDouble(b *testing.B) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				_, _ = jcsfloat.FormatDouble(tc.val)
+				if _, err := jcsfloat.FormatDouble(tc.val); err != nil {
+					b.Fatal(err)
+				}
 			}
 		})
 	}

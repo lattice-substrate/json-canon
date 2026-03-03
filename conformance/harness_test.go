@@ -3009,6 +3009,7 @@ func verifyFloatOracle(t *testing.T, path string, expectedRows int, expectedSHA2
 // === API-CANON-001: Canonicalize produces output identical to Parse+Serialize ===
 
 func checkCanonicalizeEquivalence(t *testing.T, _ *harness) {
+	t.Helper()
 	inputs := []string{
 		`{"b":2,"a":1}`,
 		`[3,1,2]`,
@@ -3041,6 +3042,7 @@ func checkCanonicalizeEquivalence(t *testing.T, _ *harness) {
 // === API-CANON-002: CanonicalizeWithOptions passes options through ===
 
 func checkCanonicalizeWithOptionsEquivalence(t *testing.T, _ *harness) {
+	t.Helper()
 	// Verify options pass through: MaxDepth=1 should reject nested input.
 	deep := []byte(`{"a":{"b":1}}`)
 	opts := &jcstoken.Options{MaxDepth: 1}
