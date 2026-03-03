@@ -289,6 +289,9 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"DET-IDEMPOTENT-001": checkParseSerializeIdempotence,
 		"DET-STATIC-001":     checkDeterministicStaticBuildCommand,
 		"DET-NOSOURCE-001":   checkNoNondeterminismSources,
+		// API
+		"API-CANON-001": checkCanonicalizeEquivalence,
+		"API-CANON-002": checkCanonicalizeWithOptionsEquivalence,
 	}
 }
 
@@ -3047,5 +3050,74 @@ func verifyFloatOracle(t *testing.T, path string, expectedRows int, expectedSHA2
 	gotSHA := fmt.Sprintf("%x", h.Sum(nil))
 	if gotSHA != expectedSHA256 {
 		t.Fatalf("oracle checksum mismatch: got %s want %s", gotSHA, expectedSHA256)
+	}
+}
+
+// === API-CANON-001: Canonicalize produces output identical to Parse+Serialize ===
+
+func checkCanonicalizeEquivalence(t *testing.T, _ *harness) {
+	inputs := []string{
+		`{"b":2,"a":1}`,
+		`[3,1,2]`,
+		`"hello"`,
+		`42`,
+		`true`,
+		`null`,
+		`{ "z" : true , "a" : null }`,
+		`{"nested":{"b":2,"a":1},"outer":1}`,
+	}
+	for _, in := range inputs {
+		v, err := jcstoken.Parse([]byte(in))
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", in, err)
+		}
+		want, err := jcs.Serialize(v)
+		if err != nil {
+			t.Fatalf("Serialize(%q): %v", in, err)
+		}
+		got, err := jcs.Canonicalize([]byte(in))
+		if err != nil {
+			t.Fatalf("Canonicalize(%q): %v", in, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("Canonicalize(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// === API-CANON-002: CanonicalizeWithOptions passes options through ===
+
+func checkCanonicalizeWithOptionsEquivalence(t *testing.T, _ *harness) {
+	// Verify options pass through: MaxDepth=1 should reject nested input.
+	deep := []byte(`{"a":{"b":1}}`)
+	opts := &jcstoken.Options{MaxDepth: 1}
+	_, err := jcs.CanonicalizeWithOptions(deep, opts)
+	if err == nil {
+		t.Fatal("expected depth error with MaxDepth=1")
+	}
+	var je *jcserr.Error
+	if !errors.As(err, &je) {
+		t.Fatalf("expected *jcserr.Error, got %T", err)
+	}
+	if je.Class != jcserr.BoundExceeded {
+		t.Fatalf("expected BoundExceeded, got %s", je.Class)
+	}
+
+	// Verify nil options uses defaults and produces same output as Parse+Serialize.
+	input := []byte(`{"b":1,"a":2}`)
+	v, err := jcstoken.Parse(input)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	want, err := jcs.Serialize(v)
+	if err != nil {
+		t.Fatalf("Serialize: %v", err)
+	}
+	got, err := jcs.CanonicalizeWithOptions(input, nil)
+	if err != nil {
+		t.Fatalf("CanonicalizeWithOptions: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

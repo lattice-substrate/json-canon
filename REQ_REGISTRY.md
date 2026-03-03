@@ -7,7 +7,7 @@ The requirement universe is split into two registries to separate normative conf
 
 Current counts:
 - Normative requirements: 54
-- Policy requirements: 52
-- Total requirements: 106
+- Policy requirements: 54
+- Total requirements: 108
 
 Conformance coverage is enforced against the union of both registries.
