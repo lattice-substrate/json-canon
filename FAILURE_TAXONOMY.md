@@ -1,7 +1,6 @@
 # Failure Taxonomy
 
-Stable enumeration of failure classes for `json-canon`.
-Each class maps to a fixed exit code and is referenced by conformance vectors.
+Failure classes for `json-canon`, each mapping to a fixed exit code.
 
 ## Failure Classes
 

@@ -2099,8 +2099,8 @@ func checkLocalMandatoryLintGate(t *testing.T, h *harness) {
 	t.Helper()
 	const lintCmd = "go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8 run --config=golangci.yml"
 
-	agents := mustReadText(t, filepath.Join(h.root, "AGENTS.md"))
-	assertContains(t, agents, lintCmd, "agents mandatory lint gate")
+	claude := mustReadText(t, filepath.Join(h.root, "CLAUDE.md"))
+	assertContains(t, claude, lintCmd, "claude mandatory lint gate")
 
 	contributing := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
 	assertContains(t, contributing, lintCmd, "contributing mandatory lint gate")
@@ -2245,11 +2245,11 @@ func TestGovernanceDurabilityClausesPresent(t *testing.T) {
 
 func checkGovernanceDurabilityClausesPresent(t *testing.T, h *harness) {
 	t.Helper()
-	gov := mustReadText(t, filepath.Join(h.root, "GOVERNANCE.md"))
-	assertContains(t, gov, "## Maintainer Policy", "governance maintainer policy")
+	gov := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, gov, "## Governance", "governance section")
 	assertContains(t, gov, "### Review Requirements", "governance review requirements")
 	assertContains(t, gov, "### Maintainer Succession", "governance succession policy")
-	assertContains(t, gov, "## Support Window Policy", "governance support window")
+	assertContains(t, gov, "### Support Window", "governance support window")
 }
 
 // TestOfflineMatrixManifestPresent verifies offline matrix contract files exist and parse.
@@ -2317,7 +2317,7 @@ func TestOfflineReleaseGatePolicy(t *testing.T) {
 
 func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	t.Helper()
-	releaseDoc := mustReadText(t, filepath.Join(h.root, "RELEASE_PROCESS.md"))
+	releaseDoc := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
 	assertContains(t, releaseDoc, "go test ./offline/conformance", "offline release gate command")
 	assertContains(t, releaseDoc, "JCS_OFFLINE_EVIDENCE", "offline release gate environment variable")
 	assertContains(t, releaseDoc, "JCS_OFFLINE_MATRIX", "offline release gate matrix override")
@@ -2426,14 +2426,11 @@ func TestRequiredDocumentationPresent(t *testing.T) {
 		"README.md",
 		"AGENTS.md",
 		"CLAUDE.md",
-		"GOVERNANCE.md",
 		"ARCHITECTURE.md",
 		"ABI.md",
-		"NORMATIVE_REFERENCES.md",
 		"SPECIFICATION.md",
 		"CONFORMANCE.md",
-		"THREAT_MODEL.md",
-		"RELEASE_PROCESS.md",
+		"CONTRIBUTING.md",
 		"REQ_REGISTRY_NORMATIVE.md",
 		"REQ_REGISTRY_POLICY.md",
 		"REQ_ENFORCEMENT_MATRIX.md",
@@ -2441,6 +2438,7 @@ func TestRequiredDocumentationPresent(t *testing.T) {
 		"abi_manifest.json",
 		"standards/CITATION_INDEX.md",
 		"docs/README.md",
+		"docs/GUIDE.md",
 	}
 
 	for _, rel := range required {
@@ -2457,37 +2455,6 @@ func TestRequiredDocumentationPresent(t *testing.T) {
 		if st.Size() == 0 {
 			t.Errorf("required documentation file is empty: %s", rel)
 		}
-	}
-}
-
-// TestRequirementRegistryIndexCounts verifies REQ_REGISTRY.md count values
-// stay synchronized with split requirement registries.
-//
-//nolint:gosec // REQ:TRACE-LINK-001 registry count check reads repository documentation files by path.
-func TestRequirementRegistryIndexCounts(t *testing.T) {
-	h := testHarness(t)
-	normIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"))
-	policyIDs := loadRequirementIDs(t, filepath.Join(h.root, "REQ_REGISTRY_POLICY.md"))
-
-	indexPath := filepath.Join(h.root, "REQ_REGISTRY.md")
-	data, err := os.ReadFile(indexPath)
-	if err != nil {
-		t.Fatalf("read REQ_REGISTRY.md: %v", err)
-	}
-	text := string(data)
-
-	normCount := extractIntByPattern(t, text, `(?m)^-\s*Normative requirements:\s*([0-9]+)\s*$`, "normative count")
-	policyCount := extractIntByPattern(t, text, `(?m)^-\s*Policy requirements:\s*([0-9]+)\s*$`, "policy count")
-	totalCount := extractIntByPattern(t, text, `(?m)^-\s*Total requirements:\s*([0-9]+)\s*$`, "total count")
-
-	if want := len(normIDs); normCount != want {
-		t.Errorf("REQ_REGISTRY.md normative count=%d, want %d", normCount, want)
-	}
-	if want := len(policyIDs); policyCount != want {
-		t.Errorf("REQ_REGISTRY.md policy count=%d, want %d", policyCount, want)
-	}
-	if want := len(normIDs) + len(policyIDs); totalCount != want {
-		t.Errorf("REQ_REGISTRY.md total count=%d, want %d", totalCount, want)
 	}
 }
 
@@ -2803,20 +2770,6 @@ func assertContains(t *testing.T, haystack, needle, context string) {
 	if !strings.Contains(haystack, needle) {
 		t.Errorf("%s missing required token %q", context, needle)
 	}
-}
-
-func extractIntByPattern(t *testing.T, text, pattern, label string) int {
-	t.Helper()
-	re := regexp.MustCompile(pattern)
-	m := re.FindStringSubmatch(text)
-	if len(m) != 2 {
-		t.Fatalf("failed to locate %s using pattern %q", label, pattern)
-	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil {
-		t.Fatalf("parse %s %q: %v", label, m[1], err)
-	}
-	return n
 }
 
 //nolint:gosec // REQ:ABI-PARITY-001 ABI manifest loader reads repository contract file by path.

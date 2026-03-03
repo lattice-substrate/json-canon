@@ -28,7 +28,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | Vendored official Cyberphone canonicalization fixtures MUST pass byte-identical canonicalization checks. |
 | OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | Vendored RFC 8785 example fixtures (sorting example and finite Appendix B number mappings) MUST match canonical output/format results. |
 | OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | CI conformance gates MUST validate the official deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
-| OFFICIAL-VEC-004 | RELEASE_PROCESS.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
+| OFFICIAL-VEC-004 | CONTRIBUTING.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
 
 ## PROF-NUM — Number Profile Restrictions
 
@@ -88,7 +88,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
-| GOV-DUR-001 | CLAUDE | Infrastructure-Grade Definition | MUST | Governance durability clauses (review policy, succession policy, support policy) MUST be present in `GOVERNANCE.md` and validated by tests. |
+| GOV-DUR-001 | CLAUDE | Infrastructure-Grade Definition | MUST | Governance durability clauses (review policy, succession policy, support policy) MUST be present in `CONTRIBUTING.md` and validated by tests. |
 
 ## TRACE — Traceability Integrity
 
@@ -101,7 +101,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | LINT-CI-001 | .github/workflows/ci.yml | CI Gates | MUST | Pull-request and main-branch CI MUST execute golangci-lint via pinned action SHA, pinned linter version, and explicit `--config=golangci.yml`. |
-| LINT-GATE-001 | AGENTS.md + CONTRIBUTING.md + cmd/jcs-gate/main.go | Mandatory Validation Gates | MUST | Required local validation gates MUST include the same pinned golangci-lint command path used for repository lint governance. |
+| LINT-GATE-001 | CLAUDE.md + CONTRIBUTING.md + cmd/jcs-gate/main.go | Mandatory Validation Gates | MUST | Required local validation gates MUST include the same pinned golangci-lint command path used for repository lint governance. |
 | LINT-CONFIG-001 | golangci.yml | Lint Policy | MUST | Lint configuration MUST enforce strict suppression governance (`nolintlint` require-specific/explanation/used) and include determinism/supply-hardening linters (`forbidigo`, `depguard`, `bidichk`, `asciicheck`, `gocognit`, `copyloopvar`, `durationcheck`, `makezero`). |
 | LINT-NOLINT-001 | golangci.yml + source tree | Suppression Discipline | MUST | Every `//nolint` directive MUST be linter-specific, MUST NOT use blanket `all`, and MUST include an explicit requirement-ID rationale. |
 
@@ -112,7 +112,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFLINE-MATRIX-001 | offline/README.md | Contracts | MUST | Offline replay matrix manifest (`offline/matrix.yaml`) MUST exist, parse, and include both `container` and `vm` lanes. |
 | OFFLINE-COLD-001 | offline/README.md | Contracts | MUST | Maximal offline profile (`offline/profiles/maximal.yaml`) MUST enforce at least 5 cold replays per required lane and `hard_release_gate: true`. |
 | OFFLINE-EVIDENCE-001 | offline/README.md | Contracts | MUST | Offline evidence schema (`offline/schema/evidence.v1.json`) and `verify-evidence` validation path MUST exist and remain executable, including source binding fields (`source_git_commit`, `source_git_tag`). |
-| OFFLINE-GATE-001 | RELEASE_PROCESS.md | Verification Requirements | MUST | Release process MUST include explicit offline replay evidence gate execution via `go test ./offline/conformance` for both `x86_64` and `arm64` matrix/profile contracts and MUST bind evidence to the expected release commit/tag. |
+| OFFLINE-GATE-001 | CONTRIBUTING.md | Release Process | MUST | Release process MUST include explicit offline replay evidence gate execution via `go test ./offline/conformance` for both `x86_64` and `arm64` matrix/profile contracts and MUST bind evidence to the expected release commit/tag. |
 | OFFLINE-ARCH-001 | offline/matrix.yaml + offline/matrix.arm64.yaml | Profile | MUST | Release architecture scope MUST be explicit and constrained to the supported set: `x86_64` and `arm64`. |
 | OFFLINE-LOCAL-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Local operators MUST have a Go-native `jcs-offline-replay cross-arch` workflow that can execute offline vector gates, including the optional official ES6 100,000,000-line gate. |
 
