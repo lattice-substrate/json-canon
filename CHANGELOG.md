@@ -8,17 +8,26 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ### Added
 - `jcs.Canonicalize` and `jcs.CanonicalizeWithOptions` convenience functions (parse + serialize in one call).
+- `jcs.SerializeWithOptions` for value-tree canonicalization with caller-supplied bounds.
 - Benchmark suites for `jcsfloat.FormatDouble`, `jcstoken.Parse`, `jcs.Serialize`, and end-to-end canonicalization.
 - Optional pre-push git hook (`.githooks/pre-push`) that validates vet and lint before tag pushes.
 
 ### Changed
 - Reduced `big.Int` allocations in Burger-Dybvig digit generation (scratch values reused across iterations).
 - Added ASCII fast path in `parseString` — pure ASCII strings with no escapes parse with a single allocation instead of per-byte appends.
+- Serializer bound validation now honors caller options for `CanonicalizeWithOptions` and `SerializeWithOptions` instead of always applying parser defaults.
+- Binary hygiene policy now fails CI when compiled `jcs-*` artifacts are tracked under `offline/runs/**/bin/`.
+- Offline run artifacts are now ignored recursively under `offline/runs/**` (while preserving `offline/runs/.gitkeep`).
+- Conformance `CLI-EXIT-004` now skips on Linux environments where `/dev/full` is unavailable or not writable.
+- Lint CI now enforces a `>=70%` coverage floor for `cmd/jcs-offline-replay`, `cmd/jcs-offline-worker`, `offline/runtime/executil`, and total project coverage.
 
 ### Fixed
 - `--version` now reports the Go module version when installed via `go install` without explicit `-ldflags`.
 - Release workflow offline evidence gate now derives `source_git_commit`/`source_git_tag` from archived evidence and builds the control binary from that commit, preventing false failures when a tag is not exactly one commit after evidence generation.
 - CI and Coverage workflows now ignore `articles/**`-only changes so docs/article release commits do not trigger full runtime gates.
+- Offline evidence validation now enforces SHA-256 token format for node-level and aggregate digest fields (not just bundle-level metadata), preventing malformed digest acceptance.
+- Added regression tests for malformed node/aggregate digest rejection and serializer option-bound parity.
+- Expanded offline replay and worker command tests to exercise full harness/worker orchestration paths under deterministic fake toolchains.
 
 ## [v0.2.1] - 2026-02-27
 

@@ -144,6 +144,16 @@ v, err := jcstoken.ParseWithOptions(input, &jcstoken.Options{
 })
 ```
 
+Or canonicalize directly with the same bounds:
+
+```go
+canonical, err := jcs.CanonicalizeWithOptions(input, &jcstoken.Options{
+	MaxDepth:     32,
+	MaxValues:    10_000,
+	MaxInputSize: 1 << 20,
+})
+```
+
 See [BOUNDS.md](../BOUNDS.md) for all bounds and their defaults.
 
 ### Canonical Verification

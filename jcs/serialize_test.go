@@ -3,6 +3,7 @@ package jcs_test
 import (
 	"errors"
 	"math"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -406,5 +407,29 @@ func TestCanonicalizeWithOptions_API_CANON_002(t *testing.T) {
 	want := canon(t, `{"b":1,"a":2}`)
 	if string(got) != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	// Depth above default (1000) remains valid when caller expands bounds.
+	const depth = 1200
+	deepNesting := []byte(strings.Repeat("[", depth) + "0" + strings.Repeat("]", depth))
+	got, err = jcs.CanonicalizeWithOptions(deepNesting, &jcstoken.Options{MaxDepth: 2000})
+	if err != nil {
+		t.Fatalf("CanonicalizeWithOptions deep input: %v", err)
+	}
+	if string(got) != string(deepNesting) {
+		t.Fatalf("unexpected deep canonical output")
+	}
+
+	// Serializer-only bounds honor the provided options as well.
+	v, err := jcstoken.Parse([]byte(`[[[0]]]`))
+	if err != nil {
+		t.Fatalf("parse for SerializeWithOptions: %v", err)
+	}
+	_, err = jcs.SerializeWithOptions(v, &jcstoken.Options{MaxDepth: 2})
+	if err == nil {
+		t.Fatal("expected SerializeWithOptions depth bound error")
+	}
+	if !errors.As(err, &je) || je.Class != jcserr.BoundExceeded {
+		t.Fatalf("expected BoundExceeded, got %v", err)
 	}
 }

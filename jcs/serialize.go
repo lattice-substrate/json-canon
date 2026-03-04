@@ -28,7 +28,7 @@ func Canonicalize(input []byte) ([]byte, error) {
 		return nil, err //nolint:wrapcheck // API-CANON-001: pass through jcstoken parse errors unchanged.
 	}
 	// Pre-allocate: canonical output is typically similar in size to input.
-	return serializeInto(make([]byte, 0, len(input)), v)
+	return serializeInto(make([]byte, 0, len(input)), v, nil)
 }
 
 // CanonicalizeWithOptions is like Canonicalize but accepts parser options.
@@ -40,7 +40,7 @@ func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, erro
 		return nil, err //nolint:wrapcheck // API-CANON-002: pass through jcstoken parse errors unchanged.
 	}
 	// Pre-allocate: canonical output is typically similar in size to input.
-	return serializeInto(make([]byte, 0, len(input)), v)
+	return serializeInto(make([]byte, 0, len(input)), v, opts)
 }
 
 // Serialize produces the RFC 8785 JCS canonical byte sequence for a parsed
@@ -49,15 +49,22 @@ func CanonicalizeWithOptions(input []byte, opts *jcstoken.Options) ([]byte, erro
 // CANON-ENC-001: Output is UTF-8.
 // CANON-WS-001: No insignificant whitespace.
 func Serialize(v *jcstoken.Value) ([]byte, error) {
-	return serializeInto(nil, v)
+	return serializeInto(nil, v, nil)
 }
 
-func serializeInto(buf []byte, v *jcstoken.Value) ([]byte, error) {
+// SerializeWithOptions is like Serialize but validates the value tree against
+// caller-supplied bounds before canonical emission.
+func SerializeWithOptions(v *jcstoken.Value, opts *jcstoken.Options) ([]byte, error) {
+	return serializeInto(nil, v, opts)
+}
+
+func serializeInto(buf []byte, v *jcstoken.Value, opts *jcstoken.Options) ([]byte, error) {
 	if v == nil {
 		return nil, jcserr.New(jcserr.InternalError, -1, "jcs: nil value")
 	}
+	limits := resolveSerializeLimits(opts)
 	state := &serializeValidationState{}
-	if err := validateValueTree(v, 0, state); err != nil {
+	if err := validateValueTree(v, 0, state, limits); err != nil {
 		return nil, err
 	}
 
@@ -302,16 +309,50 @@ type serializeValidationState struct {
 	values int
 }
 
-//nolint:gocyclo,cyclop,gocognit // REQ:IJSON-DUP-001 spec-bound validation logic is intentionally explicit for requirement traceability.
-func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState) error {
-	state.values++
-	if state.values > jcstoken.DefaultMaxValues {
-		return jcserr.New(jcserr.BoundExceeded, -1,
-			fmt.Sprintf("jcs: value count exceeds maximum %d", jcstoken.DefaultMaxValues))
+type serializeLimits struct {
+	maxDepth         int
+	maxValues        int
+	maxObjectMembers int
+	maxArrayElements int
+	maxStringBytes   int
+}
+
+func resolveSerializeLimits(opts *jcstoken.Options) serializeLimits {
+	if opts == nil {
+		return serializeLimits{
+			maxDepth:         jcstoken.DefaultMaxDepth,
+			maxValues:        jcstoken.DefaultMaxValues,
+			maxObjectMembers: jcstoken.DefaultMaxObjectMembers,
+			maxArrayElements: jcstoken.DefaultMaxArrayElements,
+			maxStringBytes:   jcstoken.DefaultMaxStringBytes,
+		}
 	}
-	if depth > jcstoken.DefaultMaxDepth {
+	return serializeLimits{
+		maxDepth:         resolveSerializeLimit(opts.MaxDepth, jcstoken.DefaultMaxDepth),
+		maxValues:        resolveSerializeLimit(opts.MaxValues, jcstoken.DefaultMaxValues),
+		maxObjectMembers: resolveSerializeLimit(opts.MaxObjectMembers, jcstoken.DefaultMaxObjectMembers),
+		maxArrayElements: resolveSerializeLimit(opts.MaxArrayElements, jcstoken.DefaultMaxArrayElements),
+		maxStringBytes:   resolveSerializeLimit(opts.MaxStringBytes, jcstoken.DefaultMaxStringBytes),
+	}
+}
+
+func resolveSerializeLimit(val, def int) int {
+	if val > 0 {
+		return val
+	}
+	return def
+}
+
+//nolint:gocyclo,cyclop,gocognit // REQ:IJSON-DUP-001 spec-bound validation logic is intentionally explicit for requirement traceability.
+func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationState, limits serializeLimits) error {
+	state.values++
+	if state.values > limits.maxValues {
 		return jcserr.New(jcserr.BoundExceeded, -1,
-			fmt.Sprintf("jcs: value nesting depth exceeds maximum %d", jcstoken.DefaultMaxDepth))
+			fmt.Sprintf("jcs: value count exceeds maximum %d", limits.maxValues))
+	}
+	if depth > limits.maxDepth {
+		return jcserr.New(jcserr.BoundExceeded, -1,
+			fmt.Sprintf("jcs: value nesting depth exceeds maximum %d", limits.maxDepth))
 	}
 
 	switch v.Kind {
@@ -329,29 +370,29 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 		}
 		return nil
 	case jcstoken.KindString:
-		if err := validateString(v.Str); err != nil {
+		if err := validateString(v.Str, limits.maxStringBytes); err != nil {
 			return err
 		}
 		return nil
 	case jcstoken.KindArray:
-		if len(v.Elems) > jcstoken.DefaultMaxArrayElements {
+		if len(v.Elems) > limits.maxArrayElements {
 			return jcserr.New(jcserr.BoundExceeded, -1,
-				fmt.Sprintf("jcs: array element count exceeds maximum %d", jcstoken.DefaultMaxArrayElements))
+				fmt.Sprintf("jcs: array element count exceeds maximum %d", limits.maxArrayElements))
 		}
 		for i := range v.Elems {
-			if err := validateValueTree(&v.Elems[i], depth+1, state); err != nil {
+			if err := validateValueTree(&v.Elems[i], depth+1, state, limits); err != nil {
 				return err
 			}
 		}
 		return nil
 	case jcstoken.KindObject:
-		if len(v.Members) > jcstoken.DefaultMaxObjectMembers {
+		if len(v.Members) > limits.maxObjectMembers {
 			return jcserr.New(jcserr.BoundExceeded, -1,
-				fmt.Sprintf("jcs: object member count exceeds maximum %d", jcstoken.DefaultMaxObjectMembers))
+				fmt.Sprintf("jcs: object member count exceeds maximum %d", limits.maxObjectMembers))
 		}
 		seen := make(map[string]struct{}, len(v.Members))
 		for i := range v.Members {
-			if err := validateString(v.Members[i].Key); err != nil {
+			if err := validateString(v.Members[i].Key, limits.maxStringBytes); err != nil {
 				return jcserr.Wrap(err.Class, err.Offset, "jcs: invalid object key", err)
 			}
 			if _, ok := seen[v.Members[i].Key]; ok {
@@ -359,7 +400,7 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 					fmt.Sprintf("jcs: duplicate object key %q", v.Members[i].Key))
 			}
 			seen[v.Members[i].Key] = struct{}{}
-			if err := validateValueTree(&v.Members[i].Value, depth+1, state); err != nil {
+			if err := validateValueTree(&v.Members[i].Value, depth+1, state, limits); err != nil {
 				return err
 			}
 		}
@@ -369,13 +410,13 @@ func validateValueTree(v *jcstoken.Value, depth int, state *serializeValidationS
 	}
 }
 
-func validateString(s string) *jcserr.Error {
+func validateString(s string, maxStringBytes int) *jcserr.Error {
 	if !utf8.ValidString(s) {
 		return jcserr.New(jcserr.InvalidUTF8, -1, "jcs: string is not valid UTF-8")
 	}
-	if len(s) > jcstoken.DefaultMaxStringBytes {
+	if len(s) > maxStringBytes {
 		return jcserr.New(jcserr.BoundExceeded, -1,
-			fmt.Sprintf("jcs: string length exceeds maximum %d bytes", jcstoken.DefaultMaxStringBytes))
+			fmt.Sprintf("jcs: string length exceeds maximum %d bytes", maxStringBytes))
 	}
 	for _, r := range s {
 		if jcstoken.IsNoncharacter(r) {

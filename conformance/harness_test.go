@@ -1258,6 +1258,9 @@ func checkInternalWriteFailureExitCode(t *testing.T, h *harness) {
 	}
 	f, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
 	if err != nil {
+		if errors.Is(err, os.ErrPermission) || errors.Is(err, os.ErrNotExist) {
+			t.Skipf("CLI-EXIT-004 conformance gate requires writable /dev/full: %v", err)
+		}
 		t.Fatalf("open /dev/full: %v", err)
 	}
 	t.Cleanup(func() {
