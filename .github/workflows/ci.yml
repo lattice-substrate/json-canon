@@ -35,6 +35,12 @@ jobs:
             echo "$tracked_root_exec"
             exit 1
           fi
+          tracked_offline_bins=$(git ls-files | grep -E '^offline/runs/.+/bin/(jcs-canon|jcs-offline-replay|jcs-offline-worker)$' || true)
+          if [ -n "$tracked_offline_bins" ]; then
+            echo "tracked compiled binaries are not allowed under offline/runs:"
+            echo "$tracked_offline_bins"
+            exit 1
+          fi
 
   lint:
     name: Lint
@@ -50,6 +56,9 @@ jobs:
         with:
           version: v1.64.8
           args: --config=golangci.yml
+      - name: coverage gate (>=70%)
+        shell: bash
+        run: bash ./scripts/coverage_gate.sh
 
   test_matrix:
     name: Vet+Unit (${{ matrix.os }}, Go ${{ matrix.go }})

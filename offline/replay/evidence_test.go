@@ -95,6 +95,32 @@ func TestValidateEvidenceBundleRejectsTamperedMetadata(t *testing.T) {
 	}
 }
 
+func TestValidateEvidenceBundleRejectsMalformedNodeDigestTokens(t *testing.T) {
+	m, p, e, opts := validEvidenceFixture()
+	e.NodeReplays[0].CanonicalSHA256 = "abc"
+
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected malformed canonical digest validation error")
+	}
+	if !strings.Contains(err.Error(), "canonical_sha256 must be 64 hex characters") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleRejectsMalformedAggregateDigestTokens(t *testing.T) {
+	m, p, e, opts := validEvidenceFixture()
+	e.AggregateCanonical = "abc"
+
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected malformed aggregate digest validation error")
+	}
+	if !strings.Contains(err.Error(), "aggregate_canonical_sha256 must be 64 hex characters") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
 	m := &replay.Matrix{
 		Version:      "v1",
