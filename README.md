@@ -93,6 +93,16 @@ json-canon owns every stage of the pipeline from input bytes to canonical output
 
 **Determinism evidence.** Unit tests prove correctness. They do not prove determinism across environments. An offline replay harness runs the tool across Linux distributions (Debian, Ubuntu, Alpine, Fedora, Rocky, openSUSE) in both container and VM execution modes, capturing SHA-256 digests of all output. Releases are gated on byte-identical digests across the full matrix. The evidence bundle (checksummed, machine-readable, committed alongside the source) makes the determinism claim auditable, not just asserted.
 
+## Engineering Articles
+
+Detailed technical articles covering the engineering behind json-canon:
+
+1. [Shortest Round-Trip: Implementing IEEE 754 to Decimal Conversion in Go](https://lattice-substrate.github.io/blog/2026/02/27/shortest-roundtrip-ieee754-burger-dybvig/) - Burger-Dybvig algorithm, multiprecision arithmetic, ECMA-262 formatting
+2. [A Strict RFC 8259 JSON Parser](https://lattice-substrate.github.io/blog/2026/02/26/strict-rfc8259-json-parser/) - single-pass parser design, surrogate validation, bounds enforcement
+3. [The Small Decisions That Infrastructure Depends On](https://lattice-substrate.github.io/blog/2026/02/25/small-decisions-infrastructure-primitive/) - UTF-16 sort order, failure taxonomy, ABI contracts
+4. [Proving Determinism: Evidence-Based Release Engineering](https://lattice-substrate.github.io/blog/2026/02/24/proving-determinism-evidence-release/) - offline replay harness, SHA-256 evidence chains, release gating
+5. [IEEE 754 Compliance Does Not Mean Platform Independence](https://lattice-substrate.github.io/blog/2026/03/04/fma-go-floating-point-determinism/) - FMA instructions, Go compiler fusion policy, platform-independent digit generation
+
 ## CLI Reference
 
 ```text

@@ -6,11 +6,14 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.0] - 2026-03-04
+
 ### Added
 - `jcs.Canonicalize` and `jcs.CanonicalizeWithOptions` convenience functions (parse + serialize in one call).
 - `jcs.SerializeWithOptions` for value-tree canonicalization with caller-supplied bounds.
 - Benchmark suites for `jcsfloat.FormatDouble`, `jcstoken.Parse`, `jcs.Serialize`, and end-to-end canonicalization.
 - Optional pre-push git hook (`.githooks/pre-push`) that validates vet and lint before tag pushes.
+- Engineering articles section in README linking to the published technical article series.
 
 ### Changed
 - Reduced `big.Int` allocations in Burger-Dybvig digit generation (scratch values reused across iterations).
@@ -20,6 +23,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Offline run artifacts are now ignored recursively under `offline/runs/**` (while preserving `offline/runs/.gitkeep`).
 - Conformance `CLI-EXIT-004` now skips on Linux environments where `/dev/full` is unavailable or not writable.
 - Lint CI now enforces a `>=70%` coverage floor for `cmd/jcs-offline-replay`, `cmd/jcs-offline-worker`, `offline/runtime/executil`, and total project coverage.
+- README rewritten for voice and structure. Documentation consolidated (removed redundant GOVERNANCE.md, THREAT_MODEL.md, RELEASE_PROCESS.md, VERIFICATION.md, NORMATIVE_REFERENCES.md, docs/QUICKSTART.md, docs/COMPARISON.md, docs/INTEGRATION_GUIDE.md, docs/book/).
+- New unified `docs/GUIDE.md` replaces QUICKSTART.md and INTEGRATION_GUIDE.md.
 
 ### Fixed
 - `--version` now reports the Go module version when installed via `go install` without explicit `-ldflags`.
