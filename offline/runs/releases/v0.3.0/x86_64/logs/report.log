@@ -2,7 +2,7 @@ schema: evidence.v1
 profile: maximal-offline-linux-x86_64
 architecture: x86_64
 source git commit: f916696d88c15d35c027ed80dea0581c7ef3579c
-source git tag: untagged
+source git tag: v0.3.0
 runs: 60
 aggregate canonical: 2818166c21e1b445d59b061c5a546eccb54f71566325ea9366ddde30ddd5ebc6
 node alpine320-container: 5 replays
