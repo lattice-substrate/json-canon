@@ -118,6 +118,10 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		{name: "control_binary_sha256", value: e.ControlBinarySHA},
 		{name: "matrix_sha256", value: e.MatrixSHA256},
 		{name: "profile_sha256", value: e.ProfileSHA256},
+		{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
+		{name: "aggregate_verify_sha256", value: e.AggregateVerify},
+		{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
+		{name: "aggregate_exit_code_sha256", value: e.AggregateExitCode},
 	} {
 		if err := validateSHA256Token(field.name, field.value); err != nil {
 			return err
@@ -206,13 +210,22 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 			{"session_id", r.SessionID},
 			{"started_at_utc", r.StartedAtUTC},
 			{"completed_at_utc", r.CompletedAtUTC},
+		} {
+			if strings.TrimSpace(token.value) == "" {
+				return fmt.Errorf("node %s replay %d missing %s", r.NodeID, r.ReplayIndex, token.name)
+			}
+		}
+		for _, token := range []struct {
+			name  string
+			value string
+		}{
 			{"canonical_sha256", r.CanonicalSHA256},
 			{"verify_sha256", r.VerifySHA256},
 			{"failure_class_sha256", r.FailureClassSHA256},
 			{"exit_code_sha256", r.ExitCodeSHA256},
 		} {
-			if strings.TrimSpace(token.value) == "" {
-				return fmt.Errorf("node %s replay %d missing %s", r.NodeID, r.ReplayIndex, token.name)
+			if err := validateSHA256Token(token.name, token.value); err != nil {
+				return err
 			}
 		}
 		byNode[r.NodeID] = append(byNode[r.NodeID], r)

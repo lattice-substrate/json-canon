@@ -12,7 +12,12 @@
 | Max string bytes | 8 MiB (decoded UTF-8 bytes) | `DefaultMaxStringBytes` |
 | Max number chars | 4,096 | `DefaultMaxNumberChars` |
 
-All bounds are configurable via `jcstoken.Options`. The CLI uses defaults.
+Library callers can configure bounds through `jcstoken.Options` on:
+- `jcstoken.ParseWithOptions`
+- `jcs.CanonicalizeWithOptions`
+- `jcs.SerializeWithOptions`
+
+`jcs.Serialize` and the CLI use default bounds.
 
 Bound violations produce `BOUND_EXCEEDED` (exit code 2) with a diagnostic
 indicating which bound was exceeded.
@@ -76,8 +81,9 @@ safer operational baseline.
 1. **Reduce `MaxInputSize`** to match expected payload size (e.g., 1 MiB for API payloads).
 2. **Reduce `MaxValues`** if processing simple structures (e.g., 10,000).
 3. **Reduce `MaxDepth`** if nesting beyond a few levels is unexpected (e.g., 32).
-4. Use the library API (`jcstoken.ParseWithOptions`) for fine-grained control;
-   the CLI uses defaults only.
+4. Use library APIs with options (`jcstoken.ParseWithOptions`,
+   `jcs.CanonicalizeWithOptions`, `jcs.SerializeWithOptions`) for fine-grained
+   control; the CLI uses defaults only.
 
 ## Nondeterminism Sources
 
