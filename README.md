@@ -5,23 +5,9 @@
 [![CI](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml)
 [![Coverage](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml)
 
-Deterministic JSON for signing, hashing, and audit trails.
+json-canon produces byte-deterministic JSON. Same input, same bytes — across Go versions, architectures, and kernel versions. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written Burger-Dybvig number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. Zero external dependencies. Linux only.
 
-## The Problem
-
-JSON is not deterministic. Object key order, number formatting, and whitespace
-vary across serializers, languages, and versions. When two systems render the
-same logical data differently, cryptographic signatures break, content hashes
-diverge, and audit comparisons produce false mismatches.
-
-[RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization
-Scheme) defines a canonical form that eliminates this nondeterminism.
-`json-canon` implements RFC 8785 with a strict parser, a hand-written
-ECMA-262 number formatter, and stable CLI ABI under SemVer.
-
-## The Solution
-
-### Go Library
+## Go API
 
 ```go
 import (
@@ -56,7 +42,13 @@ func main() {
 }
 ```
 
-### CLI
+For a single call that parses and serializes in one step:
+
+```go
+canonical, err := jcs.Canonicalize(input)
+```
+
+## CLI
 
 ```bash
 # Canonicalize
@@ -66,35 +58,6 @@ echo '{"b":2,"a":1}' | jcs-canon canonicalize -
 # Verify canonical form
 jcs-canon verify document.json
 ```
-
-## Why This Approach
-
-`encoding/json` semantics can change across Go versions. A canonicalizer that
-delegates parsing or number formatting to stdlib inherits that instability — any
-formatting drift produces different canonical bytes, breaking every downstream
-signature and hash. json-canon owns every byte of its output through a
-hand-written strict RFC 8259 parser, a Burger-Dybvig ECMA-262 number formatter,
-and UTF-16 code-unit key sorting.
-
-Strict input rejection means two systems cannot silently canonicalize the same
-malformed input differently. 286,000+ oracle vectors prove number formatting
-correctness. Offline cold-replay proves stability across architectures and
-kernel versions. Every normative behavior traces from an RFC clause to a
-requirement ID to an implementation symbol to a test.
-
-## When to Use
-
-- Signing or hashing JSON documents — you need byte-deterministic output.
-- Content-addressable storage — identical content must produce identical hashes.
-- Audit trails — you need reproducible, traceable canonicalization.
-- Pipeline validation — you need strict input gates with stable exit codes.
-
-## When NOT to Use
-
-- Pretty-printing or human-readable formatting — use `jq`.
-- macOS or Windows — supported runtime is Linux only.
-- Lenient parsing — `json-canon` rejects invalid JSON by design.
-- General JSON processing — this is not a query engine or transformation toolkit.
 
 ## Install
 
@@ -116,6 +79,20 @@ Release binaries are available on the
 [releases page](https://github.com/lattice-substrate/json-canon/releases).
 Verification instructions: [`CONTRIBUTING.md`](CONTRIBUTING.md#release-verification).
 
+## Design
+
+json-canon owns every stage of the pipeline from input bytes to canonical output. Nothing is delegated to `encoding/json` or `strconv.FormatFloat`.
+
+**Parser.** A strict RFC 8259 parser that rejects what `encoding/json` silently accepts: lone surrogates, duplicate keys after escape decoding, noncharacters, lexical negative zero, overflow, underflow. Seven independent resource bounds — input size, nesting depth, total values, object members, array elements, string bytes, number token length — all fail-fast, all configurable. If the parser returns a value, that value has exactly one canonical representation.
+
+**Number formatting.** Burger-Dybvig algorithm with ECMA-262 even-digit tie-breaking, implemented from scratch in pure `math/big` arithmetic. `strconv.FormatFloat` is a high-quality formatter, but it is not an ECMA-262 conformance contract — its output policy can change across Go versions and doesn't match RFC 8785's required formatting rules at key exponent boundaries. The implementation is validated against 286,362 oracle test vectors (54,445 boundary cases + 231,917 stress vectors) with pinned SHA-256 checksums on the test data itself.
+
+**Key sorting.** UTF-16 code-unit order, not UTF-8 byte order. These orderings disagree for characters above U+FFFF. A supplementary-plane character like U+10000 sorts *before* U+E000 in UTF-16 code-unit order and *after* it in UTF-8 byte order. Most implementations get this wrong because the bug only surfaces with emoji, CJK Extension B, or historic script keys — rare in testing, not rare in production. RFC 8785 §3.2.3 mandates UTF-16 code-unit order because JCS is defined for interoperability with ECMAScript string semantics.
+
+**Error taxonomy.** 13 failure classes mapped to 3 exit codes (0, 2, 10). Classified by root cause, not error origin — a missing file path is `CLI_USAGE` (the invocation is wrong), not `INTERNAL_IO` (infrastructure broke). Exit code 2 means "fix your input or invocation." Exit code 10 means "investigate the environment." The class name is the stable contract; the surrounding message text is not. Machines should switch on the class, not parse the message.
+
+**Determinism evidence.** Unit tests prove correctness. They do not prove determinism across environments. An offline replay harness runs the tool across Linux distributions (Debian, Ubuntu, Alpine, Fedora, Rocky, openSUSE) in both container and VM execution modes, capturing SHA-256 digests of all output. Releases are gated on byte-identical digests across the full matrix. The evidence bundle — checksummed, machine-readable, committed alongside the source — makes the determinism claim auditable, not just asserted.
+
 ## CLI Reference
 
 ```text
@@ -133,46 +110,23 @@ jcs-canon --version
 | 2 | Input rejection | Parse error, policy violation, non-canonical, invalid usage |
 | 10 | Internal error | I/O write failure, unexpected state |
 
-Every rejection maps to a stable failure class. See
-[`FAILURE_TAXONOMY.md`](FAILURE_TAXONOMY.md) for the full taxonomy.
+Full taxonomy: [`FAILURE_TAXONOMY.md`](FAILURE_TAXONOMY.md).
 
-## Stability Policy
+## Stability
 
-This project enforces strict SemVer for the published CLI ABI.
-
-- Command set and flag semantics are versioned.
-- Exit code taxonomy and failure classes are stable.
-- Canonical stdout bytes for accepted inputs are deterministic.
-- stderr stream contract (`verify` writes `ok\n` to stderr on success) is frozen.
-
-Full ABI contract: [`ABI.md`](ABI.md).
-
-## Test
-
-```bash
-go test ./... -count=1 -v
-go test ./conformance -count=1 -v -timeout=10m
-```
+The CLI ABI — command names, flag semantics, exit codes, failure classes, stdout/stderr contracts, canonical output bytes — is governed by strict SemVer. Patch releases change no behavior. Minor releases are additive only. Any breaking change requires a major version bump. The machine-readable contract is [`abi_manifest.json`](abi_manifest.json); the full specification is [`ABI.md`](ABI.md).
 
 ## Documentation
 
-**Getting started:**
-- [`docs/GUIDE.md`](docs/GUIDE.md) — library usage, CLI patterns, CI/CD, migration, feature comparison
-
-**Architecture and contracts:**
+- [`docs/GUIDE.md`](docs/GUIDE.md) — usage, CI/CD integration, migration, feature comparison
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — package boundaries, runtime model
-- [`ABI.md`](ABI.md) — stable CLI contract
 - [`SPECIFICATION.md`](SPECIFICATION.md) — normative behavior contract
 - [`FAILURE_TAXONOMY.md`](FAILURE_TAXONOMY.md) — error classes and exit codes
 - [`BOUNDS.md`](BOUNDS.md) — resource limits and memory behavior
 - [`CONFORMANCE.md`](CONFORMANCE.md) — conformance gates and evidence
-
-**Project:**
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor guide, governance, release process, verification
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor guide, release process, verification
 - [`SECURITY.md`](SECURITY.md) — vulnerability reporting
 - [`docs/adr/`](docs/adr/) — architectural decision records
-
-Full documentation index: [`docs/README.md`](docs/README.md).
 
 ## Normative References
 
