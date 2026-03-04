@@ -1,16 +1,16 @@
 # Guide
 
+json-canon has two interfaces: a Go library for embedding canonicalization into your code, and a CLI for pipelines and verification scripts. This guide covers both, along with CI/CD integration and migration from other implementations.
+
 ## Quick Start
 
 ### Go Library
-
-Install:
 
 ```bash
 go get github.com/lattice-substrate/json-canon
 ```
 
-Parse and canonicalize:
+The two-step API gives you a parsed value tree that you can inspect before serializing:
 
 ```go
 package main
@@ -47,7 +47,7 @@ func main() {
 }
 ```
 
-Or use the convenience function to parse and serialize in one call:
+If you don't need the intermediate value tree, `jcs.Canonicalize` does both steps in one call:
 
 ```go
 canonical, err := jcs.Canonicalize(input)
@@ -66,7 +66,7 @@ CGO_ENABLED=0 go build -trimpath -buildvcs=false \
 Or download a release binary from the
 [releases page](https://github.com/lattice-substrate/json-canon/releases).
 
-Canonicalize:
+Canonicalize from stdin or a file:
 
 ```bash
 echo '{"b":2,"a":1}' | ./jcs-canon canonicalize -
@@ -75,7 +75,7 @@ echo '{"b":2,"a":1}' | ./jcs-canon canonicalize -
 ./jcs-canon canonicalize input.json > canonical.json
 ```
 
-Verify canonical form:
+Verify that a document is already in canonical form:
 
 ```bash
 ./jcs-canon verify input.json
@@ -83,7 +83,7 @@ Verify canonical form:
 # Prints diagnostic and exits 2 on failure
 ```
 
-Check exit codes in scripts:
+The exit codes are stable and designed for scripts — 0 is success, 2 is input rejection (parse error, policy violation, non-canonical, bad usage), 10 is internal error (I/O failure). Switch on them directly:
 
 ```bash
 if ./jcs-canon canonicalize input.json > canonical.json; then
@@ -108,8 +108,7 @@ Use `--quiet` to suppress the `ok` status message from `verify`:
 
 ### Error Handling
 
-All errors from `jcstoken.Parse` and `jcs.Serialize` are `*jcserr.Error`
-values with a stable `FailureClass`. Use `errors.As` to branch on the class:
+Every error from `jcstoken.Parse` and `jcs.Serialize` is a `*jcserr.Error` with a stable failure class. The class is the machine contract — switch on it, not the message text:
 
 ```go
 v, err := jcstoken.Parse(input)
@@ -130,11 +129,11 @@ if err != nil {
 }
 ```
 
-See [FAILURE_TAXONOMY.md](../FAILURE_TAXONOMY.md) for the full class list.
+The 13 failure classes and their exit code mappings are defined in [FAILURE_TAXONOMY.md](../FAILURE_TAXONOMY.md).
 
 ### Custom Resource Limits
 
-For constrained environments, use `ParseWithOptions` to override default bounds:
+The parser enforces seven independent bounds by default (see [BOUNDS.md](../BOUNDS.md)). For constrained environments — API servers, embedded systems, hostile-input pipelines — override them with `ParseWithOptions`:
 
 ```go
 v, err := jcstoken.ParseWithOptions(input, &jcstoken.Options{
@@ -144,7 +143,7 @@ v, err := jcstoken.ParseWithOptions(input, &jcstoken.Options{
 })
 ```
 
-Or canonicalize directly with the same bounds:
+The same options work through `CanonicalizeWithOptions` (parse + serialize) and `SerializeWithOptions` (value tree only):
 
 ```go
 canonical, err := jcs.CanonicalizeWithOptions(input, &jcstoken.Options{
@@ -154,11 +153,9 @@ canonical, err := jcs.CanonicalizeWithOptions(input, &jcstoken.Options{
 })
 ```
 
-See [BOUNDS.md](../BOUNDS.md) for all bounds and their defaults.
-
 ### Canonical Verification
 
-Check whether bytes are already canonical without transforming:
+Check whether bytes are already in canonical form without transforming them. This is what the CLI's `verify` command does internally:
 
 ```go
 func isCanonical(input []byte) (bool, error) {
@@ -176,7 +173,7 @@ func isCanonical(input []byte) (bool, error) {
 
 ### Round-Trip Hashing
 
-Parse, serialize, and hash the canonical bytes:
+The canonical output is deterministic — the same input always produces the same bytes. That makes it safe to hash or sign directly:
 
 ```go
 v, err := jcstoken.Parse(input)
@@ -187,11 +184,12 @@ canonical, err := jcs.Serialize(v)
 if err != nil {
 	return err
 }
-// canonical is deterministic — safe for hashing or signing
 hash := sha256.Sum256(canonical)
 ```
 
 ### HTTP Middleware
+
+Canonicalize request bodies before they reach your handler. This ensures downstream code always sees canonical JSON, regardless of how the client formatted it:
 
 ```go
 func canonicalBodyMiddleware(next http.Handler) http.Handler {
@@ -249,7 +247,7 @@ Produce a deterministic hash from arbitrary JSON:
 ./jcs-canon verify --quiet payload.json && sign payload.json
 ```
 
-### GitHub Actions Step
+### GitHub Actions
 
 ```yaml
 - name: Verify canonical JSON
@@ -257,21 +255,7 @@ Produce a deterministic hash from arbitrary JSON:
     ./jcs-canon verify --quiet config.json
 ```
 
-## When to Use
-
-- Signing or hashing JSON documents — you need byte-deterministic output.
-- Content-addressable storage — identical content must produce identical hashes.
-- Audit trails — you need reproducible, traceable canonicalization.
-- Pipeline validation — strict input gates with stable exit codes for automation.
-
-## When Not to Use
-
-- Pretty-printing or reformatting — use `jq`.
-- macOS or Windows — supported runtime is Linux only.
-- Lenient parsing — `json-canon` rejects invalid JSON by design.
-- General JSON processing — this is not a query engine or transformation toolkit.
-
-## Feature Comparison
+## Comparison with Other Implementations
 
 | Capability | json-canon | Cyberphone Go | encoding/json |
 |------------|-----------|---------------|---------------|
@@ -280,12 +264,14 @@ Produce a deterministic hash from arbitrary JSON:
 | UTF-16 code-unit key sort | Yes | Yes | No (byte order) |
 | Strict RFC 8259 grammar | Yes | Partial | Partial |
 | I-JSON constraints (RFC 7493) | Yes | No | No |
-| Classified error taxonomy | Yes (12 classes) | No | No |
+| Classified error taxonomy | Yes (13 classes) | No | No |
 | Stable CLI ABI (SemVer) | Yes | N/A (library only) | N/A |
 | Configurable resource bounds | Yes | No | No |
 | Offline replay evidence | Yes | No | No |
 | External dependencies | None (stdlib only) | None | N/A (stdlib) |
 | Platform support | Linux | Cross-platform | Cross-platform |
+
+The "strconv-based" distinction for Cyberphone Go matters. Both libraries produce RFC 8785-compliant output for well-formed input. The difference is in the input contract: Cyberphone Go's parser is more lenient, which means inputs that json-canon rejects are silently canonicalized by Cyberphone Go. Whether that's a feature or a defect depends on whether you trust your input pipeline.
 
 ### Differential Strictness
 
@@ -311,15 +297,11 @@ go test ./conformance -run TestCyberphoneGoDifferentialInvalidAcceptance -count=
 
 ### From Cyberphone Go
 
-Behavioral differences:
+Three things change:
 
-1. **Stricter parsing** — json-canon rejects hex floats, plus-prefixed numbers,
-   leading-zero numbers, invalid UTF-8, and lone surrogates that Cyberphone Go
-   silently accepts.
-2. **Error types** — json-canon returns `*jcserr.Error` with classified failure
-   classes, not generic errors.
-3. **API shape** — Cyberphone Go uses `Transform([]byte) ([]byte, error)`.
-   json-canon uses a two-step parse/serialize model.
+1. **Stricter parsing.** json-canon rejects hex floats, plus-prefixed numbers, leading-zero numbers, invalid UTF-8, and lone surrogates that Cyberphone Go silently accepts. If your inputs contain any of these, you'll get rejections where you previously got output.
+2. **Typed errors.** json-canon returns `*jcserr.Error` with a failure class and byte offset, not a generic `error`. You can switch on the class for programmatic handling.
+3. **Two-step API.** Cyberphone Go uses `Transform([]byte) ([]byte, error)`. json-canon separates parsing from serialization, giving you access to the value tree between steps. Use `jcs.Canonicalize` if you want the single-call equivalent.
 
 ```go
 // Before (Cyberphone Go):
@@ -331,29 +313,27 @@ if err != nil {
 	return err
 }
 out, err := jcs.Serialize(v)
+
+// Or, single call:
+// out, err := jcs.Canonicalize(input)
 ```
 
 ### From encoding/json + Manual Sorting
 
-Key differences:
+Three things will break if you're hand-rolling canonicalization on top of `encoding/json`:
 
-1. **Key sort order** — `encoding/json` sorts by UTF-8 byte order. RFC 8785
-   requires UTF-16 code-unit order. These differ for supplementary-plane characters.
-2. **Number formatting** — `encoding/json` uses `strconv.FormatFloat`. RFC 8785
-   requires ECMA-262 Number::toString output.
-3. **Whitespace** — `json.MarshalIndent` output is never canonical.
+1. **Key sort order.** `encoding/json` sorts by UTF-8 byte order. RFC 8785 requires UTF-16 code-unit order. These produce different results for keys containing supplementary-plane characters (emoji, CJK Extension B, mathematical symbols).
+2. **Number formatting.** `encoding/json` uses `strconv.FormatFloat`, which doesn't match ECMA-262 Number::toString output at key exponent boundaries.
+3. **Whitespace.** `json.MarshalIndent` output is never canonical. Neither is any output with trailing newlines or spaces.
 
-Replace the marshal-then-sort pattern with `jcstoken.Parse` + `jcs.Serialize`.
+Replace the marshal-then-sort pattern with `jcstoken.Parse` + `jcs.Serialize`, or `jcs.Canonicalize` for a single call.
 
 ### From Other Languages
 
-If migrating from a JCS implementation in another language, verify canonical
-output matches byte-for-byte on a representative corpus. Watch for:
+If migrating from a JCS implementation in another language, verify canonical output matches byte-for-byte on a representative corpus. The divergence points are predictable:
 
-- Number formatting for edge cases (subnormals, large integers, values near
-  powers of 10)
-- Key ordering for keys with supplementary-plane characters
-- Handling of `\uXXXX` escape sequences and surrogate pairs
+- **Number formatting** for edge cases: subnormals, large integers, values near powers of 10, values at the 1e-6 and 1e21 notation boundaries.
+- **Key ordering** for keys with supplementary-plane characters (anything above U+FFFF).
+- **Surrogate pair handling** in `\uXXXX` escape sequences — some implementations silently replace lone surrogates with U+FFFD instead of rejecting them.
 
-The conformance suite (`go test ./conformance -count=1 -v`) validates against
-official Cyberphone vectors and RFC 8785-derived fixtures.
+The conformance suite (`go test ./conformance -count=1 -v`) validates against official Cyberphone vectors and RFC 8785-derived fixtures.
