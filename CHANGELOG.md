@@ -14,7 +14,7 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ### Changed
 - Reduced `big.Int` allocations in Burger-Dybvig digit generation (scratch values reused across iterations).
-- Added ASCII fast path in `parseString` — pure ASCII strings with no escapes parse with a single allocation instead of per-byte appends.
+- Added ASCII fast path in `parseString`: pure ASCII strings with no escapes parse with a single allocation instead of per-byte appends.
 - Serializer bound validation now honors caller options for `CanonicalizeWithOptions` and `SerializeWithOptions` instead of always applying parser defaults.
 - Binary hygiene policy now fails CI when compiled `jcs-*` artifacts are tracked under `offline/runs/**/bin/`.
 - Offline run artifacts are now ignored recursively under `offline/runs/**` (while preserving `offline/runs/.gitkeep`).
@@ -68,9 +68,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Developer-oriented documentation overhaul:
-  - `docs/QUICKSTART.md` — 5-minute getting started guide for Go library and CLI.
-  - `docs/INTEGRATION_GUIDE.md` — CI/CD patterns, error handling, resource limits, migration guides.
-  - `docs/COMPARISON.md` — evaluation guide with differential strictness table, feature matrix, and use-case guidance.
+  - `docs/QUICKSTART.md`: 5-minute getting started guide for Go library and CLI.
+  - `docs/INTEGRATION_GUIDE.md`: CI/CD patterns, error handling, resource limits, migration guides.
+  - `docs/COMPARISON.md`: evaluation guide with differential strictness table, feature matrix, and use-case guidance.
   - `README.md` rewritten as a developer-oriented landing page with progressive disclosure to new guides and handbook.
   - `docs/README.md` updated with new "Getting Started and Integration" section.
 - Official external conformance fixture packs under `conformance/official/`:

@@ -150,7 +150,7 @@ func TestSerialize_CANON_STR_011(t *testing.T) {
 		t.Fatalf("serialize NFD: %v", err)
 	}
 	if string(o1) == string(o2) {
-		t.Fatal("normalization was applied — NFC and NFD should produce different output")
+		t.Fatal("normalization was applied: NFC and NFD should produce different output")
 	}
 }
 

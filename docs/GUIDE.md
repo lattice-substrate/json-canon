@@ -83,7 +83,7 @@ Verify that a document is already in canonical form:
 # Prints diagnostic and exits 2 on failure
 ```
 
-The exit codes are stable and designed for scripts — 0 is success, 2 is input rejection (parse error, policy violation, non-canonical, bad usage), 10 is internal error (I/O failure). Switch on them directly:
+The exit codes are stable and designed for scripts: 0 is success, 2 is input rejection (parse error, policy violation, non-canonical, bad usage), 10 is internal error (I/O failure). Switch on them directly:
 
 ```bash
 if ./jcs-canon canonicalize input.json > canonical.json; then
@@ -108,7 +108,7 @@ Use `--quiet` to suppress the `ok` status message from `verify`:
 
 ### Error Handling
 
-Every error from `jcstoken.Parse` and `jcs.Serialize` is a `*jcserr.Error` with a stable failure class. The class is the machine contract — switch on it, not the message text:
+Every error from `jcstoken.Parse` and `jcs.Serialize` is a `*jcserr.Error` with a stable failure class. The class is the machine contract; switch on it, not the message text:
 
 ```go
 v, err := jcstoken.Parse(input)
@@ -117,11 +117,11 @@ if err != nil {
 	if errors.As(err, &je) {
 		switch je.Class {
 		case jcserr.InvalidGrammar, jcserr.InvalidUTF8:
-			// malformed input — reject
+			// malformed input, reject
 		case jcserr.BoundExceeded:
-			// input too large — consider adjusting limits
+			// input too large, consider adjusting limits
 		default:
-			// other rejection — log class and offset
+			// other rejection, log class and offset
 			log.Printf("%s at offset %d", je.Class, je.Offset)
 		}
 	}
@@ -133,7 +133,7 @@ The 13 failure classes and their exit code mappings are defined in [FAILURE_TAXO
 
 ### Custom Resource Limits
 
-The parser enforces seven independent bounds by default (see [BOUNDS.md](../BOUNDS.md)). For constrained environments — API servers, embedded systems, hostile-input pipelines — override them with `ParseWithOptions`:
+The parser enforces seven independent bounds by default (see [BOUNDS.md](../BOUNDS.md)). For constrained environments (API servers, embedded systems, hostile-input pipelines), override them with `ParseWithOptions`:
 
 ```go
 v, err := jcstoken.ParseWithOptions(input, &jcstoken.Options{
@@ -173,7 +173,7 @@ func isCanonical(input []byte) (bool, error) {
 
 ### Round-Trip Hashing
 
-The canonical output is deterministic — the same input always produces the same bytes. That makes it safe to hash or sign directly:
+The canonical output is deterministic. The same input always produces the same bytes. That makes it safe to hash or sign directly:
 
 ```go
 v, err := jcstoken.Parse(input)
@@ -334,6 +334,6 @@ If migrating from a JCS implementation in another language, verify canonical out
 
 - **Number formatting** for edge cases: subnormals, large integers, values near powers of 10, values at the 1e-6 and 1e21 notation boundaries.
 - **Key ordering** for keys with supplementary-plane characters (anything above U+FFFF).
-- **Surrogate pair handling** in `\uXXXX` escape sequences — some implementations silently replace lone surrogates with U+FFFD instead of rejecting them.
+- **Surrogate pair handling** in `\uXXXX` escape sequences. Some implementations silently replace lone surrogates with U+FFFD instead of rejecting them.
 
 The conformance suite (`go test ./conformance -count=1 -v`) validates against official Cyberphone vectors and RFC 8785-derived fixtures.

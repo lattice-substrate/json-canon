@@ -233,7 +233,7 @@ Commit B:  evidence files only           <- tag points here
 ```
 
 1. Finalize all code and documentation changes (commit A).
-2. Generate offline evidence with `JCS_OFFLINE_SOURCE_GIT_TAG=<tag>` — evidence
+2. Generate offline evidence with `JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`. Evidence
    binds `source_git_commit` to commit A.
 3. Commit evidence files only (commit B).
 4. Create annotated tag on commit B.

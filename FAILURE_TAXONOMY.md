@@ -65,4 +65,4 @@ For escaped string diagnostics, offsets point to the originating escape sequence
 | NOT_CANONICAL | VERIFY-ORDER-001, VERIFY-WS-001 |
 | CLI_USAGE | CLI-EXIT-001, CLI-EXIT-002, CLI-FLAG-001, CLI-IO-002 |
 | INTERNAL_IO | CLI-EXIT-004 |
-| INTERNAL_ERROR | — (defensive) |
+| INTERNAL_ERROR | - (defensive) |

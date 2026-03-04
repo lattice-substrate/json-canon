@@ -55,7 +55,7 @@ Determinism is an architectural property, not a test-only property.
 
 `jcsfloat` uses a hand-written Burger-Dybvig algorithm with even-digit
 tie-breaking, validated against 286,000+ oracle vectors. It exists because
-`strconv.FormatFloat` output can change across Go versions — any formatting
+`strconv.FormatFloat` output can change across Go versions. Any formatting
 drift produces different canonical bytes.
 
 Invariants:

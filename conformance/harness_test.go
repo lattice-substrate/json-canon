@@ -693,7 +693,7 @@ func checkNoNormalization(t *testing.T, _ *harness) {
 		t.Fatalf("serialize NFD: %v", err)
 	}
 	if bytes.Equal(o1, o2) {
-		t.Fatal("normalization was applied — NFC and NFD should produce different output")
+		t.Fatal("normalization was applied: NFC and NFD should produce different output")
 	}
 }
 

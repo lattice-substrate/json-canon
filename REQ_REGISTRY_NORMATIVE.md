@@ -13,14 +13,14 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | Requirement | Normative text (paraphrased) |
 
 ---
-## PARSE-UTF8 — UTF-8 Input Validation (RFC 3629)
+## PARSE-UTF8: UTF-8 Input Validation (RFC 3629)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | PARSE-UTF8-001 | RFC 3629 | §3 | MUST | Input MUST be valid UTF-8. Invalid byte sequences (continuation bytes without start, truncated multibyte, bytes 0xFE/0xFF) MUST be rejected. |
 | PARSE-UTF8-002 | RFC 3629 | §3 | MUST | Overlong UTF-8 encodings MUST be rejected (e.g. 0xC0 0xAF for U+002F). |
 
-## PARSE-GRAM — JSON Grammar (RFC 8259)
+## PARSE-GRAM: JSON Grammar (RFC 8259)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
@@ -35,14 +35,14 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | PARSE-GRAM-009 | RFC 8259 | §6 | MUST | Number tokens MUST match the RFC 8259 grammar: optional minus, integer, optional fraction, optional exponent. |
 | PARSE-GRAM-010 | RFC 8259 | §7 | MUST | String escape sequences MUST be one of: `\" \\ \/ \b \f \n \r \t \uXXXX`. Invalid escapes MUST be rejected. |
 
-## IJSON-DUP — Duplicate Key Rejection (RFC 7493)
+## IJSON-DUP: Duplicate Key Rejection (RFC 7493)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | IJSON-DUP-001 | RFC 7493 | §2.3 | MUST | Objects with duplicate member names MUST be rejected. |
 | IJSON-DUP-002 | RFC 7493 | §2.3 | MUST | Duplicate detection MUST compare keys after escape decoding (e.g. `\u0061` equals `a`). |
 
-## IJSON-SUR — Surrogate Handling (RFC 7493)
+## IJSON-SUR: Surrogate Handling (RFC 7493)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
@@ -50,19 +50,19 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | IJSON-SUR-002 | RFC 7493 | §2.1 | MUST | Lone low surrogates (U+DC00..U+DFFF without preceding high surrogate) MUST be rejected. |
 | IJSON-SUR-003 | RFC 7493 | §2.1 | MUST | Valid surrogate pairs (\uD800-\uDBFF followed by \uDC00-\uDFFF) MUST be decoded to supplementary-plane scalar values. |
 
-## IJSON-NONC — Noncharacter Rejection (RFC 7493)
+## IJSON-NONC: Noncharacter Rejection (RFC 7493)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | IJSON-NONC-001 | RFC 7493 | §2.1 | MUST | Unicode noncharacters MUST be rejected. The 66 noncharacters are: U+FDD0..U+FDEF (32 codepoints) and U+xFFFE/U+xFFFF for planes 0-16 (34 codepoints). |
 
-## CANON-WS — Whitespace (RFC 8785)
+## CANON-WS: Whitespace (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | CANON-WS-001 | RFC 8785 | §3.2.1 | MUST | Canonical output MUST NOT contain insignificant whitespace between tokens. |
 
-## CANON-STR — String Serialization (RFC 8785)
+## CANON-STR: String Serialization (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
@@ -79,7 +79,7 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | CANON-STR-011 | RFC 8785 | §3.2.2.2 | MUST | No Unicode normalization SHALL be applied to strings. |
 | CANON-STR-012 | RFC 8785 | §3.2.2.2 | MUST | Serialized strings MUST be enclosed in double quotes. |
 
-## CANON-SORT — Object Key Sorting (RFC 8785)
+## CANON-SORT: Object Key Sorting (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
@@ -89,26 +89,26 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | CANON-SORT-004 | RFC 8785 | §3.2.3 | MUST | Sorting MUST be based on property names in raw (unescaped) form. |
 | CANON-SORT-005 | RFC 8785 | §3.2.3 | MUST | Lexicographic order MUST compare UTF-16 code units at first differing index; if equal prefix, shorter string precedes longer. |
 
-## CANON-LIT — Literal Serialization (RFC 8785)
+## CANON-LIT: Literal Serialization (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | CANON-LIT-001 | RFC 8785 | §3.2.1 | MUST | Literals MUST be lowercase: `null`, `true`, `false`. |
 
-## CANON-ENC — Output Encoding (RFC 8785)
+## CANON-ENC: Output Encoding (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | CANON-ENC-001 | RFC 8785 | §3.2 | MUST | Canonical output MUST be encoded as UTF-8. |
 | CANON-ENC-002 | RFC 8259 | §8.1 | MUST | JSON generator output MUST NOT include a UTF-8 BOM prefix (U+FEFF). |
 
-## GEN-GRAM — Generator Grammar Conformance (RFC 8259)
+## GEN-GRAM: Generator Grammar Conformance (RFC 8259)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | GEN-GRAM-001 | RFC 8259 | §10 | MUST | JSON generator output MUST strictly conform to the JSON grammar. |
 
-## ECMA-FMT — Number Formatting (ECMA-262)
+## ECMA-FMT: Number Formatting (ECMA-262)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
@@ -125,7 +125,7 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | ECMA-FMT-011 | ECMA-262 | §6.1.6.1.20 | MUST | Intermediate `(n,k,s)` selection MUST use smallest possible `k` satisfying the algorithm constraints (step 5). |
 | ECMA-FMT-012 | ECMA-262 | §6.1.6.1.20 | MUST | Scientific notation branch with single significant digit MUST omit decimal point (`k = 1` branch in step 10). |
 
-## VERIFY — Canonical Verification (RFC 8785)
+## VERIFY: Canonical Verification (RFC 8785)
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
