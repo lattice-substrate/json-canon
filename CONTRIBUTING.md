@@ -216,10 +216,42 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
-For release tagging, move the validated cross-arch output under:
+### Release Evidence Generation
 
-- `offline/runs/releases/<tag>/x86_64/...`
-- `offline/runs/releases/<tag>/arm64/...`
+Release evidence must be generated with three constraints that match the
+CI release workflow:
+
+1. **Go version.** The release workflow pins Go to the version in
+   `.github/workflows/release.yml` (currently `1.24.13`). The harness
+   builds the control binary internally, and the CI workflow rebuilds it
+   from the source commit using the pinned Go version. If the Go versions
+   differ, the `control_binary_sha256` in the evidence will not match the
+   CI-built binary and the release gate will fail. Use `GOTOOLCHAIN` or
+   `PATH` to select the matching Go version.
+
+2. **Version ldflags.** Pass `--version <tag>` to `cross-arch`. The
+   harness builds the control binary with `-X main.version=<value>`. The
+   CI workflow builds with `-X main.version=${GITHUB_REF_NAME}`. If
+   these differ, the binary hashes diverge.
+
+3. **Source identity.** Set `JCS_OFFLINE_SOURCE_GIT_TAG=<tag>` and
+   `JCS_OFFLINE_SOURCE_GIT_COMMIT=$(git rev-parse HEAD)`. The tag does
+   not exist yet at evidence generation time, so `git describe` returns
+   "untagged" by default. The CI workflow validates that the evidence
+   `source_git_tag` matches the release tag.
+
+Full release evidence command:
+
+```bash
+GOTOOLCHAIN=go1.24.13 \
+JCS_OFFLINE_SOURCE_GIT_COMMIT=$(git rev-parse HEAD) \
+JCS_OFFLINE_SOURCE_GIT_TAG=<tag> \
+go run ./cmd/jcs-offline-replay cross-arch \
+  --version <tag> \
+  --run-official-vectors \
+  --run-official-es6-100m \
+  --output-dir offline/runs/releases/<tag>
+```
 
 ### Evidence Commit Sequence
 
@@ -233,10 +265,12 @@ Commit B:  evidence files only           <- tag points here
 ```
 
 1. Finalize all code and documentation changes (commit A).
-2. Generate offline evidence with `JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`. Evidence
-   binds `source_git_commit` to commit A.
-3. Commit evidence files only (commit B).
-4. Create annotated tag on commit B.
+2. Generate offline evidence with the release evidence command above.
+   Evidence binds `source_git_commit` to commit A and `source_git_tag`
+   to the release tag.
+3. Commit evidence files only (commit B). Exclude binaries under
+   `offline/runs/**/bin/` (CI rejects tracked binaries).
+4. Create tag on commit B.
 
 Because a commit can never contain its own SHA, the evidence source commit is
 often the parent of the tagged commit. The release workflow resolves source

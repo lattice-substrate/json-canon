@@ -144,6 +144,19 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
+### Release evidence generation
+
+For release evidence, three additional constraints apply. See
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) for the full release evidence
+command. In summary:
+
+1. **Go version** must match the release workflow pin (currently
+   `1.24.13`). Use `GOTOOLCHAIN=go1.24.13` or equivalent.
+2. **`--version <tag>`** must be passed so the control binary ldflags
+   match the CI build (`-X main.version=${GITHUB_REF_NAME}`).
+3. **`JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`** must be set because the tag
+   does not exist yet at evidence generation time.
+
 ## 7. Cross-Arch Proof Procedure
 
 Use this exact sequence for formal parity proof:
