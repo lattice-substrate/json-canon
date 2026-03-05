@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
+// Provenance: oracle vectors generated via ECMA-262 String(x) (§7.1.12.1).
+// The oracle function is V8's Number::toString, which is stable across versions.
+// Verified reproducible with Node.js v23.3.0 (V8 12.9.202.28).
+console.error(`oracle-provenance: node=${process.version} v8=${process.versions.v8}`);
+if (typeof process.versions.v8 === 'undefined') {
+  console.error('warning: unable to detect V8 version');
+}
+
 function toHex64(bits) {
   return bits.toString(16).padStart(16, '0');
 }

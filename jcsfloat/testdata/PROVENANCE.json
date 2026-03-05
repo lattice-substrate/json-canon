@@ -1,0 +1,26 @@
+{
+  "description": "Oracle vector provenance for jcsfloat golden test data",
+  "oracle_function": "ECMA-262 String(x) (§7.1.12.1) via V8 Number::toString",
+  "verified_node_version": "v23.3.0",
+  "verified_v8_version": "12.9.202.28-node.11",
+  "generation_date": "2026-03-05",
+  "datasets": [
+    {
+      "file": "golden_vectors.csv",
+      "generator": "generate_golden.js",
+      "rows": 54445,
+      "sha256": "593bdecbe0dccbc182bc3baf570b716887db25739fc61b7808764ecb966d5636"
+    },
+    {
+      "file": "golden_stress_vectors.csv",
+      "generator": "generate_stress_golden.js",
+      "rows": 231917,
+      "sha256": "287d21ac87e5665550f1baf86038302a0afc67a74a020dffb872f1a93b26d410"
+    }
+  ],
+  "notes": [
+    "String(x) output is stable across V8 versions for finite IEEE 754 binary64 values.",
+    "Reproducibility verified by regenerating vectors and comparing SHA-256 checksums.",
+    "Total oracle coverage: 286362 unique IEEE 754 binary64 values including subnormals, powers of two, and RFC 8785 Appendix B examples."
+  ]
+}
