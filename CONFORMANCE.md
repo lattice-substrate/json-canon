@@ -93,8 +93,8 @@ jcs-offline-replay cross-arch \
 CI configuration MUST enforce at least:
 
 1. pinned action dependencies,
-2. Linux runtime validation,
-3. supported Go version matrix,
+2. Linux runtime validation on both x86_64 and arm64,
+3. supported Go version matrix across both architectures,
 4. conformance suite execution,
 5. race checks,
 6. reproducible-build check.
