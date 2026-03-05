@@ -6,6 +6,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- CI Go version matrix expanded to include Go 1.25.x and 1.26.x. Go 1.26
+  switched `strconv.FormatFloat` from Ryu to Dragonbox; the matrix row
+  validates that json-canon's Burger-Dybvig digit generation is independent
+  of standard library algorithm changes.
+
 ## [v0.3.1] - 2026-03-04
 
 ### Fixed
