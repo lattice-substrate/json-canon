@@ -141,7 +141,7 @@ type parser struct {
 
 // Parse parses a complete JSON text under RFC 8785's strict input domain.
 // PARSE-UTF8-001: Input must be valid UTF-8.
-// PARSE-GRAM-008: Trailing content rejected.
+// PARSE-GRAM-008: Trailing non-whitespace content rejected (whitespace consumed per RFC 8259 §2).
 func Parse(data []byte) (*Value, error) {
 	return ParseWithOptions(data, nil)
 }

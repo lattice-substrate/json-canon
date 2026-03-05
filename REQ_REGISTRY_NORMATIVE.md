@@ -31,7 +31,7 @@ Formal catalog of normative RFC/ECMA requirements implemented by `json-canon`.
 | PARSE-GRAM-005 | RFC 8259 | §2 | MUST | Top-level value MAY be any JSON value (object, array, string, number, boolean, null). |
 | PARSE-GRAM-006 | RFC 8259 | §2 | MUST | Insignificant whitespace (space, tab, LF, CR) before/after structural characters MUST be accepted and ignored. |
 | PARSE-GRAM-007 | RFC 8259 | §3 | MUST | Invalid literals (e.g. `tru`, `fals`, `nul`) MUST be rejected. |
-| PARSE-GRAM-008 | RFC 8259 | §2 | MUST | Trailing content after a complete JSON value MUST be rejected. |
+| PARSE-GRAM-008 | RFC 8259 | §2 | MUST | Trailing non-whitespace content after a complete JSON value MUST be rejected. Trailing whitespace is consumed per RFC 8259 §2 (JSON-text = ws value ws). |
 | PARSE-GRAM-009 | RFC 8259 | §6 | MUST | Number tokens MUST match the RFC 8259 grammar: optional minus, integer, optional fraction, optional exponent. |
 | PARSE-GRAM-010 | RFC 8259 | §7 | MUST | String escape sequences MUST be one of: `\" \\ \/ \b \f \n \r \t \uXXXX`. Invalid escapes MUST be rejected. |
 

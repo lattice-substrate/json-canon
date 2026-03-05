@@ -168,6 +168,22 @@ Each release should include:
 3. `SHA256SUMS`,
 4. provenance attestation.
 
+### Building from Source
+
+Building from source without explicit version injection produces a binary
+that reports `v0.0.0-dev`. To build a binary that reports a specific
+version, pass the version via `-X main.version`:
+
+```bash
+CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+  -ldflags="-s -w -buildid= -X main.version=vX.Y.Z" \
+  -o ./jcs-canon ./cmd/jcs-canon
+```
+
+The CI release workflow uses `-X main.version=${GITHUB_REF_NAME}` to inject
+the tag name automatically. Users building from source to verify release
+reproducibility should substitute the target release tag for `vX.Y.Z`.
+
 ### Offline Evidence and Replay Gates
 
 Build the release-gate control binary with the exact release workflow Go patch

@@ -187,7 +187,7 @@ func parseCanonicalFromInput(positional []string, stdin io.Reader) ([]byte, []by
 func writeClassifiedError(stderr io.Writer, err error) int {
 	var je *jcserr.Error
 	if errors.As(err, &je) {
-		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+		if writeErr := writef(stderr, "error: %v\n", je); writeErr != nil {
 			return jcserr.InternalIO.ExitCode()
 		}
 		return je.Class.ExitCode()

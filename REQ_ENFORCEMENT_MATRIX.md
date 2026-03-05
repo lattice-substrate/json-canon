@@ -108,6 +108,7 @@ CLI-IO-003,policy,L3,cmd/jcs-canon/main.go,run,32,conformance/harness_test.go,Te
 CLI-IO-004,policy,L3,cmd/jcs-canon/main.go,run,32,conformance/harness_test.go,TestConformanceRequirements/CLI-IO-004,CONFORMANCE
 CLI-IO-005,policy,L3,cmd/jcs-canon/main.go,run,32,conformance/harness_test.go,TestConformanceRequirements/CLI-IO-005,CONFORMANCE
 CLI-CLASS-001,policy,L1,cmd/jcs-canon/main.go,writeClassifiedError,187,cmd/jcs-canon/main_test.go,TestRunVerifyNotCanonicalIncludesClass,TEST
+CLI-CLASS-001,policy,L1,cmd/jcs-canon/main.go,writeClassifiedError,187,cmd/jcs-canon/main_test.go,TestVerifyStderrFormatMatchesCanonicalize,TEST
 CLI-CLASS-001,policy,L3,cmd/jcs-canon/main.go,writeClassifiedError,187,conformance/harness_test.go,TestConformanceRequirements/CLI-CLASS-001,CONFORMANCE
 ABI-PARITY-001,policy,L1,conformance/harness_test.go,checkABIManifestBehaviorParity,1992,conformance/harness_test.go,TestABIManifestBehaviorParity,TEST
 ABI-PARITY-001,policy,L3,conformance/harness_test.go,checkABIManifestBehaviorParity,1992,conformance/harness_test.go,TestConformanceRequirements/ABI-PARITY-001,CONFORMANCE

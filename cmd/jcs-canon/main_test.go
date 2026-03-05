@@ -205,6 +205,37 @@ func TestRunVerifyNotCanonicalIncludesClass(t *testing.T) {
 	}
 }
 
+func TestVerifyStderrFormatMatchesCanonicalize(t *testing.T) {
+	invalidInput := `{"a":01}`
+
+	var canonStderr bytes.Buffer
+	canonCode := run(
+		[]string{"canonicalize", "-"},
+		strings.NewReader(invalidInput),
+		&bytes.Buffer{},
+		&canonStderr,
+	)
+
+	var verifyStderr bytes.Buffer
+	verifyCode := run(
+		[]string{"verify", "-"},
+		strings.NewReader(invalidInput),
+		&bytes.Buffer{},
+		&verifyStderr,
+	)
+
+	if canonCode != verifyCode {
+		t.Fatalf("exit code mismatch: canonicalize=%d verify=%d", canonCode, verifyCode)
+	}
+	if canonStderr.String() != verifyStderr.String() {
+		t.Fatalf("stderr format mismatch:\n  canonicalize: %q\n  verify:      %q",
+			canonStderr.String(), verifyStderr.String())
+	}
+	if !strings.HasPrefix(canonStderr.String(), "error: jcserr: ") {
+		t.Fatalf("expected stderr prefix 'error: jcserr: ', got %q", canonStderr.String())
+	}
+}
+
 func TestReadInputOversizeClassBoundExceededForStdinAndFile(t *testing.T) {
 	const maxInput = 8
 	oversized := strings.Repeat("x", maxInput+1)

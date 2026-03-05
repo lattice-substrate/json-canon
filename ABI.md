@@ -52,7 +52,7 @@ The stable ABI includes:
 
 ## Output Stream Contract
 
-1. `canonicalize` success emits canonical bytes to `stdout`; `stderr` is empty.
+1. `canonicalize` success emits canonical bytes to `stdout` with no trailing newline; `stderr` is empty. The output-is-canonical-bytes contract requires byte-exact fidelity.
 2. `verify` success emits `ok\n` to `stderr` unless `--quiet`.
 3. Help text is user-facing and exits with status `0`.
 4. Error diagnostics are emitted to `stderr`.

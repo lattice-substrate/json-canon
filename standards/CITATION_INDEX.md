@@ -33,7 +33,7 @@ Maps each requirement ID to the exact authoritative clause that governs it.
 | PARSE-GRAM-005 | RFC 8259 | §2 ¶1 | "A JSON text is a serialized value." (any value type is valid at top level) |
 | PARSE-GRAM-006 | RFC 8259 | §2 ¶2 | "Insignificant whitespace is allowed before or after any of the six structural characters." |
 | PARSE-GRAM-007 | RFC 8259 | §3 ¶1 | `false = %x66.61.6c.73.65`, `null = %x6e.75.6c.6c`, `true = %x74.72.75.65`. Exact byte sequences required. |
-| PARSE-GRAM-008 | RFC 8259 | §2 ¶1 | "A JSON text is a serialized value." Exactly one value, no trailing content. |
+| PARSE-GRAM-008 | RFC 8259 | §2 ¶1 | "A JSON text is a serialized value." JSON-text = ws value ws. Exactly one value; trailing non-whitespace content rejected. |
 | PARSE-GRAM-009 | RFC 8259 | §6 ¶1 | number = `[ minus ] int [ frac ] [ exp ]`. Full grammar specified. |
 | PARSE-GRAM-010 | RFC 8259 | §7 ¶2 | "Any character may be escaped" via listed forms: `\" \\ \/ \b \f \n \r \t \uXXXX`. |
 

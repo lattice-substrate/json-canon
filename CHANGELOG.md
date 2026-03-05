@@ -6,6 +6,31 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.1] - 2026-03-04
+
+### Fixed
+- `writeClassifiedError` now formats the unwrapped `*jcserr.Error` instead of the
+  outer `fmt.Errorf` wrapper. Previously, the `verify` command emitted stderr like
+  `error: parse canonical input: jcserr: PARSE_ERROR ...` while `canonicalize` emitted
+  `error: jcserr: PARSE_ERROR ...` for the same malformed input. Both commands now
+  emit the consistent `error: jcserr: <CLASS> ...` format. Callers scripting against
+  stderr diagnostics should expect the shorter, uniform prefix on all error paths.
+
+### Changed
+- PARSE-GRAM-008 requirement wording clarified across `REQ_REGISTRY_NORMATIVE.md`,
+  `jcstoken/token.go`, and `standards/CITATION_INDEX.md` to explicitly distinguish
+  trailing non-whitespace (rejected) from trailing whitespace (consumed per
+  RFC 8259 section 2, `JSON-text = ws value ws`). No behavioral change -- the parser
+  already implemented this correctly.
+- ABI output stream contract (`ABI.md`) now explicitly states that `canonicalize`
+  emits no trailing newline. The canonical output is byte-exact; appending any
+  bytes (including a newline) would violate the RFC 8785 byte-identity guarantee.
+  No behavioral change -- the CLI has never appended a trailing newline.
+- Added "Building from Source" section to `CONTRIBUTING.md` documenting the
+  deterministic build command with `-X main.version=vX.Y.Z` injection. Users
+  building from source to verify release reproducibility now have an explicit
+  reference for version-stamped builds.
+
 ## [v0.3.0] - 2026-03-04
 
 ### Added
