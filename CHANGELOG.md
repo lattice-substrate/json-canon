@@ -6,6 +6,11 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.3] - 2026-03-06
+
+### Changed
+- Zenodo DOI badge updated to use concept DOI (always resolves to latest version).
+
 ## [v0.3.2] - 2026-03-06
 
 ### Added
