@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/lattice-substrate/json-canon)](https://goreportcard.com/report/github.com/lattice-substrate/json-canon)
 [![CI](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/ci.yml)
 [![Coverage](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml)
-[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.18890836.svg)](https://doi.org/10.5281/zenodo.18890836)
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.18890835.svg)](https://doi.org/10.5281/zenodo.18890835)
 
 json-canon produces byte-deterministic JSON. Same input, same bytes, across Go versions, architectures, and kernel versions. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written Burger-Dybvig number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. Zero external dependencies. Linux only.
 
