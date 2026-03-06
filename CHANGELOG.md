@@ -6,11 +6,26 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.2] - 2026-03-06
+
+### Added
+- Zenodo DOI badge in README for citation discoverability.
+- Oracle vector provenance metadata (`jcsfloat/testdata/PROVENANCE.json`)
+  documenting Node.js v23.3.0 / V8 12.9.202.28 generation environment.
+- arm64 runner in CI test matrix.
+
 ### Changed
 - CI Go version matrix expanded to include Go 1.25.x and 1.26.x. Go 1.26
   switched `strconv.FormatFloat` from Ryu to Dragonbox; the matrix row
   validates that json-canon's Burger-Dybvig digit generation is independent
   of standard library algorithm changes.
+- `go.mod` minimum version aligned to `go 1.24` to match ARTIFACT.md
+  requirements.
+- README and CONFORMANCE.md updated to reflect arm64 CI coverage.
+
+### Fixed
+- ECMA-262 section reference and V8 stability claim in oracle vector
+  provenance metadata.
 
 ## [v0.3.1] - 2026-03-04
 
