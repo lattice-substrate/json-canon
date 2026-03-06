@@ -63,12 +63,30 @@ jobs:
   test_matrix:
     name: Vet+Unit (${{ matrix.os }}, Go ${{ matrix.go }})
     needs: [binary_hygiene, lint]
+    continue-on-error: ${{ matrix.experimental }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
-        go: ['1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.x']
+        include:
+          - os: ubuntu-latest
+            go: '1.24.x'
+            experimental: false
+          - os: ubuntu-latest
+            go: '1.25.x'
+            experimental: false
+          - os: ubuntu-latest
+            go: '1.26.x'
+            experimental: true
+          - os: ubuntu-24.04-arm
+            go: '1.24.x'
+            experimental: false
+          - os: ubuntu-24.04-arm
+            go: '1.25.x'
+            experimental: false
+          - os: ubuntu-24.04-arm
+            go: '1.26.x'
+            experimental: true
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5

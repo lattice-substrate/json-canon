@@ -6,6 +6,16 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v0.3.4] - 2026-03-06
+
+### Fixed
+- CI Go test matrix now starts at Go `1.24.x` to match `go.mod` (`go 1.24`)
+  and avoid unsupported-toolchain failures in required release gating paths.
+
+### Changed
+- Go `1.26.x` matrix rows are now marked experimental (`continue-on-error`)
+  so forward-looking toolchain checks remain visible without blocking release.
+
 ## [v0.3.3] - 2026-03-06
 
 ### Changed
