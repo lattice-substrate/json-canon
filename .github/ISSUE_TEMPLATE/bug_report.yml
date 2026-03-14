@@ -1,0 +1,48 @@
+name: Bug Report
+description: Report incorrect behavior in parsing, serialization, or CLI output.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Go version, OS, and architecture.
+      placeholder: |
+        go version go1.24.1 linux/amd64
+    validations:
+      required: true
+
+  - type: textarea
+    id: input
+    attributes:
+      label: Input
+      description: The exact input that triggers the behavior. For CLI issues, include the full command.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected output
+      description: What the output should be. Reference the specification section if known (e.g., RFC 8785 Section 3.2.3, ECMA-262 Section 6.1.6.1.20).
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual output
+      description: What the tool produced. Include the failure class from stderr if applicable (e.g., INVALID_GRAMMAR, LONE_SURROGATE).
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else relevant. Library version, whether the issue is intermittent, related spec discussion.
+    validations:
+      required: false

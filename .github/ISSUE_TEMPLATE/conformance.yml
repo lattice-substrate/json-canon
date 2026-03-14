@@ -1,0 +1,28 @@
+name: Conformance Question
+description: Report a standards ambiguity, edge case, or conformance concern.
+labels: ["conformance"]
+body:
+  - type: textarea
+    id: specification
+    attributes:
+      label: Specification section
+      description: Which specification section is involved (e.g., RFC 8785 Section 3.2.3, RFC 8259 Section 7, RFC 7493 Section 2.1).
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question or ambiguity
+      description: Describe the conformance concern. What behavior is ambiguous, underspecified, or potentially incorrect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-input
+    attributes:
+      label: Test input
+      description: Input that demonstrates the ambiguity, if applicable.
+      render: text
+    validations:
+      required: false
