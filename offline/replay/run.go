@@ -2,7 +2,6 @@ package replay
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,6 +32,10 @@ type RunOptions struct {
 	Orchestrator        string
 	GlobalEnv           map[string]string
 	Now                 func() time.Time
+	// v2 fields: when InfraManifestSHA256 is non-empty, evidence.v2 is emitted.
+	InfraManifestSHA256 string
+	InfraRepoURL        string
+	InfraRepoCommit     string
 }
 
 // RunMatrix orchestrates replay execution across required nodes and replays.
@@ -77,20 +80,31 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		nodeIndex[n.ID] = n
 	}
 
+	schemaVersion := EvidenceSchemaVersion
+	if strings.TrimSpace(opts.InfraManifestSHA256) != "" {
+		schemaVersion = EvidenceSchemaVersionV2
+	}
+	if opts.GlobalEnv == nil {
+		opts.GlobalEnv = make(map[string]string, 1)
+	}
+	opts.GlobalEnv["JCS_EVIDENCE_SCHEMA_VERSION"] = schemaVersion
 	bundle := &EvidenceBundle{
-		SchemaVersion:    EvidenceSchemaVersion,
-		BundleSHA256:     opts.BundleSHA256,
-		ControlBinarySHA: opts.ControlBinarySHA256,
-		MatrixSHA256:     opts.MatrixSHA256,
-		ProfileSHA256:    opts.ProfileSHA256,
-		SourceGitCommit:  sourceCommit,
-		SourceGitTag:     sourceTag,
-		GeneratedAtUTC:   now().UTC().Format(time.RFC3339Nano),
-		Orchestrator:     opts.Orchestrator,
-		ProfileName:      profile.Name,
-		Architecture:     matrix.Architecture,
-		RequiredSuites:   append([]string(nil), profile.RequiredSuites...),
-		HardReleaseGate:  profile.HardReleaseGate,
+		SchemaVersion:       schemaVersion,
+		BundleSHA256:        opts.BundleSHA256,
+		ControlBinarySHA:    opts.ControlBinarySHA256,
+		MatrixSHA256:        opts.MatrixSHA256,
+		ProfileSHA256:       opts.ProfileSHA256,
+		SourceGitCommit:     sourceCommit,
+		SourceGitTag:        sourceTag,
+		GeneratedAtUTC:      now().UTC().Format(time.RFC3339Nano),
+		Orchestrator:        opts.Orchestrator,
+		ProfileName:         profile.Name,
+		Architecture:        matrix.Architecture,
+		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
+		HardReleaseGate:     profile.HardReleaseGate,
+		InfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
+		InfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
+		InfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
 	}
 
 	tmpRoot, err := os.MkdirTemp("", "jcs-offline-replay-*")
@@ -166,6 +180,9 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,
+		ExpectedInfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
+		ExpectedInfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
+		ExpectedInfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
 	}); err != nil {
 		return nil, err
 	}
@@ -176,13 +193,9 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 //
 //nolint:gosec // REQ:OFFLINE-EVIDENCE-001 node evidence path is explicit operator/runtime input.
 func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read node evidence: %w", err)
-	}
 	var run NodeRunEvidence
-	if err := json.Unmarshal(data, &run); err != nil {
-		return nil, fmt.Errorf("decode node evidence: %w", err)
+	if err := decodeStrictJSONFile(path, "node evidence", &run); err != nil {
+		return nil, err
 	}
 	return &run, nil
 }

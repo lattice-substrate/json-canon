@@ -442,7 +442,7 @@ if [[ "$INSTALL_UBUNTU_DEPS" -eq 1 ]]; then
   sudo virsh -c "$LIBVIRT_URI" net-autostart "$LIBVIRT_NETWORK" >/dev/null 2>&1 || true
 fi
 
-for cmd in sudo go python3 tar virsh virt-install qemu-img cloud-localds ssh awk cut grep; do
+for cmd in sudo go jq tar virsh virt-install qemu-img cloud-localds ssh awk cut grep; do
   require_cmd "$cmd"
 done
 
@@ -477,25 +477,19 @@ vm_tsv="${tmp_data}/vms.tsv"
 
 "$CONTROLLER" inspect-matrix --matrix "$MATRIX" > "$matrix_json"
 
-python3 - "$matrix_json" "$vm_tsv" <<'PY'
-import json,sys
-matrix=json.load(open(sys.argv[1],encoding='utf-8'))
-out=sys.argv[2]
-rows=[]
-for n in matrix.get("nodes",[]):
-    if n.get("mode")!="vm":
-        continue
-    replay=(n.get("runner") or {}).get("replay") or []
-    env=(n.get("runner") or {}).get("env") or {}
-    domain=replay[1] if len(replay)>1 else ""
-    snapshot=replay[2] if len(replay)>2 else "snapshot-cold"
-    ssh_target=env.get("JCS_VM_SSH_TARGET", f"root@{domain}")
-    rows.append((n.get("id",""), domain, n.get("distro",""), n.get("kernel_family",""), snapshot, ssh_target))
-with open(out,"w",encoding="utf-8") as f:
-    for r in rows:
-        f.write("\t".join(r)+"\n")
-print(f"vm_nodes={len(rows)}")
-PY
+jq -r '
+  .nodes[] | select(.mode=="vm") |
+  [
+    (.id // ""),
+    (.runner.replay[1] // ""),
+    (.distro // ""),
+    (.kernel_family // ""),
+    (.runner.replay[2] // "snapshot-cold"),
+    (.runner.env.JCS_VM_SSH_TARGET // ("root@" + (.runner.replay[1] // "")))
+  ] | @tsv
+' "$matrix_json" > "$vm_tsv"
+
+echo "vm_nodes=$(wc -l < "$vm_tsv" | tr -d ' ')"
 
 if [[ ! -s "$vm_tsv" ]]; then
   echo "matrix has no VM nodes: ${MATRIX}" >&2

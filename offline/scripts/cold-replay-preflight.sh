@@ -85,36 +85,31 @@ fi
 MATRIX_JSON="$TMPDIR/matrix.json"
 "$CONTROLLER" inspect-matrix --matrix "$MATRIX" > "$MATRIX_JSON"
 
-python3 - "$MATRIX_JSON" "$TMPDIR" <<'PY'
-import json,sys,os
-matrix=json.load(open(sys.argv[1],encoding='utf-8'))
-out=sys.argv[2]
-containers=[]
-vms=[]
-for n in matrix.get('nodes',[]):
-    mode=n.get('mode','')
-    replay=n.get('runner',{}).get('replay',[])
-    env=n.get('runner',{}).get('env',{}) or {}
-    if mode=='container':
-        image=replay[1] if len(replay)>1 else ''
-        containers.append((n.get('id',''), image, str(n.get('replays',0))))
-    elif mode=='vm':
-        domain=replay[1] if len(replay)>1 else ''
-        snapshot=replay[2] if len(replay)>2 else 'snapshot-cold'
-        ssh_target=env.get('JCS_VM_SSH_TARGET', f"root@{domain}")
-        ssh_opts=env.get('JCS_VM_SSH_OPTIONS','-') or '-'
-        vms.append((n.get('id',''), domain, snapshot, ssh_target, ssh_opts, str(n.get('replays',0))))
-with open(os.path.join(out,'containers.tsv'),'w',encoding='utf-8') as f:
-    for row in containers:
-        f.write('\t'.join(row)+'\n')
-with open(os.path.join(out,'vms.tsv'),'w',encoding='utf-8') as f:
-    for row in vms:
-        f.write('\t'.join(row)+'\n')
-print(f"architecture={matrix.get('architecture','')}")
-print(f"nodes_total={len(matrix.get('nodes',[]))}")
-print(f"container_nodes={len(containers)}")
-print(f"vm_nodes={len(vms)}")
-PY
+jq -r '
+  .nodes[] | select(.mode=="container") |
+  [
+    (.id // ""),
+    ((.runner.replay[1] // .runner.env.JCS_CONTAINER_IMAGE // "")),
+    ((.replays // 0) | tostring)
+  ] | @tsv
+' "$MATRIX_JSON" > "$TMPDIR/containers.tsv"
+
+jq -r '
+  .nodes[] | select(.mode=="vm") |
+  [
+    (.id // ""),
+    (.runner.replay[1] // ""),
+    (.runner.replay[2] // "snapshot-cold"),
+    (.runner.env.JCS_VM_SSH_TARGET // ("root@" + (.runner.replay[1] // ""))),
+    (.runner.env.JCS_VM_SSH_OPTIONS // "-"),
+    ((.replays // 0) | tostring)
+  ] | @tsv
+' "$MATRIX_JSON" > "$TMPDIR/vms.tsv"
+
+echo "architecture=$(jq -r '.architecture // empty' "$MATRIX_JSON")"
+echo "nodes_total=$(jq -r '(.nodes // []) | length' "$MATRIX_JSON")"
+echo "container_nodes=$(wc -l < "$TMPDIR/containers.tsv" | tr -d ' ')"
+echo "vm_nodes=$(wc -l < "$TMPDIR/vms.tsv" | tr -d ' ')"
 
 FAIL=0
 WARN=0
@@ -134,7 +129,7 @@ pass() {
 }
 
 echo "[preflight] checking base toolchain"
-for c in go tar python3; do
+for c in go tar jq; do
   if command -v "$c" >/dev/null 2>&1; then
     pass "command available: $c"
   else

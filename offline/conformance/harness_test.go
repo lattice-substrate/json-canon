@@ -38,6 +38,16 @@ func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.arm64.yaml"),
 			architecture: "arm64",
 		},
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.server-x86_64.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "server-linux-x86_64.yaml"),
+			architecture: "x86_64",
+		},
+		{
+			matrixPath:   filepath.Join(root, "offline", "matrix.server-arm64.yaml"),
+			profilePath:  filepath.Join(root, "offline", "profiles", "server-linux-arm64.yaml"),
+			architecture: "arm64",
+		},
 	}
 
 	for _, tc := range tests {
@@ -81,6 +91,97 @@ func TestOfflineEvidenceSchemaPresent(t *testing.T) {
 	}
 }
 
+func TestOfflineEvidenceV2SchemaPresent(t *testing.T) {
+	root := repoRoot(t)
+	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v2.json")
+	// #nosec G304 -- conformance test intentionally reads repository schema path.
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read evidence.v2 schema: %v", err)
+	}
+	for _, needle := range []string{
+		"evidence.v2",
+		"infra_manifest_sha256",
+		"infra_repo_url",
+		"infra_repo_commit",
+		"discovered_cpu",
+		"discovered_kernel",
+		"image_digest",
+		"node_replays",
+		"aggregate_canonical_sha256",
+	} {
+		if !strings.Contains(string(data), needle) {
+			t.Fatalf("evidence.v2 schema missing %q", needle)
+		}
+	}
+}
+
+func TestOfflineInfraManifestSchemaPresent(t *testing.T) {
+	root := repoRoot(t)
+	schemaPath := filepath.Join(root, "offline", "schema", "infra-manifest.v1.json")
+	// #nosec G304 -- conformance test intentionally reads repository schema path.
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read infra-manifest.v1 schema: %v", err)
+	}
+	for _, needle := range []string{
+		"infra-manifest.v1",
+		"infra_repo_url",
+		"infra_repo_commit",
+		"provider_engine",
+		"provider_lock_sha256",
+		"hosts",
+		"instance_type",
+		"image_id",
+	} {
+		if !strings.Contains(string(data), needle) {
+			t.Fatalf("infra-manifest.v1 schema missing %q", needle)
+		}
+	}
+}
+
+func TestOfflineServerProfileContract(t *testing.T) {
+	root := repoRoot(t)
+	tests := []struct {
+		profilePath string
+		wantName    string
+	}{
+		{
+			profilePath: filepath.Join(root, "offline", "profiles", "server-linux-x86_64.yaml"),
+			wantName:    "server-offline-linux-x86_64",
+		},
+		{
+			profilePath: filepath.Join(root, "offline", "profiles", "server-linux-arm64.yaml"),
+			wantName:    "server-offline-linux-arm64",
+		},
+	}
+	for _, tc := range tests {
+		p, err := replay.LoadProfile(tc.profilePath)
+		if err != nil {
+			t.Fatalf("load server profile %s: %v", tc.profilePath, err)
+		}
+		if p.Name != tc.wantName {
+			t.Fatalf("expected profile name %q, got %q", tc.wantName, p.Name)
+		}
+		if p.MinColdReplays < 5 {
+			t.Fatalf("server profile %s must have min_cold_replays >= 5, got %d", tc.profilePath, p.MinColdReplays)
+		}
+		if !p.HardReleaseGate {
+			t.Fatalf("server profile %s must have hard_release_gate=true", tc.profilePath)
+		}
+		hasInfraBinding := false
+		for _, s := range p.RequiredSuites {
+			if s == "infra-substrate-binding" {
+				hasInfraBinding = true
+				break
+			}
+		}
+		if !hasInfraBinding {
+			t.Fatalf("server profile %s must include infra-substrate-binding in required_suites", tc.profilePath)
+		}
+	}
+}
+
 func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	root := repoRoot(t)
 	releaseDoc := mustReadText(t, filepath.Join(root, "CONTRIBUTING.md"))
@@ -114,6 +215,9 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	}
 	if !strings.Contains(releaseWorkflow, "offline evidence gate arm64") {
 		t.Fatal("release workflow missing explicit arm64 offline evidence gate")
+	}
+	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_INFRA_MANIFEST") {
+		t.Fatal("release workflow missing JCS_OFFLINE_INFRA_MANIFEST for server-backed offline evidence gate")
 	}
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")
@@ -167,6 +271,8 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load evidence: %v", err)
 	}
+	infraManifestPath := lookupEnvTrimmed("JCS_OFFLINE_INFRA_MANIFEST")
+	expectedInfraManifestSHA256 := validateInfraManifestForGate(t, infraManifestPath, evidence, profile)
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        mustFileSHA256(t, bundlePath),
 		ExpectedControlBinarySHA256: mustFileSHA256(t, controlBinaryPath),
@@ -175,6 +281,7 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
 		ExpectedSourceGitTag:        lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),
+		ExpectedInfraManifestSHA256: expectedInfraManifestSHA256,
 	}); err != nil {
 		t.Fatalf("offline evidence gate failed: %v", err)
 	}
@@ -212,4 +319,41 @@ func mustFileSHA256(t *testing.T, path string) string {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+// validateInfraManifestForGate validates the infra manifest against evidence and profile policy.
+// When infraManifestPath is non-empty it loads, validates, and cross-checks the manifest against
+// the evidence bundle. When the profile requires infra-substrate-binding the path must be set.
+// Returns the expected SHA-256 to pass to EvidenceValidationOptions.
+func validateInfraManifestForGate(t *testing.T, infraManifestPath string, evidence *replay.EvidenceBundle, profile *replay.Profile) string {
+	t.Helper()
+	requiresInfra := profileRequiresInfraBinding(profile)
+	if infraManifestPath == "" {
+		if requiresInfra {
+			t.Fatal("profile requires infra-substrate-binding but JCS_OFFLINE_INFRA_MANIFEST is not set")
+		}
+		return ""
+	}
+	im, err := replay.LoadInfraManifest(infraManifestPath)
+	if err != nil {
+		t.Fatalf("load infra manifest: %v", err)
+	}
+	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 {
+		if evidence.InfraRepoURL != im.InfraRepoURL {
+			t.Fatalf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
+		}
+		if evidence.InfraRepoCommit != im.InfraRepoCommit {
+			t.Fatalf("evidence infra_repo_commit %q does not match manifest infra_repo_commit %q", evidence.InfraRepoCommit, im.InfraRepoCommit)
+		}
+	}
+	return mustFileSHA256(t, infraManifestPath)
+}
+
+func profileRequiresInfraBinding(profile *replay.Profile) bool {
+	for _, s := range profile.RequiredSuites {
+		if s == "infra-substrate-binding" {
+			return true
+		}
+	}
+	return false
 }

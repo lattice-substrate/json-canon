@@ -18,6 +18,8 @@ Core artifacts:
 - Matrix contract: `offline/matrix.yaml` (x86_64), `offline/matrix.arm64.yaml` (arm64)
 - Profile contract: `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`
 - Evidence schema: `offline/schema/evidence.v1.json`
+- Server evidence schema: `offline/schema/evidence.v2.json`
+- Infra manifest schema: `offline/schema/infra-manifest.v1.json`
 - Orchestrator CLI: `cmd/jcs-offline-replay`
 - Worker CLI: `cmd/jcs-offline-worker`
 
@@ -157,6 +159,12 @@ command. In summary:
 3. **`JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`** must be set because the tag
    does not exist yet at evidence generation time.
 
+### Server-backed release evidence
+
+Use `./scripts/release-server.sh` when generating server-backed `evidence.v2`.
+That path requires `SSH_INGRESS_CIDR`, writes `infra-manifest.v1.json`, and
+the release gate must be invoked with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
+
 ## 7. Cross-Arch Proof Procedure
 
 Use this exact sequence for formal parity proof:
@@ -205,6 +213,9 @@ JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
+
+For server-backed `evidence.v2`, use the committed server matrix/profile pair and
+set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json`.
 
 **Evidence source binding model:** Evidence records `source_git_commit` at
 generation time (commit A). Evidence files are then committed on top (commit B),

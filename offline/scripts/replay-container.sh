@@ -2,6 +2,12 @@
 set -euo pipefail
 
 image="${1:-}"
+if [[ -z "$image" && -n "${JCS_CONTAINER_IMAGE_ENV:-}" ]]; then
+  image="${!JCS_CONTAINER_IMAGE_ENV:-}"
+fi
+if [[ -z "$image" && -n "${JCS_CONTAINER_IMAGE:-}" ]]; then
+  image="${JCS_CONTAINER_IMAGE}"
+fi
 if [[ -z "$image" ]]; then
   echo "usage: replay-container.sh <image>" >&2
   exit 2
@@ -46,6 +52,12 @@ if ! inspect_out="$("$engine" image inspect "$image" 2>&1)"; then
   exit 2
 fi
 
+# Pre-resolve the image tag to a content digest for evidence binding.
+image_digest=""
+if resolved=$("$engine" image inspect --format='{{index .RepoDigests 0}}' "$image" 2>/dev/null); then
+  image_digest="$resolved"
+fi
+
 evidence_dir="$(dirname "$JCS_EVIDENCE_PATH")"
 evidence_file="$(basename "$JCS_EVIDENCE_PATH")"
 mkdir -p "$evidence_dir"
@@ -84,7 +96,9 @@ host_gid="$(id -g)"
     --mode "$JCS_NODE_MODE" \
     --distro "$JCS_NODE_DISTRO" \
     --kernel-family "$JCS_NODE_KERNEL_FAMILY" \
-    --replay-index "$JCS_REPLAY_INDEX"
+    --replay-index "$JCS_REPLAY_INDEX" \
+    --schema-version "${JCS_EVIDENCE_SCHEMA_VERSION:-evidence.v1}" \
+    --image-digest "$image_digest"
 
 if [[ -f "$JCS_EVIDENCE_PATH" ]]; then
   chmod u+rw,go+r "$JCS_EVIDENCE_PATH" >/dev/null 2>&1 || true

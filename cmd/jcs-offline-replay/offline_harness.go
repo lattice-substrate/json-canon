@@ -30,13 +30,14 @@ const (
 )
 
 type runSuiteOptions struct {
-	MatrixPath      string
-	ProfilePath     string
-	OutputDir       string
-	Timeout         time.Duration
-	Version         string
-	SkipPreflight   bool
-	SkipReleaseGate bool
+	MatrixPath        string
+	ProfilePath       string
+	OutputDir         string
+	Timeout           time.Duration
+	Version           string
+	SkipPreflight     bool
+	SkipReleaseGate   bool
+	InfraManifestPath string
 }
 
 type runSuiteArtifacts struct {
@@ -137,6 +138,7 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 	x86Profile := defaultString(flags, "--x86-profile", defaultProfilePath)
 	armMatrix := defaultString(flags, "--arm64-matrix", defaultARMMatrixPath)
 	armProfile := defaultString(flags, "--arm64-profile", defaultARMProfilePath)
+	infraManifestPath := strings.TrimSpace(flags["--infra-manifest"])
 	if useLocalNoRocky {
 		x86Matrix = "offline/matrix.local-no-rocky.yaml"
 		armMatrix = "offline/matrix.local-no-rocky.arm64.yaml"
@@ -168,13 +170,14 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 		return writeErr
 	}
 	x86Run, err := runSuite(runSuiteOptions{
-		MatrixPath:      x86Matrix,
-		ProfilePath:     x86Profile,
-		OutputDir:       filepath.Join(outDirAbs, "x86_64"),
-		Timeout:         timeout,
-		Version:         version,
-		SkipPreflight:   skipPreflight,
-		SkipReleaseGate: skipReleaseGate,
+		MatrixPath:        x86Matrix,
+		ProfilePath:       x86Profile,
+		OutputDir:         filepath.Join(outDirAbs, "x86_64"),
+		Timeout:           timeout,
+		Version:           version,
+		SkipPreflight:     skipPreflight,
+		SkipReleaseGate:   skipReleaseGate,
+		InfraManifestPath: infraManifestPath,
 	}, stdout)
 	if err != nil {
 		return err
@@ -184,13 +187,14 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 		return writeErr
 	}
 	armRun, err := runSuite(runSuiteOptions{
-		MatrixPath:      armMatrix,
-		ProfilePath:     armProfile,
-		OutputDir:       filepath.Join(outDirAbs, "arm64"),
-		Timeout:         timeout,
-		Version:         version,
-		SkipPreflight:   skipPreflight,
-		SkipReleaseGate: skipReleaseGate,
+		MatrixPath:        armMatrix,
+		ProfilePath:       armProfile,
+		OutputDir:         filepath.Join(outDirAbs, "arm64"),
+		Timeout:           timeout,
+		Version:           version,
+		SkipPreflight:     skipPreflight,
+		SkipReleaseGate:   skipReleaseGate,
+		InfraManifestPath: infraManifestPath,
 	}, stdout)
 	if err != nil {
 		return err
@@ -325,13 +329,14 @@ func parseRunSuiteOptions(flags map[string]string) (runSuiteOptions, error) {
 		outDir = filepath.Join("offline", "runs", utcStamp())
 	}
 	return runSuiteOptions{
-		MatrixPath:      defaultString(flags, "--matrix", defaultMatrixPath),
-		ProfilePath:     defaultString(flags, "--profile", defaultProfilePath),
-		OutputDir:       outDir,
-		Timeout:         timeout,
-		Version:         defaultString(flags, "--version", defaultBuildVersion),
-		SkipPreflight:   skipPreflight,
-		SkipReleaseGate: skipReleaseGate,
+		MatrixPath:        defaultString(flags, "--matrix", defaultMatrixPath),
+		ProfilePath:       defaultString(flags, "--profile", defaultProfilePath),
+		OutputDir:         outDir,
+		Timeout:           timeout,
+		Version:           defaultString(flags, "--version", defaultBuildVersion),
+		SkipPreflight:     skipPreflight,
+		SkipReleaseGate:   skipReleaseGate,
+		InfraManifestPath: strings.TrimSpace(flags["--infra-manifest"]),
 	}, nil
 }
 
@@ -367,6 +372,10 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	if err != nil {
 		return nil, fmt.Errorf("resolve profile path: %w", err)
 	}
+	matrixContract, err := replay.LoadMatrix(opts.MatrixPath)
+	if err != nil {
+		return nil, fmt.Errorf("load matrix: %w", err)
+	}
 
 	canonBin := filepath.Join(outDirAbs, "bin", "jcs-canon")
 	controllerBin := filepath.Join(outDirAbs, "bin", "jcs-offline-replay")
@@ -387,7 +396,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		return nil, err
 	}
 
-	if buildErr := buildCanonicalizer(canonBin, opts.Version, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
+	if buildErr := buildCanonicalizer(canonBin, matrixContract.Architecture, opts.Version, filepath.Join(outDirAbs, "logs", "build-jcs-canon.log"), stdout); buildErr != nil {
 		return nil, buildErr
 	}
 	if buildErr := buildController(controllerBin, filepath.Join(outDirAbs, "logs", "build-jcs-offline-replay.log"), stdout); buildErr != nil {
@@ -427,6 +436,9 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 		"--source-git-commit": sourceGitCommit,
 		"--source-git-tag":    sourceGitTag,
 	}
+	if opts.InfraManifestPath != "" {
+		runFlags["--infra-manifest"] = opts.InfraManifestPath
+	}
 	if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "run.log"), stdout, func(w io.Writer) error {
 		return cmdRun(runFlags, w)
 	}); stepErr != nil {
@@ -460,7 +472,7 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}
 
 	if !opts.SkipReleaseGate {
-		if gateErr := runOfflineReleaseGate(matrixAbs, profileAbs, evidencePath, sourceGitCommit, sourceGitTag, filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout); gateErr != nil {
+		if gateErr := runOfflineReleaseGate(matrixAbs, profileAbs, evidencePath, sourceGitCommit, sourceGitTag, opts.InfraManifestPath, filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout); gateErr != nil {
 			return nil, gateErr
 		}
 	} else if stepErr := runLoggedStep(filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout, func(w io.Writer) error {
@@ -507,11 +519,15 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}, nil
 }
 
-func buildCanonicalizer(outputPath, version, logPath string, stdout io.Writer) error {
+func buildCanonicalizer(outputPath, matrixArchitecture, version, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] build jcs-canon"); err != nil {
 		return err
 	}
-	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
+	goArch, err := goArchForMatrixArch(matrixArchitecture)
+	if err != nil {
+		return err
+	}
+	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": goArch},
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid= -X main.version="+version, "-o", outputPath, "./cmd/jcs-canon")
 }
 
@@ -523,7 +539,7 @@ func buildController(outputPath, logPath string, stdout io.Writer) error {
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-replay")
 }
 
-func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSourceGitCommit, expectedSourceGitTag, logPath string, stdout io.Writer) error {
+func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSourceGitCommit, expectedSourceGitTag, infraManifestPath, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] release gate test"); err != nil {
 		return err
 	}
@@ -537,6 +553,9 @@ func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSource
 	}
 	if strings.TrimSpace(expectedSourceGitTag) != "" {
 		env["JCS_OFFLINE_EXPECTED_GIT_TAG"] = expectedSourceGitTag
+	}
+	if strings.TrimSpace(infraManifestPath) != "" {
+		env["JCS_OFFLINE_INFRA_MANIFEST"] = infraManifestPath
 	}
 	return runGoCommandLogged(logPath, stdout, env, "test", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
 }
@@ -817,11 +836,11 @@ func vmLaneFromNode(node replay.NodeSpec) vmLane {
 			snapshot = "snapshot-cold"
 		}
 	}
-	sshTarget := strings.TrimSpace(node.Runner.Env["JCS_VM_SSH_TARGET"])
+	sshTarget := resolveRunnerEnvValue(node.Runner.Env, "JCS_VM_SSH_TARGET")
 	if sshTarget == "" {
 		sshTarget = "root@" + domain
 	}
-	sshOptions := strings.TrimSpace(node.Runner.Env["JCS_VM_SSH_OPTIONS"])
+	sshOptions := resolveRunnerEnvValue(node.Runner.Env, "JCS_VM_SSH_OPTIONS")
 	if sshOptions == "" {
 		sshOptions = "-"
 	}
@@ -838,7 +857,22 @@ func containerImageFromNode(node replay.NodeSpec) string {
 	if len(node.Runner.Replay) > 1 {
 		return strings.TrimSpace(node.Runner.Replay[1])
 	}
+	if image := resolveRunnerEnvValue(node.Runner.Env, "JCS_CONTAINER_IMAGE"); image != "" {
+		return image
+	}
 	return ""
+}
+
+func resolveRunnerEnvValue(env map[string]string, key string) string {
+	value := strings.TrimSpace(env[key])
+	if value != "" {
+		return value
+	}
+	indirectKey := strings.TrimSpace(env[key+"_ENV"])
+	if indirectKey == "" {
+		return ""
+	}
+	return lookupEnvTrimmed(indirectKey)
 }
 
 func containsLine(text, want string) bool {

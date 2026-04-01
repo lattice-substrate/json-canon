@@ -26,3 +26,11 @@ offline/isos/
 
 # Local temporary workspace files
 /.tmp/
+
+# IaC state and provider cache (never committed; lock file is committed).
+infra/.terraform/
+infra/.opentofu/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+
+.claude/*

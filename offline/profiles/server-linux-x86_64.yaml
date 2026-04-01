@@ -1,0 +1,18 @@
+{
+  "evidence_required": true,
+  "hard_release_gate": true,
+  "min_cold_replays": 5,
+  "name": "server-offline-linux-x86_64",
+  "required_nodes": [],
+  "required_suites": [
+    "binary-identity",
+    "bounds-limit-parity",
+    "canonical-byte-stability",
+    "env-independence",
+    "evidence-completeness",
+    "failure-class-parity",
+    "infra-substrate-binding",
+    "verify-parity"
+  ],
+  "version": "v1"
+}

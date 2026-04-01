@@ -50,6 +50,26 @@ func TestParseWorkerArgs(t *testing.T) {
 	if cfg.replayIndex != 3 || cfg.nodeID != "n1" {
 		t.Fatalf("unexpected worker args: %#v", cfg)
 	}
+	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
+		t.Fatalf("unexpected default schema version: %q", cfg.schemaVersion)
+	}
+
+	cfg, err = parseWorkerArgs([]string{
+		"--bundle", "/tmp/offline-bundle.tgz",
+		"--evidence", "/tmp/offline-evidence.json",
+		"--node-id", "n1",
+		"--mode", "container",
+		"--distro", "debian",
+		"--kernel-family", "host",
+		"--replay-index", "3",
+		"--schema-version", replay.EvidenceSchemaVersionV2,
+	})
+	if err != nil {
+		t.Fatalf("parseWorkerArgs v2: %v", err)
+	}
+	if cfg.schemaVersion != replay.EvidenceSchemaVersionV2 {
+		t.Fatalf("unexpected explicit schema version: %q", cfg.schemaVersion)
+	}
 
 	_, err = parseWorkerArgs([]string{"--bundle", "b.tgz", "--evidence", "e.json"})
 	if err == nil {
@@ -67,6 +87,20 @@ func TestParseWorkerArgs(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected replay index validation error")
+	}
+
+	_, err = parseWorkerArgs([]string{
+		"--bundle", "b.tgz",
+		"--evidence", "e.json",
+		"--node-id", "n1",
+		"--mode", "container",
+		"--distro", "debian",
+		"--kernel-family", "host",
+		"--replay-index", "1",
+		"--schema-version", "evidence.v3",
+	})
+	if err == nil {
+		t.Fatal("expected schema version validation error")
 	}
 }
 

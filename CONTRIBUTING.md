@@ -232,6 +232,72 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
+### Server-Backed Evidence (evidence.v2)
+
+Server-backed runs use real AWS EC2 instances (x86_64 + arm64 Graviton2) and produce
+`evidence.v2` with an infrastructure manifest binding. The infra manifest records the
+IaC repo commit, provider lock digest, AMI IDs, instance types, and discovered CPU/kernel.
+
+**Requirements:**
+- OpenTofu CLI installed (`https://opentofu.org/`)
+- AWS credentials with EC2 permissions
+- SSH key pair (private + matching `.pub` file)
+- `SSH_INGRESS_CIDR` for SSH access restriction (for example `203.0.113.10/32`)
+
+**Single command:**
+
+```bash
+AWS_ACCESS_KEY_ID=<key> \
+AWS_SECRET_ACCESS_KEY=<secret> \
+AWS_REGION=us-east-1 \
+TAG=<release-tag> \
+SSH_KEY_PATH=~/.ssh/id_rsa \
+SSH_INGRESS_CIDR=203.0.113.10/32 \
+./scripts/release-server.sh
+```
+
+The script provisions two EC2 instances, runs 5 cold replays on each via SSH,
+installs the remote container runtime, resolves digest-pinned container image
+references on each provisioned host, emits `evidence.v2`, runs
+`TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
+then destroys the instances.
+
+**Output:** `offline/runs/releases/<tag>/`
+
+```
+x86_64/offline-evidence.json   (evidence.v2, schema_version: evidence.v2)
+x86_64/offline-bundle.tgz
+arm64/offline-evidence.json    (evidence.v2, schema_version: evidence.v2)
+arm64/offline-bundle.tgz
+infra-manifest.v1.json         (shared across both arches)
+```
+
+The `infra_manifest_sha256` in each evidence file must match the SHA-256 of
+`infra-manifest.v1.json`.
+
+**Release gate with server profiles:**
+
+```bash
+JCS_OFFLINE_EVIDENCE=offline/runs/releases/<tag>/x86_64/offline-evidence.json \
+JCS_OFFLINE_BUNDLE=offline/runs/releases/<tag>/x86_64/offline-bundle.tgz \
+JCS_OFFLINE_CONTROL_BINARY=/path/to/jcs-canon \
+JCS_OFFLINE_MATRIX=/path/to/matrix.server-x86_64.yaml \
+JCS_OFFLINE_PROFILE=offline/profiles/server-linux-x86_64.yaml \
+JCS_OFFLINE_EXPECTED_GIT_COMMIT=<sha> \
+JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
+JCS_OFFLINE_INFRA_MANIFEST=offline/runs/releases/<tag>/infra-manifest.v1.json \
+go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
+```
+
+**First-time IaC setup** (run once, commit the lockfile):
+
+```bash
+cd infra
+tofu init
+# Commit the generated .terraform.lock.hcl
+git add infra/.terraform.lock.hcl
+```
+
 ### Release Evidence Generation
 
 Release evidence must be generated with three constraints that match the

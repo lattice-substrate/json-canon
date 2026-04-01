@@ -8,14 +8,17 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
-const archArm64 = "arm64"
+const (
+	archArm64  = "arm64"
+	archX86_64 = "x86_64"
+)
 
 func TestLoadMatrix_OFFLINE_MATRIX_001(t *testing.T) {
 	m, err := replay.LoadMatrix(filepath.Join("..", "matrix.yaml"))
 	if err != nil {
 		t.Fatalf("load matrix: %v", err)
 	}
-	if m.Architecture != "x86_64" {
+	if m.Architecture != archX86_64 {
 		t.Fatalf("unexpected architecture %q", m.Architecture)
 	}
 	if err := replay.ValidateReleaseArchitecture(m); err != nil {
@@ -39,6 +42,28 @@ func TestLoadArm64Matrix_OFFLINE_ARCH_001(t *testing.T) {
 	}
 }
 
+func TestLoadServerMatrices(t *testing.T) {
+	tests := []struct {
+		path string
+		arch string
+	}{
+		{path: filepath.Join("..", "matrix.server-x86_64.yaml"), arch: archX86_64},
+		{path: filepath.Join("..", "matrix.server-arm64.yaml"), arch: archArm64},
+	}
+	for _, tc := range tests {
+		m, err := replay.LoadMatrix(tc.path)
+		if err != nil {
+			t.Fatalf("load server matrix %s: %v", tc.path, err)
+		}
+		if m.Architecture != tc.arch {
+			t.Fatalf("unexpected architecture %q for %s", m.Architecture, tc.path)
+		}
+		if err := replay.ValidateMatrix(m); err != nil {
+			t.Fatalf("validate server matrix %s: %v", tc.path, err)
+		}
+	}
+}
+
 func TestLoadProfile_OFFLINE_COLD_001(t *testing.T) {
 	p, err := replay.LoadProfile(filepath.Join("..", "profiles", "maximal.yaml"))
 	if err != nil {
@@ -55,7 +80,7 @@ func TestLoadProfile_OFFLINE_COLD_001(t *testing.T) {
 func TestValidateMatrixRequiresContainerAndVM(t *testing.T) {
 	m := &replay.Matrix{
 		Version:      "v1",
-		Architecture: "x86_64",
+		Architecture: archX86_64,
 		Nodes: []replay.NodeSpec{
 			{ID: "a", Mode: replay.NodeModeContainer, Distro: "debian", KernelFamily: "host", Runner: replay.RunnerConfig{Kind: "container_command", Replay: []string{"true"}}},
 		},
@@ -67,7 +92,7 @@ func TestValidateMatrixRequiresContainerAndVM(t *testing.T) {
 }
 
 func TestValidateReleaseArchitecture_OFFLINE_ARCH_001(t *testing.T) {
-	m := &replay.Matrix{Version: "v1", Architecture: "x86_64"}
+	m := &replay.Matrix{Version: "v1", Architecture: archX86_64}
 	if err := replay.ValidateReleaseArchitecture(m); err != nil {
 		t.Fatalf("unexpected architecture validation failure: %v", err)
 	}

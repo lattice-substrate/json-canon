@@ -49,13 +49,15 @@ type digestAccumulator struct {
 }
 
 type workerArgs struct {
-	bundlePath   string
-	evidencePath string
-	nodeID       string
-	mode         string
-	distro       string
-	kernelFamily string
-	replayIndex  int
+	bundlePath    string
+	evidencePath  string
+	nodeID        string
+	mode          string
+	distro        string
+	kernelFamily  string
+	replayIndex   int
+	imageDigest   string
+	schemaVersion string
 }
 
 func (d *digestAccumulator) Add(parts ...string) {
@@ -141,6 +143,11 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		FailureClassSHA256: classAcc.Hex(),
 		ExitCodeSHA256:     exitAcc.Hex(),
 	}
+	if cfg.schemaVersion == replay.EvidenceSchemaVersionV2 {
+		evidence.DiscoveredCPU = discoverCPU()
+		evidence.DiscoveredKernel = discoverKernel()
+		evidence.ImageDigest = cfg.imageDigest
+	}
 
 	if err := writeEvidence(cfg.evidencePath, evidence); err != nil {
 		writeErrorLine(stderr, err)
@@ -159,12 +166,14 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 	}
 
 	cfg := workerArgs{
-		bundlePath:   strings.TrimSpace(flags["--bundle"]),
-		evidencePath: strings.TrimSpace(flags["--evidence"]),
-		nodeID:       strings.TrimSpace(flags["--node-id"]),
-		mode:         strings.TrimSpace(flags["--mode"]),
-		distro:       strings.TrimSpace(flags["--distro"]),
-		kernelFamily: strings.TrimSpace(flags["--kernel-family"]),
+		bundlePath:    strings.TrimSpace(flags["--bundle"]),
+		evidencePath:  strings.TrimSpace(flags["--evidence"]),
+		nodeID:        strings.TrimSpace(flags["--node-id"]),
+		mode:          strings.TrimSpace(flags["--mode"]),
+		distro:        strings.TrimSpace(flags["--distro"]),
+		kernelFamily:  strings.TrimSpace(flags["--kernel-family"]),
+		imageDigest:   strings.TrimSpace(flags["--image-digest"]),
+		schemaVersion: resolveWorkerSchemaVersion(flags),
 	}
 	replayIndexRaw := strings.TrimSpace(flags["--replay-index"])
 
@@ -175,7 +184,22 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 	if err != nil || cfg.replayIndex < 1 {
 		return workerArgs{}, fmt.Errorf("invalid --replay-index %q", replayIndexRaw)
 	}
+	switch cfg.schemaVersion {
+	case replay.EvidenceSchemaVersion, replay.EvidenceSchemaVersionV2:
+	default:
+		return workerArgs{}, fmt.Errorf("invalid --schema-version %q", cfg.schemaVersion)
+	}
 	return cfg, nil
+}
+
+func resolveWorkerSchemaVersion(flags map[string]string) string {
+	if schema := strings.TrimSpace(flags["--schema-version"]); schema != "" {
+		return schema
+	}
+	if schema := strings.TrimSpace(os.Getenv("JCS_EVIDENCE_SCHEMA_VERSION")); schema != "" {
+		return schema
+	}
+	return replay.EvidenceSchemaVersion
 }
 
 func validateRequiredWorkerFlags(cfg workerArgs, replayIndexRaw string) error {
@@ -600,4 +624,36 @@ func writeErrorLine(w io.Writer, err error) {
 //nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 worker evidence intentionally records wall-clock observation timestamps.
 func wallClockNowUTC() time.Time {
 	return time.Now().UTC()
+}
+
+// discoverCPU reads the CPU model name from /proc/cpuinfo.
+// Returns empty string if the file is absent or the field is not present.
+func discoverCPU() string {
+	data, err := os.ReadFile("/proc/cpuinfo")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "model name") {
+			if i := strings.IndexByte(line, ':'); i >= 0 {
+				return strings.TrimSpace(line[i+1:])
+			}
+		}
+	}
+	return ""
+}
+
+// discoverKernel reads the kernel version from /proc/version.
+// Returns empty string if the file is absent or cannot be parsed.
+func discoverKernel() string {
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return ""
+	}
+	// Format: "Linux version 6.1.0-28-amd64 (builder@...) ..."
+	fields := strings.Fields(strings.TrimSpace(string(data)))
+	if len(fields) >= 3 {
+		return fields[2]
+	}
+	return ""
 }

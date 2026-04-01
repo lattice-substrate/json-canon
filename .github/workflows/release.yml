@@ -82,29 +82,80 @@ jobs:
           git worktree add --detach "${source_tree}" "${{ steps.evidence-source.outputs.commit }}"
           (
             cd "${source_tree}"
-            CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false \
               -ldflags="-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
-              -o "${control_binary}" ./cmd/jcs-canon
+              -o "${control_binary}-x86_64" ./cmd/jcs-canon
+            CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -buildvcs=false \
+              -ldflags="-s -w -buildid= -X main.version=${GITHUB_REF_NAME}" \
+              -o "${control_binary}-arm64" ./cmd/jcs-canon
           )
+      - name: resolve x86_64 evidence gate inputs
+        id: gate-x86
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_path="${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-evidence.json"
+          schema="$(jq -r '.schema_version // empty' "${evidence_path}")"
+          case "${schema}" in
+            evidence.v1)
+              echo "matrix=${GITHUB_WORKSPACE}/offline/matrix.yaml" >> "$GITHUB_OUTPUT"
+              echo "profile=${GITHUB_WORKSPACE}/offline/profiles/maximal.yaml" >> "$GITHUB_OUTPUT"
+              echo "infra_manifest=" >> "$GITHUB_OUTPUT"
+              ;;
+            evidence.v2)
+              echo "matrix=${GITHUB_WORKSPACE}/offline/matrix.server-x86_64.yaml" >> "$GITHUB_OUTPUT"
+              echo "profile=${GITHUB_WORKSPACE}/offline/profiles/server-linux-x86_64.yaml" >> "$GITHUB_OUTPUT"
+              echo "infra_manifest=${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/infra-manifest.v1.json" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::unsupported x86_64 evidence schema ${schema}"
+              exit 1
+              ;;
+          esac
+      - name: resolve arm64 evidence gate inputs
+        id: gate-arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_path="${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/arm64/offline-evidence.json"
+          schema="$(jq -r '.schema_version // empty' "${evidence_path}")"
+          case "${schema}" in
+            evidence.v1)
+              echo "matrix=${GITHUB_WORKSPACE}/offline/matrix.arm64.yaml" >> "$GITHUB_OUTPUT"
+              echo "profile=${GITHUB_WORKSPACE}/offline/profiles/maximal.arm64.yaml" >> "$GITHUB_OUTPUT"
+              echo "infra_manifest=" >> "$GITHUB_OUTPUT"
+              ;;
+            evidence.v2)
+              echo "matrix=${GITHUB_WORKSPACE}/offline/matrix.server-arm64.yaml" >> "$GITHUB_OUTPUT"
+              echo "profile=${GITHUB_WORKSPACE}/offline/profiles/server-linux-arm64.yaml" >> "$GITHUB_OUTPUT"
+              echo "infra_manifest=${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/infra-manifest.v1.json" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::unsupported arm64 evidence schema ${schema}"
+              exit 1
+              ;;
+          esac
       - name: offline evidence gate x86_64
         env:
           JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/x86_64/offline-evidence.json
           JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/x86_64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
-          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.yaml
-          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.yaml
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon-x86_64
+          JCS_OFFLINE_MATRIX: ${{ steps.gate-x86.outputs.matrix }}
+          JCS_OFFLINE_PROFILE: ${{ steps.gate-x86.outputs.profile }}
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
+          JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-x86.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: offline evidence gate arm64
         env:
           JCS_OFFLINE_EVIDENCE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/arm64/offline-evidence.json
           JCS_OFFLINE_BUNDLE: ${{ github.workspace }}/offline/runs/releases/${{ github.ref_name }}/arm64/offline-bundle.tgz
-          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon
-          JCS_OFFLINE_MATRIX: ${{ github.workspace }}/offline/matrix.arm64.yaml
-          JCS_OFFLINE_PROFILE: ${{ github.workspace }}/offline/profiles/maximal.arm64.yaml
+          JCS_OFFLINE_CONTROL_BINARY: ${{ github.workspace }}/.tmp/release-offline-control/jcs-canon-arm64
+          JCS_OFFLINE_MATRIX: ${{ steps.gate-arm64.outputs.matrix }}
+          JCS_OFFLINE_PROFILE: ${{ steps.gate-arm64.outputs.profile }}
           JCS_OFFLINE_EXPECTED_GIT_COMMIT: ${{ steps.evidence-source.outputs.commit }}
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
+          JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-arm64.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2

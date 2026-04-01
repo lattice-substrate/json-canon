@@ -1,37 +1,52 @@
 package replay
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
 )
 
-// EvidenceSchemaVersion is the stable schema identifier for evidence bundles.
+// EvidenceSchemaVersion is the stable schema identifier for evidence bundles (v1).
 const EvidenceSchemaVersion = "evidence.v1"
+
+// EvidenceSchemaVersionV2 is the schema identifier for evidence bundles with infra-manifest binding.
+const EvidenceSchemaVersionV2 = "evidence.v2"
+
+// supportedEvidenceSchemaVersions lists all schema versions accepted by ValidateEvidenceBundle.
+var supportedEvidenceSchemaVersions = map[string]bool{
+	EvidenceSchemaVersion:   true,
+	EvidenceSchemaVersionV2: true,
+}
 
 // EvidenceBundle is the machine-consumed replay output artifact.
 type EvidenceBundle struct {
-	SchemaVersion      string            `json:"schema_version"`
-	BundleSHA256       string            `json:"bundle_sha256"`
-	ControlBinarySHA   string            `json:"control_binary_sha256"`
-	MatrixSHA256       string            `json:"matrix_sha256"`
-	ProfileSHA256      string            `json:"profile_sha256"`
-	SourceGitCommit    string            `json:"source_git_commit"`
-	SourceGitTag       string            `json:"source_git_tag"`
-	GeneratedAtUTC     string            `json:"generated_at_utc"`
-	Orchestrator       string            `json:"orchestrator"`
-	ProfileName        string            `json:"profile_name"`
-	Architecture       string            `json:"architecture"`
-	RequiredSuites     []string          `json:"required_suites"`
-	HardReleaseGate    bool              `json:"hard_release_gate"`
-	NodeReplays        []NodeRunEvidence `json:"node_replays"`
-	AggregateCanonical string            `json:"aggregate_canonical_sha256"`
-	AggregateVerify    string            `json:"aggregate_verify_sha256"`
-	AggregateClass     string            `json:"aggregate_failure_class_sha256"`
-	AggregateExitCode  string            `json:"aggregate_exit_code_sha256"`
+	SchemaVersion    string   `json:"schema_version"`
+	BundleSHA256     string   `json:"bundle_sha256"`
+	ControlBinarySHA string   `json:"control_binary_sha256"`
+	MatrixSHA256     string   `json:"matrix_sha256"`
+	ProfileSHA256    string   `json:"profile_sha256"`
+	SourceGitCommit  string   `json:"source_git_commit"`
+	SourceGitTag     string   `json:"source_git_tag"`
+	GeneratedAtUTC   string   `json:"generated_at_utc"`
+	Orchestrator     string   `json:"orchestrator"`
+	ProfileName      string   `json:"profile_name"`
+	Architecture     string   `json:"architecture"`
+	RequiredSuites   []string `json:"required_suites"`
+	HardReleaseGate  bool     `json:"hard_release_gate"`
+	// v2 fields: infra-manifest binding (omitempty for v1 compat)
+	InfraManifestSHA256 string            `json:"infra_manifest_sha256,omitempty"`
+	InfraRepoURL        string            `json:"infra_repo_url,omitempty"`
+	InfraRepoCommit     string            `json:"infra_repo_commit,omitempty"`
+	NodeReplays         []NodeRunEvidence `json:"node_replays"`
+	AggregateCanonical  string            `json:"aggregate_canonical_sha256"`
+	AggregateVerify     string            `json:"aggregate_verify_sha256"`
+	AggregateClass      string            `json:"aggregate_failure_class_sha256"`
+	AggregateExitCode   string            `json:"aggregate_exit_code_sha256"`
 }
 
 // NodeRunEvidence is one replay execution on one node.
@@ -50,6 +65,10 @@ type NodeRunEvidence struct {
 	VerifySHA256       string `json:"verify_sha256"`
 	FailureClassSHA256 string `json:"failure_class_sha256"`
 	ExitCodeSHA256     string `json:"exit_code_sha256"`
+	// v2 fields: discovered substrate identity (omitempty)
+	DiscoveredCPU    string `json:"discovered_cpu,omitempty"`
+	DiscoveredKernel string `json:"discovered_kernel,omitempty"`
+	ImageDigest      string `json:"image_digest,omitempty"`
 }
 
 // EvidenceValidationOptions binds evidence metadata to expected immutable inputs.
@@ -61,6 +80,9 @@ type EvidenceValidationOptions struct {
 	ExpectedArchitecture        string
 	ExpectedSourceGitCommit     string
 	ExpectedSourceGitTag        string
+	ExpectedInfraManifestSHA256 string
+	ExpectedInfraRepoURL        string
+	ExpectedInfraRepoCommit     string
 }
 
 // WriteEvidence writes a canonical JSON evidence bundle to disk.
@@ -83,13 +105,9 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 //
 //nolint:gosec // REQ:OFFLINE-EVIDENCE-001 evidence path is explicit operator input for release-gate validation.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read evidence: %w", err)
-	}
 	var e EvidenceBundle
-	if err := json.Unmarshal(data, &e); err != nil {
-		return nil, fmt.Errorf("decode evidence: %w", err)
+	if err := decodeStrictJSONFile(path, "evidence", &e); err != nil {
+		return nil, err
 	}
 	return &e, nil
 }
@@ -104,8 +122,14 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	if m == nil || p == nil {
 		return fmt.Errorf("matrix and profile are required")
 	}
-	if e.SchemaVersion != EvidenceSchemaVersion {
+	requiresInfraBinding := profileRequiresInfraBinding(p)
+	if !supportedEvidenceSchemaVersions[e.SchemaVersion] {
 		return fmt.Errorf("unsupported schema_version %q", e.SchemaVersion)
+	}
+	isV2 := e.SchemaVersion == EvidenceSchemaVersionV2
+	// Reject mixed state: v2-only fields must not appear in a v1 schema bundle.
+	if !isV2 && (e.InfraManifestSHA256 != "" || e.InfraRepoURL != "" || e.InfraRepoCommit != "") {
+		return fmt.Errorf("evidence schema_version is %q but contains v2 infra fields; use schema_version %q", e.SchemaVersion, EvidenceSchemaVersionV2)
 	}
 	if e.ProfileName != p.Name {
 		return fmt.Errorf("profile mismatch: evidence=%q profile=%q", e.ProfileName, p.Name)
@@ -159,6 +183,11 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	if expectedTag := strings.TrimSpace(opts.ExpectedSourceGitTag); expectedTag != "" &&
 		e.SourceGitTag != expectedTag {
 		return fmt.Errorf("source_git_tag mismatch: evidence=%q expected=%q", e.SourceGitTag, expectedTag)
+	}
+	if isV2 {
+		if err := validateEvidenceV2InfraFields(e, opts); err != nil {
+			return err
+		}
 	}
 	if !e.HardReleaseGate {
 		return fmt.Errorf("evidence must record hard_release_gate=true")
@@ -228,6 +257,9 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 				return err
 			}
 		}
+		if err := validateNodeRunEvidenceVersionFields(r, node, isV2, requiresInfraBinding); err != nil {
+			return err
+		}
 		byNode[r.NodeID] = append(byNode[r.NodeID], r)
 	}
 
@@ -290,6 +322,94 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		return fmt.Errorf("required_suites mismatch")
 	}
 
+	if requiresInfraBinding && !isV2 {
+		return fmt.Errorf("profile requires infra-substrate-binding but evidence schema is %q, want %q", e.SchemaVersion, EvidenceSchemaVersionV2)
+	}
+
+	return nil
+}
+
+// validateEvidenceV2InfraFields checks the three required infra-manifest binding fields
+// in evidence.v2 bundles. Extracted to keep ValidateEvidenceBundle complexity in bounds.
+func validateEvidenceV2InfraFields(e *EvidenceBundle, opts EvidenceValidationOptions) error {
+	if err := validateSHA256Token("infra_manifest_sha256", e.InfraManifestSHA256); err != nil {
+		return err
+	}
+	if strings.TrimSpace(e.InfraRepoURL) == "" {
+		return fmt.Errorf("evidence.v2 requires infra_repo_url")
+	}
+	if err := validateGitCommitToken("infra_repo_commit", e.InfraRepoCommit); err != nil {
+		return err
+	}
+	if expected := strings.TrimSpace(opts.ExpectedInfraManifestSHA256); expected != "" &&
+		e.InfraManifestSHA256 != expected {
+		return fmt.Errorf("infra_manifest_sha256 mismatch: evidence=%q expected=%q", e.InfraManifestSHA256, expected)
+	}
+	if expected := strings.TrimSpace(opts.ExpectedInfraRepoURL); expected != "" &&
+		e.InfraRepoURL != expected {
+		return fmt.Errorf("infra_repo_url mismatch: evidence=%q expected=%q", e.InfraRepoURL, expected)
+	}
+	if expected := strings.TrimSpace(opts.ExpectedInfraRepoCommit); expected != "" &&
+		e.InfraRepoCommit != expected {
+		return fmt.Errorf("infra_repo_commit mismatch: evidence=%q expected=%q", e.InfraRepoCommit, expected)
+	}
+	return nil
+}
+
+func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, isV2 bool, requiresInfraBinding bool) error {
+	hasV2Fields := strings.TrimSpace(r.DiscoveredCPU) != "" ||
+		strings.TrimSpace(r.DiscoveredKernel) != "" ||
+		strings.TrimSpace(r.ImageDigest) != ""
+	if !isV2 && hasV2Fields {
+		return fmt.Errorf("node %s replay %d contains v2-only node fields in schema %q", r.NodeID, r.ReplayIndex, EvidenceSchemaVersion)
+	}
+	if node.Mode != NodeModeContainer && strings.TrimSpace(r.ImageDigest) != "" {
+		return fmt.Errorf("node %s replay %d image_digest is only allowed for container lanes", r.NodeID, r.ReplayIndex)
+	}
+	if !requiresInfraBinding {
+		return nil
+	}
+	if strings.TrimSpace(r.DiscoveredCPU) == "" {
+		return fmt.Errorf("node %s replay %d missing discovered_cpu for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+	}
+	if strings.TrimSpace(r.DiscoveredKernel) == "" {
+		return fmt.Errorf("node %s replay %d missing discovered_kernel for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+	}
+	if node.Mode == NodeModeContainer && strings.TrimSpace(r.ImageDigest) == "" {
+		return fmt.Errorf("node %s replay %d missing image_digest for container lane in infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+	}
+	return nil
+}
+
+func profileRequiresInfraBinding(profile *Profile) bool {
+	if profile == nil {
+		return false
+	}
+	for _, s := range profile.RequiredSuites {
+		if s == "infra-substrate-binding" {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeStrictJSONFile(path string, kind string, target any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", kind, err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(target); err != nil {
+		return fmt.Errorf("decode %s: %w", kind, err)
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("decode %s: unexpected trailing json content", kind)
+		}
+		return fmt.Errorf("decode %s: decode trailing json token: %w", kind, err)
+	}
 	return nil
 }
 

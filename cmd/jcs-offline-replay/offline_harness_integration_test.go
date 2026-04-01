@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -284,6 +285,10 @@ func writeMinimalVectorFixture(t *testing.T, root string) {
 
 func writeFakeGoBinary(t *testing.T, path string) {
 	t.Helper()
+	realGo, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("resolve real go binary: %v", err)
+	}
 	script := `#!/usr/bin/env bash
 set -euo pipefail
 if [ "${1:-}" = "build" ]; then
@@ -300,11 +305,13 @@ if [ "${1:-}" = "build" ]; then
     exit 2
   fi
   mkdir -p "$(dirname "$out")"
-  cat >"$out" <<'EOS'
-#!/usr/bin/env sh
-exit 0
+  src="$(mktemp /tmp/fake-go-XXXXXX.go)"
+  cat >"$src" <<'EOS'
+package main
+func main() {}
 EOS
-  chmod +x "$out"
+  trap 'rm -f "$src"' EXIT
+  CGO_ENABLED=0 GOOS="${GOOS:-linux}" GOARCH="${GOARCH:-amd64}" "` + realGo + `" build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o "$out" "$src"
   exit 0
 fi
 if [ "${1:-}" = "test" ]; then

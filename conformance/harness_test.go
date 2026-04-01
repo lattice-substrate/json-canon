@@ -281,6 +281,9 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
 		"OFFLINE-ARCH-001":     checkOfflineArchScopeDualArch,
 		"OFFLINE-LOCAL-001":    checkOfflineLocalProofCLI,
+		"OFFLINE-EVIDENCE-002": checkOfflineEvidenceV2SchemaPresent,
+		"OFFLINE-INFRA-001":    checkOfflineInfraManifestSchemaPresent,
+		"OFFLINE-SERVER-001":   checkOfflineServerProfileContract,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -2387,6 +2390,68 @@ func checkOfflineLocalProofCLI(t *testing.T, h *harness) {
 	cli := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
 	assertContains(t, cli, "cross-arch", "offline replay cli cross-arch subcommand")
 	assertContains(t, cli, "run-suite", "offline replay cli run-suite subcommand")
+}
+
+func checkOfflineEvidenceV2SchemaPresent(t *testing.T, h *harness) {
+	t.Helper()
+	schemaPath := filepath.Join(h.root, "offline", "schema", "evidence.v2.json")
+	data := mustReadText(t, schemaPath)
+	for _, needle := range []string{
+		"evidence.v2",
+		"infra_manifest_sha256",
+		"infra_repo_url",
+		"infra_repo_commit",
+		"discovered_cpu",
+		"discovered_kernel",
+		"image_digest",
+	} {
+		assertContains(t, data, needle, "evidence.v2 schema field")
+	}
+}
+
+func checkOfflineInfraManifestSchemaPresent(t *testing.T, h *harness) {
+	t.Helper()
+	schemaPath := filepath.Join(h.root, "offline", "schema", "infra-manifest.v1.json")
+	data := mustReadText(t, schemaPath)
+	for _, needle := range []string{
+		"infra-manifest.v1",
+		"infra_repo_url",
+		"infra_repo_commit",
+		"provider_engine",
+		"provider_lock_sha256",
+		"hosts",
+		"instance_type",
+		"image_id",
+	} {
+		assertContains(t, data, needle, "infra-manifest.v1 schema field")
+	}
+}
+
+func checkOfflineServerProfileContract(t *testing.T, h *harness) {
+	t.Helper()
+	profiles := []string{
+		filepath.Join(h.root, "offline", "profiles", "server-linux-x86_64.yaml"),
+		filepath.Join(h.root, "offline", "profiles", "server-linux-arm64.yaml"),
+	}
+	for _, profilePath := range profiles {
+		profile, err := replay.LoadProfile(profilePath)
+		if err != nil {
+			t.Fatalf("load server profile %s: %v", profilePath, err)
+		}
+		if !profile.HardReleaseGate {
+			t.Fatalf("server profile %s must have hard_release_gate=true", profilePath)
+		}
+		hasInfraBinding := false
+		for _, suite := range profile.RequiredSuites {
+			if suite == "infra-substrate-binding" {
+				hasInfraBinding = true
+				break
+			}
+		}
+		if !hasInfraBinding {
+			t.Fatalf("server profile %s must include infra-substrate-binding in required_suites", profilePath)
+		}
+	}
 }
 
 // TestCitationIndexCoversNormativeRequirements verifies every normative

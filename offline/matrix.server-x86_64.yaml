@@ -1,0 +1,41 @@
+{
+  "architecture": "x86_64",
+  "version": "v1",
+  "nodes": [
+    {
+      "id": "aws-debian12-vm-x86_64",
+      "mode": "vm",
+      "distro": "debian-12",
+      "kernel_family": "cloud",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_X86_SSH_TARGET",
+          "JCS_VM_SSH_OPTIONS_ENV": "JCS_SERVER_X86_SSH_OPTIONS"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-debian12-container-x86_64",
+      "mode": "container",
+      "distro": "debian-12",
+      "kernel_family": "cloud",
+      "replays": 5,
+      "runner": {
+        "kind": "container_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_X86_SSH_TARGET",
+          "JCS_VM_SSH_OPTIONS_ENV": "JCS_SERVER_X86_SSH_OPTIONS",
+          "JCS_CONTAINER_IMAGE_ENV": "JCS_SERVER_X86_CONTAINER_IMAGE"
+        },
+        "replay": [
+          "./offline/scripts/replay-container-ssh.sh"
+        ]
+      }
+    }
+  ]
+}

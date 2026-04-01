@@ -6,6 +6,54 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `evidence.v2` schema (`offline/schema/evidence.v2.json`) extending evidence.v1
+  with three required infrastructure binding fields: `infra_manifest_sha256`,
+  `infra_repo_url`, `infra_repo_commit`. Node replay items gain three optional
+  discovered substrate fields: `discovered_cpu`, `discovered_kernel`, `image_digest`.
+- `infra-manifest.v1` schema (`offline/schema/infra-manifest.v1.json`) recording
+  IaC repo identity, provider engine and lock digest, and per-host substrate records
+  (role, cloud provider, region, instance type, AMI/image ID).
+- `InfraManifest` and `InfraManifestHost` Go structs in `offline/replay` package
+  with `LoadInfraManifest` and `ValidateInfraManifest` functions.
+- `ValidateEvidenceBundle` now accepts both `evidence.v1` and `evidence.v2`.
+  V2 validation enforces infra binding fields. Suite-driven policy:
+  profiles with `infra-substrate-binding` in `required_suites` reject v1 evidence.
+  Downgrade prevention: v2 infra fields present in a v1-schema bundle are rejected.
+- `discoverCPU` and `discoverKernel` in `cmd/jcs-offline-worker` read substrate
+  identity from `/proc/cpuinfo` and `/proc/version` at replay runtime (pure file
+  reads, no subprocess). Results written to `discovered_cpu` / `discovered_kernel`
+  in each node replay record.
+- `--image-digest` flag on `jcs-offline-worker`; `offline/scripts/replay-container.sh`
+  pre-resolves the image tag to a content digest via `engine image inspect` and passes
+  it as `--image-digest` to the worker, binding `image_digest` in evidence.
+- `--infra-manifest <path>` flag on `jcs-offline-replay run`, `run-suite`, and
+  `cross-arch`. When set the manifest is loaded, validated, and its SHA-256 and
+  identity fields are bound into the emitted evidence.v2.
+- OpenTofu IaC in `infra/` provisions two AWS EC2 instances (c5.xlarge x86_64,
+  c6g.xlarge arm64 Graviton2) with Debian 12. The IaC now requires an explicit
+  `ssh_ingress_cidr` and sets `associate_public_ip_address = true` on both hosts.
+- `offline/scripts/replay-ssh.sh`: SSH-based replay runner (no virsh/libvirt).
+  Polls SSH readiness (90 × 2 s), copies bundle and worker binary to the remote
+  host, runs the worker via SSH, and retrieves the evidence file.
+- `offline/scripts/replay-container-ssh.sh` for container-mode replays executed on
+  the provisioned server hosts over SSH.
+- Committed server matrices `offline/matrix.server-x86_64.yaml` and
+  `offline/matrix.server-arm64.yaml` with both VM and container lanes.
+- `scripts/release-server.sh`: single-command server-backed evidence orchestrator.
+  Provisions EC2 instances via `tofu apply`, discovers substrate identity over SSH,
+  writes the infra manifest through the Go CLI, cross-builds per-architecture control
+  binaries, runs `jcs-offline-replay` for both architectures, validates both release
+  gates with `JCS_OFFLINE_INFRA_MANIFEST`, and destroys instances on exit.
+- `TestOfflineReplayEvidenceReleaseGate` accepts optional `JCS_OFFLINE_INFRA_MANIFEST`
+  environment variable to bind infra-manifest SHA-256 during server-backed evidence
+  gate validation. Semantic cross-check: evidence `infra_repo_url` and
+  `infra_repo_commit` must match the loaded manifest. Server profiles with
+  `infra-substrate-binding` require the manifest to be set.
+- Requirements OFFLINE-EVIDENCE-002, OFFLINE-INFRA-001, OFFLINE-SERVER-001 added
+  to `REQ_REGISTRY_POLICY.md` with full enforcement matrix coverage.
+- ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
+
 ## [v0.3.2] - 2026-03-06
 
 ### Added

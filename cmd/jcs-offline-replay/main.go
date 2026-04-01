@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"debug/elf"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -71,6 +72,8 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		return 0, cmdVerifyEvidence(flags, stdout)
 	case "report":
 		return 0, cmdReport(flags, stdout)
+	case "write-infra-manifest":
+		return 0, cmdWriteInfraManifest(flags, stdout)
 	case "inspect-matrix":
 		return 0, cmdInspectMatrix(flags, stdout)
 	default:
@@ -94,14 +97,18 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if _, loadErr := replay.LoadMatrix(matrixPath); loadErr != nil {
+	matrix, loadErr := replay.LoadMatrix(matrixPath)
+	if loadErr != nil {
 		return fmt.Errorf("load matrix: %w", loadErr)
 	}
 	if _, loadErr := replay.LoadProfile(profilePath); loadErr != nil {
 		return fmt.Errorf("load profile: %w", loadErr)
 	}
+	if err := validateExecutableArchitecture(binaryPath, matrix.Architecture, "control binary"); err != nil {
+		return err
+	}
 
-	workerPath, cleanupWorker, err := resolveWorkerPath(flags)
+	workerPath, cleanupWorker, err := resolveWorkerPath(flags, matrix.Architecture)
 	if err != nil {
 		return err
 	}
@@ -147,39 +154,21 @@ func writePrepareSummary(stdout io.Writer, bundlePath string, manifest *replay.B
 }
 
 func cmdRun(flags map[string]string, stdout io.Writer) error {
-	matrixPath := requireFlag(flags, "--matrix")
-	profilePath := requireFlag(flags, "--profile")
-	bundlePath := requireFlag(flags, "--bundle")
-	evidencePath := requireFlag(flags, "--evidence")
-	if matrixPath == "" || profilePath == "" || bundlePath == "" || evidencePath == "" {
-		return fmt.Errorf("run requires --matrix, --profile, --bundle, --evidence")
+	matrixPath, profilePath, bundlePath, evidencePath, err := requireRunFlags(flags)
+	if err != nil {
+		return err
 	}
 	matrix, profile, manifest, bundleSHA, matrixSHA, profileSHA, err := loadRunInputs(matrixPath, profilePath, bundlePath)
 	if err != nil {
 		return fmt.Errorf("load run inputs: %w", err)
 	}
-	timeout, err := parseTimeout(flags)
+	runOpts, timeout, err := buildRunOptions(flags, bundlePath, manifest, bundleSHA, matrixSHA, profileSHA)
 	if err != nil {
 		return err
 	}
-	sourceGitCommit, sourceGitTag, err := resolveSourceIdentity(flags)
-	if err != nil {
-		return err
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	evidence, err := replay.RunMatrix(ctx, matrix, profile, adapterFactory(), replay.RunOptions{
-		BundlePath:          bundlePath,
-		BundleSHA256:        bundleSHA,
-		ControlBinarySHA256: manifest.BinarySHA256,
-		MatrixSHA256:        matrixSHA,
-		ProfileSHA256:       profileSHA,
-		SourceGitCommit:     sourceGitCommit,
-		SourceGitTag:        sourceGitTag,
-		Orchestrator:        "jcs-offline-replay",
-	})
+	evidence, err := replay.RunMatrix(ctx, matrix, profile, adapterFactory(), runOpts)
 	if err != nil {
 		return fmt.Errorf("run replay matrix: %w", err)
 	}
@@ -189,12 +178,73 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	return writeRunSummary(stdout, evidencePath, evidence)
 }
 
-func resolveWorkerPath(flags map[string]string) (string, func(), error) {
+func requireRunFlags(flags map[string]string) (matrixPath, profilePath, bundlePath, evidencePath string, err error) {
+	matrixPath = requireFlag(flags, "--matrix")
+	profilePath = requireFlag(flags, "--profile")
+	bundlePath = requireFlag(flags, "--bundle")
+	evidencePath = requireFlag(flags, "--evidence")
+	if matrixPath == "" || profilePath == "" || bundlePath == "" || evidencePath == "" {
+		return "", "", "", "", fmt.Errorf("run requires --matrix, --profile, --bundle, --evidence")
+	}
+	return matrixPath, profilePath, bundlePath, evidencePath, nil
+}
+
+// buildRunOptions assembles replay.RunOptions and the run timeout from flags and pre-loaded digests.
+func buildRunOptions(flags map[string]string, bundlePath string, manifest *replay.BundleManifest, bundleSHA, matrixSHA, profileSHA string) (replay.RunOptions, time.Duration, error) {
+	timeout, err := parseTimeout(flags)
+	if err != nil {
+		return replay.RunOptions{}, 0, err
+	}
+	sourceGitCommit, sourceGitTag, err := resolveSourceIdentity(flags)
+	if err != nil {
+		return replay.RunOptions{}, 0, err
+	}
+	infraManifestSHA, infraRepoURL, infraRepoCommit, err := resolveInfraManifest(flags)
+	if err != nil {
+		return replay.RunOptions{}, 0, err
+	}
+	return replay.RunOptions{
+		BundlePath:          bundlePath,
+		BundleSHA256:        bundleSHA,
+		ControlBinarySHA256: manifest.BinarySHA256,
+		MatrixSHA256:        matrixSHA,
+		ProfileSHA256:       profileSHA,
+		SourceGitCommit:     sourceGitCommit,
+		SourceGitTag:        sourceGitTag,
+		Orchestrator:        "jcs-offline-replay",
+		InfraManifestSHA256: infraManifestSHA,
+		InfraRepoURL:        infraRepoURL,
+		InfraRepoCommit:     infraRepoCommit,
+	}, timeout, nil
+}
+
+// resolveInfraManifest loads and validates the infra manifest at --infra-manifest (if set)
+// and returns its SHA-256, repo URL, and repo commit.
+func resolveInfraManifest(flags map[string]string) (sha, repoURL, repoCommit string, err error) {
+	path := requireFlag(flags, "--infra-manifest")
+	if path == "" {
+		return "", "", "", nil
+	}
+	im, loadErr := replay.LoadInfraManifest(path)
+	if loadErr != nil {
+		return "", "", "", fmt.Errorf("load infra manifest: %w", loadErr)
+	}
+	sha, err = fileSHA256(path)
+	if err != nil {
+		return "", "", "", fmt.Errorf("sha256 infra manifest: %w", err)
+	}
+	return sha, im.InfraRepoURL, im.InfraRepoCommit, nil
+}
+
+func resolveWorkerPath(flags map[string]string, targetArch string) (string, func(), error) {
 	workerPath := requireFlag(flags, "--worker")
 	if workerPath != "" {
+		if err := validateExecutableArchitecture(workerPath, targetArch, "worker binary"); err != nil {
+			return "", func() {}, err
+		}
 		return workerPath, func() {}, nil
 	}
-	workerPath, err := buildWorkerBinary()
+	workerPath, err := buildWorkerBinary(targetArch)
 	if err != nil {
 		return "", func() {}, err
 	}
@@ -279,6 +329,10 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		return fmt.Errorf("load verification digests: %w", err)
 	}
 	expectedSourceCommit, expectedSourceTag := resolveExpectedSourceIdentity(flags)
+	expectedInfraManifestSHA, expectedInfraRepoURL, expectedInfraRepoCommit, err := resolveExpectedInfraBinding(flags, evidence, profile)
+	if err != nil {
+		return err
+	}
 
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        bundleSHA,
@@ -288,10 +342,52 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     expectedSourceCommit,
 		ExpectedSourceGitTag:        expectedSourceTag,
+		ExpectedInfraManifestSHA256: expectedInfraManifestSHA,
+		ExpectedInfraRepoURL:        expectedInfraRepoURL,
+		ExpectedInfraRepoCommit:     expectedInfraRepoCommit,
 	}); err != nil {
 		return fmt.Errorf("validate evidence bundle: %w", err)
 	}
 	return writeLine(stdout, "ok")
+}
+
+func resolveExpectedInfraBinding(flags map[string]string, evidence *replay.EvidenceBundle, profile *replay.Profile) (string, string, string, error) {
+	manifestPath := requireFlag(flags, "--infra-manifest")
+	if manifestPath == "" {
+		if replayProfileRequiresInfraBinding(profile) {
+			return "", "", "", fmt.Errorf("verify-evidence requires --infra-manifest for infra-substrate-binding profiles")
+		}
+		return "", "", "", nil
+	}
+	im, err := replay.LoadInfraManifest(manifestPath)
+	if err != nil {
+		return "", "", "", fmt.Errorf("load infra manifest: %w", err)
+	}
+	manifestSHA, err := fileSHA256(manifestPath)
+	if err != nil {
+		return "", "", "", fmt.Errorf("sha256 infra manifest: %w", err)
+	}
+	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 {
+		if evidence.InfraRepoURL != im.InfraRepoURL {
+			return "", "", "", fmt.Errorf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
+		}
+		if evidence.InfraRepoCommit != im.InfraRepoCommit {
+			return "", "", "", fmt.Errorf("evidence infra_repo_commit %q does not match manifest infra_repo_commit %q", evidence.InfraRepoCommit, im.InfraRepoCommit)
+		}
+	}
+	return manifestSHA, im.InfraRepoURL, im.InfraRepoCommit, nil
+}
+
+func replayProfileRequiresInfraBinding(profile *replay.Profile) bool {
+	if profile == nil {
+		return false
+	}
+	for _, s := range profile.RequiredSuites {
+		if s == "infra-substrate-binding" {
+			return true
+		}
+	}
+	return false
 }
 
 func resolveVerifyPaths(flags map[string]string, evidencePath string) (string, string) {
@@ -342,6 +438,54 @@ func cmdReport(flags map[string]string, stdout io.Writer) error {
 		return err
 	}
 	return writeReportNodeBreakdown(stdout, evidence)
+}
+
+func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
+	outputPath := requireFlag(flags, "--output")
+	if outputPath == "" {
+		return fmt.Errorf("write-infra-manifest requires --output")
+	}
+	manifest := &replay.InfraManifest{
+		SchemaVersion:      replay.InfraManifestSchemaVersion,
+		GeneratedAtUTC:     time.Now().UTC().Format(time.RFC3339Nano),
+		InfraRepoURL:       requireFlag(flags, "--infra-repo-url"),
+		InfraRepoCommit:    requireFlag(flags, "--infra-repo-commit"),
+		ProviderEngine:     requireFlag(flags, "--provider-engine"),
+		ProviderVersion:    requireFlag(flags, "--provider-version"),
+		ProviderLockSHA256: requireFlag(flags, "--provider-lock-sha256"),
+		Hosts: []replay.InfraManifestHost{
+			{
+				Role:             "x86_64",
+				CloudProvider:    requireFlag(flags, "--cloud-provider"),
+				Region:           requireFlag(flags, "--region"),
+				InstanceType:     requireFlag(flags, "--x86-instance-type"),
+				ImageID:          requireFlag(flags, "--x86-image-id"),
+				DiscoveredCPU:    strings.TrimSpace(flags["--x86-discovered-cpu"]),
+				DiscoveredKernel: strings.TrimSpace(flags["--x86-discovered-kernel"]),
+			},
+			{
+				Role:             "arm64",
+				CloudProvider:    requireFlag(flags, "--cloud-provider"),
+				Region:           requireFlag(flags, "--region"),
+				InstanceType:     requireFlag(flags, "--arm64-instance-type"),
+				ImageID:          requireFlag(flags, "--arm64-image-id"),
+				DiscoveredCPU:    strings.TrimSpace(flags["--arm64-discovered-cpu"]),
+				DiscoveredKernel: strings.TrimSpace(flags["--arm64-discovered-kernel"]),
+			},
+		},
+	}
+	if err := replay.ValidateInfraManifest(manifest); err != nil {
+		return fmt.Errorf("validate infra manifest: %w", err)
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal infra manifest: %w", err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(outputPath, data, 0o600); err != nil {
+		return fmt.Errorf("write infra manifest: %w", err)
+	}
+	return writef(stdout, "infra-manifest: %s\n", outputPath)
 }
 
 func writeReportHeader(stdout io.Writer, evidence *replay.EvidenceBundle) error {
@@ -531,7 +675,7 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
+	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--infra-manifest <path>] [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  preflight --matrix <path> [--strict] [--no-strict]"); err != nil {
@@ -540,16 +684,19 @@ func writeUsage(w io.Writer) error {
 	if err := writeLine(w, "  audit-summary --matrix <path> --profile <path> --evidence <path> [--output-dir <path>]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]"); err != nil {
+	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--infra-manifest <path>] [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
+	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--infra-manifest <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
 		return err
 	}
-	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
+	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--infra-manifest <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "  report --evidence <path>"); err != nil {
+		return err
+	}
+	if err := writeLine(w, "  write-infra-manifest --output <path> --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>"); err != nil {
 		return err
 	}
 	return writeLine(w, "  inspect-matrix --matrix <path>")
@@ -573,15 +720,19 @@ func writeErrorLine(stderr io.Writer, err error) int {
 	return 2
 }
 
-func buildWorkerBinary() (string, error) {
+func buildWorkerBinary(targetArch string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "jcs-offline-worker-*")
 	if err != nil {
 		return "", fmt.Errorf("create worker temp dir: %w", err)
 	}
 	out := filepath.Join(tmpDir, "jcs-offline-worker")
+	goArch, err := goArchForMatrixArch(targetArch)
+	if err != nil {
+		return "", err
+	}
 	// #nosec G204 -- fixed go tool invocation with controlled arguments.
 	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", out, "./cmd/jcs-offline-worker")
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goArch)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -589,4 +740,47 @@ func buildWorkerBinary() (string, error) {
 		return "", fmt.Errorf("build worker binary: %w: %s", err, strings.TrimSpace(buf.String()))
 	}
 	return out, nil
+}
+
+func goArchForMatrixArch(matrixArch string) (string, error) {
+	switch strings.TrimSpace(matrixArch) {
+	case "x86_64":
+		return "amd64", nil
+	case "arm64":
+		return "arm64", nil
+	default:
+		return "", fmt.Errorf("unsupported matrix architecture %q", matrixArch)
+	}
+}
+
+func validateExecutableArchitecture(path string, matrixArch string, label string) error {
+	wantMachine, err := elfMachineForMatrixArch(matrixArch)
+	if err != nil {
+		return err
+	}
+	f, err := elf.Open(path)
+	if err != nil {
+		return fmt.Errorf("%s %s is not a readable ELF binary: %w", label, path, err)
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+	if f.FileHeader.Class != elf.ELFCLASS64 {
+		return fmt.Errorf("%s %s must be a 64-bit Linux ELF binary", label, path)
+	}
+	if f.FileHeader.Machine != wantMachine {
+		return fmt.Errorf("%s %s architecture mismatch: got=%s want=%s", label, path, f.FileHeader.Machine, wantMachine)
+	}
+	return nil
+}
+
+func elfMachineForMatrixArch(matrixArch string) (elf.Machine, error) {
+	switch strings.TrimSpace(matrixArch) {
+	case "x86_64":
+		return elf.EM_X86_64, nil
+	case "arm64":
+		return elf.EM_AARCH64, nil
+	default:
+		return 0, fmt.Errorf("unsupported matrix architecture %q", matrixArch)
+	}
 }
