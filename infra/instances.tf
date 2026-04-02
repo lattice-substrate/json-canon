@@ -3,10 +3,18 @@ locals {
   aws_release_hosts = {
     for host in local.aws_release_hosts_raw.hosts : host.host_id => host
   }
+  aws_release_hosts_by_name = {
+    for host_id, host in local.aws_release_hosts : host_id => host
+    if try(host.ami_source, "name") == "name"
+  }
+  aws_release_hosts_by_ssm = {
+    for host_id, host in local.aws_release_hosts : host_id => host
+    if try(host.ami_source, "name") == "ssm"
+  }
 }
 
 data "aws_ami" "release_host" {
-  for_each    = local.aws_release_hosts
+  for_each    = local.aws_release_hosts_by_name
   most_recent = true
   owners      = [each.value.ami_owner]
 
@@ -26,10 +34,19 @@ data "aws_ami" "release_host" {
   }
 }
 
+data "aws_ssm_parameter" "release_host" {
+  for_each = local.aws_release_hosts_by_ssm
+  name     = each.value.ami_ssm_parameter
+}
+
 resource "aws_instance" "release_host" {
   for_each = local.aws_release_hosts
 
-  ami                         = data.aws_ami.release_host[each.key].id
+  ami = (
+    try(each.value.ami_source, "name") == "ssm"
+    ? data.aws_ssm_parameter.release_host[each.key].value
+    : data.aws_ami.release_host[each.key].id
+  )
   instance_type               = each.value.instance_type
   associate_public_ip_address = true
   key_name                    = aws_key_pair.replay.key_name

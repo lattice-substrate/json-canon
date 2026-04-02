@@ -73,6 +73,10 @@ They do not use Docker containers as release evidence lanes. `image_digest` rema
 field for non-official container-backed replay modes, but it is absent from the official AWS
 release evidence contract.
 
+The official AWS host catalog uses stable image selectors. Ubuntu entries resolve through
+Canonical public SSM parameters instead of AMI name globs, and the arm64 fleet does not
+declare an unsupported Ubuntu 20.04 minimal lane.
+
 Evidence v2 is emitted automatically by `jcs-offline-replay` when
 `RunOptions.InfraManifestSHA256` is populated. `evidence.v1` remains the valid
 local/CI format; node-level v2 fields are rejected from v1 evidence, and release

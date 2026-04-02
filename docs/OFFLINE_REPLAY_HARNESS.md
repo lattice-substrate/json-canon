@@ -171,6 +171,8 @@ lanes / 60 total replays per architecture.
 
 Official AWS release evidence does not use Docker lanes. Each lane is a native EC2 host
 selected from the committed AWS release host catalog and executed directly over Go-managed SSH.
+Ubuntu lanes in that host catalog resolve through Canonical public SSM parameters rather than
+AMI name globs so the release path is resilient to AMI naming drift.
 
 Before the first billed AWS run, generate `infra/.terraform.lock.hcl` with the pinned
 OpenTofu binary via the Go-native `jcs-offline-replay init-infra-lock` path:

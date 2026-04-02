@@ -30,6 +30,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - OpenTofu IaC in `infra/` now provisions the committed official AWS native-host fleet
   declared in `infra/aws_release_hosts.json`, covering 12 vm-only lanes / 60 total replays
   per architecture across x86_64 and arm64.
+- Ubuntu AMI resolution in the official AWS host catalog now uses Canonical public SSM
+  parameters instead of brittle AMI name globs, and the unsupported Ubuntu 20.04 minimal
+  arm64 lane is replaced with a valid native AWS arm64 lane.
 - `offline/toolchain.lock.tsv`: normative pinned-tool lock for the server-backed
   evidence path and release workflow. It records the exact Go, OpenTofu, and jq
   artifacts by URL and SHA-256.
@@ -68,6 +71,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Requirements AWS-RELEASE-001, AWS-TOOLCHAIN-001, and AWS-GATE-001 added to
   `REQ_REGISTRY_POLICY.md` to lock official AWS release breadth, host-only pinned
   toolchain scope, and v2-only release gating.
+- Requirement AWS-AMI-001 added to `REQ_REGISTRY_POLICY.md` to lock stable official AWS
+  image selector policy and forbid the unsupported Ubuntu 20.04 minimal arm64 lane.
 - ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
 - ADR-0006: Pinned toolchain evidence for server-backed conformance.
 - ADR-0007: Go-native post-bootstrap server evidence orchestration.

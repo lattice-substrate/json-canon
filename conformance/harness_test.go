@@ -301,6 +301,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
 		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
 		"AWS-RELEASE-001":       checkOfflineServerProfileContract,
+		"AWS-AMI-001":           checkOfficialAWSHostCatalogContract,
 		"AWS-TOOLCHAIN-001":     checkOfficialAWSToolchainContract,
 		"AWS-GATE-001":          checkOfflineReleaseGatePolicy,
 		// VERIFY
@@ -2653,6 +2654,55 @@ func checkOfficialAWSToolchainContract(t *testing.T, h *harness) {
 	for id := range wantIDs {
 		t.Fatalf("official AWS toolchain lock missing required artifact %s", id)
 	}
+}
+
+func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
+	t.Helper()
+	type awsReleaseHost struct {
+		HostID          string `json:"host_id"`
+		Architecture    string `json:"architecture"`
+		Distro          string `json:"distro"`
+		AMIName         string `json:"ami_name"`
+		AMIOwner        string `json:"ami_owner"`
+		AMISource       string `json:"ami_source"`
+		AMISSMParameter string `json:"ami_ssm_parameter"`
+	}
+	type awsReleaseHostCatalog struct {
+		SchemaVersion string           `json:"schema_version"`
+		Hosts         []awsReleaseHost `json:"hosts"`
+	}
+
+	var catalog awsReleaseHostCatalog
+	raw := mustReadText(t, filepath.Join(h.root, "infra", "aws_release_hosts.json"))
+	if err := json.Unmarshal([]byte(raw), &catalog); err != nil {
+		t.Fatalf("decode aws release host catalog: %v", err)
+	}
+	if catalog.SchemaVersion != "aws-release-hosts.v1" {
+		t.Fatalf("aws release host catalog schema mismatch: got %q", catalog.SchemaVersion)
+	}
+	if len(catalog.Hosts) != 24 {
+		t.Fatalf("aws release host catalog must include 24 hosts, got %d", len(catalog.Hosts))
+	}
+	for _, host := range catalog.Hosts {
+		if strings.HasPrefix(host.Distro, "ubuntu-") {
+			if host.AMISource != "ssm" {
+				t.Fatalf("ubuntu host %s must use ami_source=ssm, got %q", host.HostID, host.AMISource)
+			}
+			if !strings.HasPrefix(host.AMISSMParameter, "/aws/service/canonical/ubuntu/") {
+				t.Fatalf("ubuntu host %s must use Canonical public SSM parameter, got %q", host.HostID, host.AMISSMParameter)
+			}
+			if host.AMIName != "" || host.AMIOwner != "" {
+				t.Fatalf("ubuntu host %s must not use ami_owner/ami_name selectors once ssm-backed", host.HostID)
+			}
+		}
+		if host.HostID == "aws-native-ubuntu2004-minimal-arm64" {
+			t.Fatal("official aws host catalog must not declare unsupported ubuntu2004 minimal arm64 lane")
+		}
+	}
+
+	instancesTF := mustReadText(t, filepath.Join(h.root, "infra", "instances.tf"))
+	assertContains(t, instancesTF, `data "aws_ssm_parameter" "release_host"`, "official aws host catalog ssm resolver")
+	assertContains(t, instancesTF, `try(host.ami_source, "name") == "ssm"`, "official aws host catalog mixed selector dispatch")
 }
 
 func checkOfflineServerProfileContract(t *testing.T, h *harness) {

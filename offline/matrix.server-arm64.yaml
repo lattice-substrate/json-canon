@@ -83,15 +83,15 @@
       }
     },
     {
-      "id": "aws-native-ubuntu2004-minimal-arm64",
+      "id": "aws-native-al2023-g3-arm64",
       "mode": "vm",
-      "distro": "ubuntu-20.04",
-      "kernel_family": "minimal",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023-g3",
       "replays": 5,
       "runner": {
         "kind": "vm_ssh",
         "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2004_MINIMAL_ARM64"
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_AL2023_G3_ARM64"
         },
         "replay": [
           "./offline/scripts/replay-ssh.sh"
