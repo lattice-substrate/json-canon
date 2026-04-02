@@ -33,6 +33,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Ubuntu AMI resolution in the official AWS host catalog now uses Canonical public SSM
   parameters instead of brittle AMI name globs, and the unsupported Ubuntu 20.04 minimal
   arm64 lane is replaced with a valid native AWS arm64 lane.
+- The official AWS `provisioned_hosts` OpenTofu output is now explicitly marked sensitive so
+  SSM-backed AMI selectors remain exportable to the Go orchestrator without weakening the
+  root-module output contract.
 - `offline/toolchain.lock.tsv`: normative pinned-tool lock for the server-backed
   evidence path and release workflow. It records the exact Go, OpenTofu, and jq
   artifacts by URL and SHA-256.
@@ -73,6 +76,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   toolchain scope, and v2-only release gating.
 - Requirement AWS-AMI-001 added to `REQ_REGISTRY_POLICY.md` to lock stable official AWS
   image selector policy and forbid the unsupported Ubuntu 20.04 minimal arm64 lane.
+- Requirement AWS-OUTPUT-001 added to `REQ_REGISTRY_POLICY.md` to lock the sensitive
+  `provisioned_hosts` output contract used by the Go-native AWS release orchestration.
 - ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
 - ADR-0006: Pinned toolchain evidence for server-backed conformance.
 - ADR-0007: Go-native post-bootstrap server evidence orchestration.

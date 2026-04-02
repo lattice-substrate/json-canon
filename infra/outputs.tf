@@ -1,5 +1,6 @@
 output "provisioned_hosts" {
   description = "Provisioned official AWS release hosts keyed by host_id."
+  sensitive   = true
   value = {
     for host_id, inst in aws_instance.release_host : host_id => {
       host_id       = host_id

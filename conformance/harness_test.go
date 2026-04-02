@@ -302,6 +302,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
 		"AWS-RELEASE-001":       checkOfflineServerProfileContract,
 		"AWS-AMI-001":           checkOfficialAWSHostCatalogContract,
+		"AWS-OUTPUT-001":        checkOfficialAWSInfraOutputContract,
 		"AWS-TOOLCHAIN-001":     checkOfficialAWSToolchainContract,
 		"AWS-GATE-001":          checkOfflineReleaseGatePolicy,
 		// VERIFY
@@ -2703,6 +2704,16 @@ func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
 	instancesTF := mustReadText(t, filepath.Join(h.root, "infra", "instances.tf"))
 	assertContains(t, instancesTF, `data "aws_ssm_parameter" "release_host"`, "official aws host catalog ssm resolver")
 	assertContains(t, instancesTF, `try(host.ami_source, "name") == "ssm"`, "official aws host catalog mixed selector dispatch")
+}
+
+func checkOfficialAWSInfraOutputContract(t *testing.T, h *harness) {
+	t.Helper()
+	outputsTF := mustReadText(t, filepath.Join(h.root, "infra", "outputs.tf"))
+	assertContains(t, outputsTF, `output "provisioned_hosts" {`, "official aws provisioned host output")
+	assertContains(t, outputsTF, `sensitive   = true`, "official aws provisioned host output sensitivity")
+
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `tofuOutputHosts(toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")`, "official aws provisioned host output consumer")
 }
 
 func checkOfflineServerProfileContract(t *testing.T, h *harness) {

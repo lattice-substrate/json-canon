@@ -173,6 +173,9 @@ Official AWS release evidence does not use Docker lanes. Each lane is a native E
 selected from the committed AWS release host catalog and executed directly over Go-managed SSH.
 Ubuntu lanes in that host catalog resolve through Canonical public SSM parameters rather than
 AMI name globs so the release path is resilient to AMI naming drift.
+The OpenTofu `provisioned_hosts` output is explicitly marked sensitive because those selectors
+can flow through provider-sensitive values; the Go release orchestrator consumes that named
+JSON output directly.
 
 Before the first billed AWS run, generate `infra/.terraform.lock.hcl` with the pinned
 OpenTofu binary via the Go-native `jcs-offline-replay init-infra-lock` path:

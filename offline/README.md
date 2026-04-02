@@ -76,6 +76,9 @@ release evidence contract.
 The official AWS host catalog uses stable image selectors. Ubuntu entries resolve through
 Canonical public SSM parameters instead of AMI name globs, and the arm64 fleet does not
 declare an unsupported Ubuntu 20.04 minimal lane.
+Because those selectors transit provider-sensitive values, `infra/outputs.tf` marks the
+`provisioned_hosts` output as sensitive and the Go orchestration path reads that named JSON
+output directly.
 
 Evidence v2 is emitted automatically by `jcs-offline-replay` when
 `RunOptions.InfraManifestSHA256` is populated. `evidence.v1` remains the valid
