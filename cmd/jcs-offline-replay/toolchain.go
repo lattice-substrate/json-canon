@@ -205,7 +205,7 @@ func toolchainArtifactExecutablePath(root string, artifact replay.ToolchainArtif
 	if artifact.Format == "raw" {
 		return toolchainArtifactDownloadPath(root, artifact)
 	}
-	return filepath.Join(root, "extracted", artifact.ID, filepath.FromSlash(artifact.ExecutablePath))
+	return filepath.Join(root, ".extracted", artifact.ID, filepath.FromSlash(artifact.ExecutablePath))
 }
 
 func downloadPinnedArtifact(artifact replay.ToolchainArtifact, dest string) error {
@@ -300,7 +300,7 @@ func materializeToolExecutable(artifact replay.ToolchainArtifact, downloadPath, 
 }
 
 func resetExtractRoot(root, artifactID string) (string, error) {
-	extractRoot := filepath.Join(root, "extracted", artifactID)
+	extractRoot := filepath.Join(root, ".extracted", artifactID)
 	if err := os.RemoveAll(extractRoot); err != nil {
 		return "", fmt.Errorf("reset extract root %s: %w", artifactID, err)
 	}

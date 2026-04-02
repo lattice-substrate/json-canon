@@ -75,9 +75,9 @@ func TestBuildRemoteReplayCommandContainerUsesSudoDocker(t *testing.T) {
 
 func testMatrixNodeContainerSSH() replay.NodeSpec {
 	return replay.NodeSpec{
-		ID:           "aws-debian12-container-x86_64",
+		ID:           "aws-debian13-container-x86_64",
 		Mode:         replay.NodeModeContainer,
-		Distro:       "debian-12",
+		Distro:       "debian-13",
 		KernelFamily: "cloud",
 		Runner: replay.RunnerConfig{
 			Env: map[string]string{

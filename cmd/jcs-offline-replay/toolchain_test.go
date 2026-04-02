@@ -37,8 +37,8 @@ func TestCmdSyncToolchainAndCollectEvidence(t *testing.T) {
 	toolchainRoot := filepath.Join(dir, "toolchain")
 	envPath := filepath.Join(dir, "toolchain.env")
 	runToolchainSync(t, lockPath, toolchainRoot, envPath)
-	assertExecutableMode(t, filepath.Join(toolchainRoot, "extracted", "go-linux-amd64", "go", "bin", "go"))
-	assertExecutableMode(t, filepath.Join(toolchainRoot, "extracted", "go-linux-amd64", "go", "pkg", "tool", "linux_amd64", "compile"))
+	assertExecutableMode(t, filepath.Join(toolchainRoot, ".extracted", "go-linux-amd64", "go", "bin", "go"))
+	assertExecutableMode(t, filepath.Join(toolchainRoot, ".extracted", "go-linux-amd64", "go", "pkg", "tool", "linux_amd64", "compile"))
 	tools, err := collectToolchainEvidenceForTest(lockPath, toolchainRoot, filepath.Join(dir, "release", "infra-manifest.v1.json"))
 	if err != nil {
 		t.Fatalf("collectToolchainEvidence: %v", err)

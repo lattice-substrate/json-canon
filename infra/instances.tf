@@ -1,5 +1,5 @@
 resource "aws_instance" "x86_replay" {
-  ami                    = data.aws_ami.debian12_x86.id
+  ami                    = data.aws_ami.debian13_x86.id
   instance_type          = "t3a.small"
   associate_public_ip_address = true
   key_name               = aws_key_pair.replay.key_name
@@ -17,7 +17,7 @@ resource "aws_instance" "x86_replay" {
 }
 
 resource "aws_instance" "arm64_replay" {
-  ami                    = data.aws_ami.debian12_arm64.id
+  ami                    = data.aws_ami.debian13_arm64.id
   instance_type          = "t4g.small"
   associate_public_ip_address = true
   key_name               = aws_key_pair.replay.key_name

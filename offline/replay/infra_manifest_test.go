@@ -48,7 +48,7 @@ func validInfraManifestFixture() *replay.InfraManifest {
 				SourceURL:              "https://go.dev/dl/go1.24.13.linux-amd64.tar.gz",
 				SHA256:                 strings.Repeat("c", 64),
 				ArtifactRelativePath:   "toolchain/downloads/go-linux-amd64/go1.24.13.linux-amd64.tar.gz",
-				ExecutableRelativePath: "toolchain/extracted/go-linux-amd64/go/bin/go",
+				ExecutableRelativePath: "toolchain/.extracted/go-linux-amd64/go/bin/go",
 			},
 			{
 				ID:                   "docker-static-linux-arm64",
@@ -286,7 +286,7 @@ func TestLoadInfraManifestRejectsUnknownFields(t *testing.T) {
   "provider_version": "1.8.0",
   "provider_lock_sha256": "` + strings.Repeat("b", 64) + `",
   "hosts": [{"role":"x86_64","cloud_provider":"aws","region":"us-east-1","instance_type":"c6i.large","image_id":"ami-0abc"}],
-  "tools": [{"id":"go-linux-amd64","scope":"host","purpose":"build","name":"go","version":"1.24.13","os":"linux","arch":"amd64","format":"tar.gz","source_url":"https://go.dev/dl/go1.24.13.linux-amd64.tar.gz","sha256":"` + strings.Repeat("c", 64) + `","artifact_relative_path":"toolchain/downloads/go/go.tar.gz","executable_relative_path":"toolchain/extracted/go/bin/go"}],
+  "tools": [{"id":"go-linux-amd64","scope":"host","purpose":"build","name":"go","version":"1.24.13","os":"linux","arch":"amd64","format":"tar.gz","source_url":"https://go.dev/dl/go1.24.13.linux-amd64.tar.gz","sha256":"` + strings.Repeat("c", 64) + `","artifact_relative_path":"toolchain/downloads/go/go.tar.gz","executable_relative_path":"toolchain/.extracted/go/bin/go"}],
   "unknown_field": "should_fail"
 }`
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {

@@ -132,7 +132,7 @@ bootstrap_go() {
   local artifact_id archive_path extract_root
   artifact_id="go-linux-$HOST_ARCH"
   archive_path="$(download_bootstrap_tool "$artifact_id")"
-  extract_root="$OUTPUT_DIR/extracted/$artifact_id"
+  extract_root="$OUTPUT_DIR/.extracted/$artifact_id"
   rm -rf "$extract_root"
   mkdir -p "$extract_root"
   tar -xzf "$archive_path" -C "$extract_root"

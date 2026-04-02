@@ -12,14 +12,14 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Latest Debian 12 (Bookworm) x86_64 AMI from the official Debian AWS account.
-data "aws_ami" "debian12_x86" {
+# Latest Debian 13 x86_64 AMI from the official Debian AWS account.
+data "aws_ami" "debian13_x86" {
   most_recent = true
   owners      = ["679593333241"]
 
   filter {
     name   = "name"
-    values = ["debian-12-amd64-*"]
+    values = ["debian-13-amd64-*"]
   }
 
   filter {
@@ -33,14 +33,14 @@ data "aws_ami" "debian12_x86" {
   }
 }
 
-# Latest Debian 12 (Bookworm) arm64 AMI from the official Debian AWS account.
-data "aws_ami" "debian12_arm64" {
+# Latest Debian 13 arm64 AMI from the official Debian AWS account.
+data "aws_ami" "debian13_arm64" {
   most_recent = true
   owners      = ["679593333241"]
 
   filter {
     name   = "name"
-    values = ["debian-12-arm64-*"]
+    values = ["debian-13-arm64-*"]
   }
 
   filter {

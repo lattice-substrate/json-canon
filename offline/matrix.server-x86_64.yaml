@@ -3,9 +3,9 @@
   "version": "v1",
   "nodes": [
     {
-      "id": "aws-debian12-vm-x86_64",
+      "id": "aws-debian13-vm-x86_64",
       "mode": "vm",
-      "distro": "debian-12",
+      "distro": "debian-13",
       "kernel_family": "cloud",
       "replays": 5,
       "runner": {
@@ -20,9 +20,9 @@
       }
     },
     {
-      "id": "aws-debian12-container-x86_64",
+      "id": "aws-debian13-container-x86_64",
       "mode": "container",
-      "distro": "debian-12",
+      "distro": "debian-13",
       "kernel_family": "cloud",
       "replays": 5,
       "runner": {

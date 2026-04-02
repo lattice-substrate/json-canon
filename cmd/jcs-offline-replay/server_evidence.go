@@ -23,7 +23,7 @@ import (
 
 const (
 	defaultAWSRegion               = "us-east-1"
-	defaultServerContainerImageTag = "debian:12-slim"
+	defaultServerContainerImageTag = "debian:13-slim"
 	defaultSSHUser                 = "admin"
 	defaultSSHPort                 = "22"
 	serverRepoURL                  = "https://github.com/lattice-substrate/json-canon"
