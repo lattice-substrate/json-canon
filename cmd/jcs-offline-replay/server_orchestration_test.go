@@ -52,6 +52,51 @@ func TestResolveServerStateConfig(t *testing.T) {
 	})
 }
 
+func TestNewServerRunRecordUsesStableCleanupPaths(t *testing.T) {
+	runtimeOpts := serverEvidenceOptions{
+		tag:          "v1.2.3",
+		awsRegion:    "us-east-1",
+		outputDir:    "/repo/offline/runs/releases/v1.2.3",
+		root:         "/repo",
+		infraDir:     "/tmp/jcs-offline-source-123/infra",
+		lockFilePath: "/tmp/jcs-offline-source-123/infra/.terraform.lock.hcl",
+		amiLockPath:  "/tmp/jcs-offline-source-123/infra/aws_release_hosts.lock.json",
+		state: serverStateConfig{
+			Mode:      serverStateModeRemote,
+			Bucket:    "state-bucket",
+			Region:    "us-east-1",
+			LockTable: "locks",
+			Key:       "server-evidence/v1.2.3/terraform.tfstate",
+		},
+	}
+	cleanupOpts := runtimeOpts
+	cleanupOpts.infraDir = "/repo/infra"
+	cleanupOpts.lockFilePath = "/repo/infra/.terraform.lock.hcl"
+	cleanupOpts.amiLockPath = "/repo/infra/aws_release_hosts.lock.json"
+
+	record := newServerRunRecord(
+		"/repo/offline/runs/releases/v1.2.3/server-run.v1.json",
+		runtimeOpts,
+		cleanupOpts,
+		strings.Repeat("a", 40),
+		"/tmp/jcs-offline-source-123",
+		strings.Repeat("b", 64),
+	)
+
+	if record.InfraDir != cleanupOpts.infraDir {
+		t.Fatalf("infra dir = %q, want %q", record.InfraDir, cleanupOpts.infraDir)
+	}
+	if record.ProviderLockPath != cleanupOpts.lockFilePath {
+		t.Fatalf("provider lock path = %q, want %q", record.ProviderLockPath, cleanupOpts.lockFilePath)
+	}
+	if record.AMILockPath != cleanupOpts.amiLockPath {
+		t.Fatalf("ami lock path = %q, want %q", record.AMILockPath, cleanupOpts.amiLockPath)
+	}
+	if record.SourceRoot != "/tmp/jcs-offline-source-123" {
+		t.Fatalf("source root = %q, want detached source root", record.SourceRoot)
+	}
+}
+
 func TestRunServerEvidenceCleansUpProvisionFailure(t *testing.T) {
 	oldFactory := newServerEvidenceRuntimeFunc
 	t.Cleanup(func() {
@@ -64,7 +109,7 @@ func TestRunServerEvidenceCleansUpProvisionFailure(t *testing.T) {
 	newServerEvidenceRuntimeFunc = func(ctx context.Context, _ serverEvidenceOptions) (*serverEvidenceRuntime, error) {
 		return &serverEvidenceRuntime{
 			ctx:   ctx,
-			infra: provisionedInfra{Hosts: map[string]provisionedHost{"aws-x86": {HostID: "aws-x86"}}},
+			infra: provisionedInfra{Applied: true, Hosts: map[string]provisionedHost{"aws-x86": {HostID: "aws-x86"}}},
 			sourceCleanup: func() error {
 				cleaned++
 				return nil
@@ -88,6 +133,36 @@ func TestRunServerEvidenceCleansUpProvisionFailure(t *testing.T) {
 	}
 	if cleaned != 1 {
 		t.Fatalf("source cleanup count = %d, want 1", cleaned)
+	}
+}
+
+func TestRunServerEvidenceCleansUpAfterApplyWithoutHosts(t *testing.T) {
+	oldFactory := newServerEvidenceRuntimeFunc
+	t.Cleanup(func() {
+		newServerEvidenceRuntimeFunc = oldFactory
+	})
+
+	provisionErr := errors.New("tofu output failed after apply")
+	destroyed := 0
+	runtimeState := &serverEvidenceRuntime{}
+	runtimeState.provisionFunc = func(io.Writer) error {
+		runtimeState.infra = provisionedInfra{Applied: true}
+		return provisionErr
+	}
+	runtimeState.destroyFunc = func() error {
+		destroyed++
+		return nil
+	}
+	newServerEvidenceRuntimeFunc = func(context.Context, serverEvidenceOptions) (*serverEvidenceRuntime, error) {
+		return runtimeState, nil
+	}
+
+	err := runServerEvidence(serverEvidenceOptions{tag: "v0.0.0-dev"}, io.Discard)
+	if !errors.Is(err, provisionErr) {
+		t.Fatalf("runServerEvidence error = %v, want %v", err, provisionErr)
+	}
+	if destroyed != 1 {
+		t.Fatalf("destroy count = %d, want 1", destroyed)
 	}
 }
 
@@ -394,6 +469,40 @@ func TestSubprocessHelpersUseProvidedContext(t *testing.T) {
 	}
 }
 
+func TestProvisionRetainsAppliedInfrastructureOnOutputFailure(t *testing.T) {
+	oldProvision := provisionServerInfrastructureFunc
+	t.Cleanup(func() {
+		provisionServerInfrastructureFunc = oldProvision
+	})
+
+	recordPath := filepath.Join(t.TempDir(), "server-run.v1.json")
+	runtimeState := &serverEvidenceRuntime{
+		ctx:           context.Background(),
+		runRecordPath: recordPath,
+		runRecord: serverRunRecord{
+			SchemaVersion:   serverRunRecordSchemaVersion,
+			ProvisionStatus: serverRunStatusPending,
+		},
+		opts:      serverEvidenceOptions{tag: "v0.0.0-dev"},
+		gitCommit: strings.Repeat("a", 40),
+		lockSHA:   strings.Repeat("b", 64),
+	}
+	provisionServerInfrastructureFunc = func(context.Context, serverEvidenceOptions, serverToolchain, string, string) (provisionedInfra, error) {
+		return provisionedInfra{Applied: true}, errors.New("tofu output failed")
+	}
+
+	err := runtimeState.provision(io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "tofu output failed") {
+		t.Fatalf("provision error = %v, want tofu output failure", err)
+	}
+	if !runtimeState.infra.Applied {
+		t.Fatal("runtime did not retain applied infrastructure state")
+	}
+	if runtimeState.runRecord.ProvisionStatus != serverRunStatusFailed {
+		t.Fatalf("provision status = %q, want %q", runtimeState.runRecord.ProvisionStatus, serverRunStatusFailed)
+	}
+}
+
 func TestPrepareStagingUploadsArchitectureArtifacts(t *testing.T) {
 	oldCreate := createStagingBucketFunc
 	oldUpload := uploadStagingFileFunc
@@ -568,6 +677,83 @@ func TestRunServerCleanupIdempotentAfterSuccessfulDestroy(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "cleanup already complete") {
 		t.Fatalf("stdout = %q, want already complete message", stdout.String())
+	}
+	for _, path := range []string{
+		filepath.Join(tempDir, "audit", "server-evidence-summary.json"),
+		filepath.Join(tempDir, "audit", "server-evidence-summary.md"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+	}
+}
+
+func TestRunServerCleanupSucceedsWithoutEvidenceArtifacts(t *testing.T) {
+	oldDelete := deleteStagingBucketFunc
+	oldDestroy := destroyServerInfrastructureFunc
+	oldAWSClients := newServerAWSClientsFunc
+	t.Cleanup(func() {
+		deleteStagingBucketFunc = oldDelete
+		destroyServerInfrastructureFunc = oldDestroy
+		newServerAWSClientsFunc = oldAWSClients
+	})
+
+	deleteStagingBucketFunc = func(context.Context, serverAWSClients, string) error {
+		return nil
+	}
+	destroyServerInfrastructureFunc = func(context.Context, serverEvidenceOptions, serverToolchain, string, string) error {
+		return nil
+	}
+	newServerAWSClientsFunc = func(context.Context, string) (serverAWSClients, error) {
+		return serverAWSClients{}, nil
+	}
+
+	tempDir := t.TempDir()
+	recordPath := filepath.Join(tempDir, "server-run.v1.json")
+	record := &serverRunRecord{
+		SchemaVersion:      serverRunRecordSchemaVersion,
+		RunRecordPath:      recordPath,
+		OutputDir:          tempDir,
+		RepoRoot:           tempDir,
+		Tag:                "v1.2.3",
+		SourceGitCommit:    strings.Repeat("a", 40),
+		SourceGitTag:       "v1.2.3",
+		AWSRegion:          "us-east-1",
+		StateMode:          serverStateModeRemote,
+		InfraDir:           filepath.Join(tempDir, "infra"),
+		ProviderLockPath:   filepath.Join(tempDir, "infra", ".terraform.lock.hcl"),
+		ProviderLockSHA256: strings.Repeat("b", 64),
+		AMILockPath:        filepath.Join(tempDir, "infra", "aws_release_hosts.lock.json"),
+		StagingBucket:      "bucket",
+		InfraManifestPath:  filepath.Join(tempDir, "infra-manifest.v1.json"),
+		X86EvidencePath:    filepath.Join(tempDir, "x86_64", "offline-evidence.json"),
+		ArmEvidencePath:    filepath.Join(tempDir, "arm64", "offline-evidence.json"),
+		DestroyStatus:      serverRunStatusPending,
+		RunStatus:          serverRunStatusRunning,
+	}
+	if err := os.MkdirAll(filepath.Join(tempDir, "infra"), dirPerm); err != nil {
+		t.Fatalf("mkdir infra: %v", err)
+	}
+	if err := os.WriteFile(record.ProviderLockPath, []byte("lock"), filePerm); err != nil {
+		t.Fatalf("write provider lock: %v", err)
+	}
+	if err := os.WriteFile(record.AMILockPath, []byte("ami-lock"), filePerm); err != nil {
+		t.Fatalf("write ami lock: %v", err)
+	}
+	for _, envVar := range []string{"JCS_TOOL_GO", "JCS_TOOL_TOFU"} {
+		toolPath := filepath.Join(tempDir, strings.ToLower(envVar))
+		if err := os.WriteFile(toolPath, []byte("tool"), filePerm); err != nil {
+			t.Fatalf("write %s: %v", envVar, err)
+		}
+		t.Setenv(envVar, toolPath)
+	}
+
+	var stdout strings.Builder
+	if err := runServerCleanup(record, &stdout); err != nil {
+		t.Fatalf("runServerCleanup: %v", err)
+	}
+	if record.DestroyStatus != serverRunStatusSucceeded {
+		t.Fatalf("destroy status = %q, want %q", record.DestroyStatus, serverRunStatusSucceeded)
 	}
 	for _, path := range []string{
 		filepath.Join(tempDir, "audit", "server-evidence-summary.json"),

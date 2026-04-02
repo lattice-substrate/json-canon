@@ -80,7 +80,8 @@ type provisionedHost struct {
 }
 
 type provisionedInfra struct {
-	Hosts map[string]provisionedHost
+	Applied bool
+	Hosts   map[string]provisionedHost
 }
 
 type discoveredRemoteFacts struct {
@@ -204,7 +205,7 @@ func runServerEvidence(opts serverEvidenceOptions, stdout io.Writer) (retErr err
 		}
 	}()
 	if err = runtimeState.provision(stdout); err != nil {
-		if len(runtimeState.infra.Hosts) != 0 {
+		if runtimeState.infra.Applied {
 			err = errors.Join(err, runtimeState.destroy())
 		}
 		return err
@@ -272,6 +273,7 @@ func resolveServerEvidencePath(root, rawPath, fallback string) string {
 }
 
 func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (*serverEvidenceRuntime, error) {
+	stableOpts := opts
 	if _, err := os.Stat(opts.lockFilePath); err != nil {
 		return nil, fmt.Errorf("stat %s: %w", opts.lockFilePath, err)
 	}
@@ -320,7 +322,7 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 		return nil, err
 	}
 	runRecordPath := filepath.Join(opts.outputDir, "server-run.v1.json")
-	runRecord := newServerRunRecord(runRecordPath, opts, gitCommit, sourceRoot, lockSHA)
+	runRecord := newServerRunRecord(runRecordPath, opts, stableOpts, gitCommit, sourceRoot, lockSHA)
 	runRecord.AWSAccountID = awsIdentity.AccountID
 	runRecord.AWSRoleARN = awsIdentity.ARN
 	if err := writeServerRunRecord(runRecordPath, &runRecord); err != nil {
@@ -395,11 +397,11 @@ func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
 		return err
 	}
 	infra, err := provisionServerInfrastructureFunc(r.ctx, r.opts, r.toolchain, r.gitCommit, r.lockSHA)
+	r.infra = infra
 	if err != nil {
 		_ = r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusFailed)
 		return err
 	}
-	r.infra = infra
 	if err := r.persistRunRecord(); err != nil {
 		return err
 	}
@@ -837,9 +839,9 @@ func provisionServerInfrastructure(ctx context.Context, opts serverEvidenceOptio
 	}
 	hosts, err := tofuOutputHosts(ctx, toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")
 	if err != nil {
-		return provisionedInfra{}, err
+		return provisionedInfra{Applied: true}, err
 	}
-	return provisionedInfra{Hosts: hosts}, nil
+	return provisionedInfra{Applied: true, Hosts: hosts}, nil
 }
 
 func destroyServerInfrastructure(ctx context.Context, opts serverEvidenceOptions, toolchain serverToolchain, gitCommit, lockSHA string) error {

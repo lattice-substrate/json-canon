@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -56,11 +58,13 @@ func writeServerAuditSummaries(record serverRunRecord) error {
 		DestroyStatus:     record.DestroyStatus,
 	}
 	if strings.TrimSpace(record.InfraManifestPath) != "" {
-		sha, err := fileSHA256(record.InfraManifestPath)
+		sha, ok, err := optionalFileSHA256(record.InfraManifestPath)
 		if err != nil {
 			return fmt.Errorf("sha256 infra manifest summary: %w", err)
 		}
-		summary.InfraManifestSHA = sha
+		if ok {
+			summary.InfraManifestSHA = sha
+		}
 	}
 	for _, item := range []struct {
 		path string
@@ -72,11 +76,13 @@ func writeServerAuditSummaries(record serverRunRecord) error {
 		if strings.TrimSpace(item.path) == "" {
 			continue
 		}
-		sha, err := fileSHA256(item.path)
+		sha, ok, err := optionalFileSHA256(item.path)
 		if err != nil {
 			return fmt.Errorf("sha256 evidence summary: %w", err)
 		}
-		*item.dest = sha
+		if ok {
+			*item.dest = sha
+		}
 	}
 	jsonPath := filepath.Join(auditDir, "server-evidence-summary.json")
 	mdPath := filepath.Join(auditDir, "server-evidence-summary.md")
@@ -126,4 +132,15 @@ func buildServerEvidenceSummaryMarkdown(summary serverEvidenceSummary) string {
 		"",
 	}
 	return strings.Join(lines, "\n")
+}
+
+func optionalFileSHA256(path string) (string, bool, error) {
+	sha, err := fileSHA256(path)
+	if err == nil {
+		return sha, true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	return "", false, err
 }

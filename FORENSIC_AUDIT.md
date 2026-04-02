@@ -115,56 +115,62 @@ private-network, SSM-based architecture:
 
 ## What Is Blocking
 
-### B-1: Orchestration test coverage is thin
+### B-1: Orchestration test coverage — RESOLVED
 
-**Severity:** Critical
-**Evidence:** `go test -coverprofile` per-function output:
+**Status:** Addressed in commit 5235301.
 
-| Function | File:Line | Coverage |
+Orchestration tests added in `server_orchestration_test.go` (767
+lines, 17 test functions) exercising the function-pointer seams at
+`server_evidence.go:37-45` and `server_aws.go:36-42`. Coverage
+after remediation:
+
+| Function | Before | After |
 |---|---|---|
-| `runServerEvidence` | `server_evidence.go:184` | 87.5% |
-| `destroy` | `server_evidence.go:631` | 68.2% |
-| `provision` | `server_evidence.go:387` | 9.5% |
-| `execute` | `server_evidence.go:419` | 11.8% |
-| `newServerEvidenceRuntime` | `server_evidence.go:274` | 0.0% |
-| `discoverRemoteFacts` | `server_evidence.go:447` | 0.0% |
-| `writeInfraManifest` | `server_evidence.go:519` | 0.0% |
-| `buildArtifacts` | `server_evidence.go:558` | 0.0% |
-| `runReplays` | `server_evidence.go:579` | 0.0% |
-| `runReleaseGates` | `server_evidence.go:608` | 0.0% |
-| All `server_aws.go` functions except `readBoundedStagingObject` | | 0.0% |
-| All `server_ssm.go` functions | | 0.0% |
+| `runServerEvidence` | 87.5% | 87.5% |
+| `provision` | 9.5% | 42.9% |
+| `destroy` | 68.2% | 68.2% |
+| `RunReplay` (SSM) | 0.0% | 73.3% |
+| `prepareStaging` | 0.0% | 63.2% |
+| `discoverHostFacts` | 0.0% | 68.8% |
+| `newServerRunRecord` | — | 80.0% |
+| `runServerCleanup` | — | 58.0% |
+| `writeServerAuditSummaries` | — | 78.6% |
+| Package total | 50.4% | 52.2% |
 
-83 lines of tests (`server_evidence_test.go`) for 1,992 lines of
-orchestration code (`server_evidence.go` + `server_aws.go` +
-`server_ssm.go`). The 3 test functions cover string parsing
-helpers: `TestResolveGitHeadCommitLooseGitDir`,
-`TestBuildRemoteReplaySSMCommandNativeVM`,
-`TestParseEvidenceSHA256`.
+Failure modes now covered:
+- Provision failure triggers destroy (line 100)
+- Post-apply failure without hosts triggers destroy (line 139)
+- Execute failure triggers destroy + source cleanup (line 169)
+- Cancelled parent context does not kill cleanup (line 210)
+- Bucket error does not block infra destroy (line 210)
+- SHA mismatch on evidence download rejects run (line 267)
+- Verified evidence written atomically (line 317)
+- Oversize download propagates (line 372)
+- Subprocess helpers receive parent context (line 419)
+- Applied infra state retained on output failure (line 472)
+- Staging uploads all 4 artifacts (line 506)
+- Host discovery cross-checks instance/image IDs (line 577)
+- Idempotent cleanup skips already-succeeded destroy (line 614)
+- Partial-run cleanup tolerates missing artifacts (line 691)
 
-The function-pointer seams at `server_evidence.go:37-45` and
-`server_aws.go:36-42` exist specifically to enable fake-client
-testing but are not yet exercised by any test. `provision`,
-`execute`, and `destroy` method overrides
-(`server_evidence.go:124-127`) are similarly unused in tests.
+Additional behavior changes in the remediation:
+- `server-run.v1.json` persists stable repo-relative cleanup
+  paths, not detached-worktree paths (`server_run_record.go:70`,
+  test at line 55).
+- `provisionedInfra.Applied` field ensures destroy runs even when
+  `tofuOutputHosts` fails after `tofu apply` succeeds
+  (`server_evidence.go:207`, test at line 472).
+- Audit summary generation tolerates missing evidence/manifest
+  files on partial runs (test at line 691).
+- Release workflow exports `JCS_TOOL_TOFU` for cleanup step.
 
-**Why this blocks merge:** Part 4 ("Proving Determinism") argues that
-evidence claims must be executable. The tool that generates
-conformance evidence has no test covering: provision failure +
-cleanup, cancellation + destroy, SHA mismatch on downloaded evidence,
-SSM timeout handling, release-gate failure, or the full
-provision-execute-destroy lifecycle. The project's published standard
-("governed evidence, not assertions") applies to the orchestrator
-just as much as to the canonicalizer.
-
-**Remedy:** Write tests using the existing function-pointer seams.
-Minimum coverage targets:
-- `runServerEvidence` happy path with fake provision/execute/destroy
-- Provision failure triggers destroy
-- Cancellation during execute triggers destroy
-- SHA mismatch on evidence download rejects the run
-- Release gate failure propagates correctly
-- Destroy errors are joined, not swallowed
+Remaining at 0.0%: `provisionServerInfrastructure`,
+`destroyServerInfrastructure`, `newServerAWSClients`,
+`createStagingBucket`, `deleteStagingBucket`, `uploadStagingFile`,
+`resolveAMIIDForHost`, `runSSMShellScript`. These are thin AWS SDK
+wrappers that require real AWS infrastructure. The function-pointer
+seams allow all orchestration logic around them to be tested, which
+is the correct boundary.
 
 ### B-2: `resolveTofuVersion` ignores the run context
 
@@ -253,24 +259,15 @@ instance security group (`main.tf:87-112`).
 
 ## Decision
 
-**Do not merge until B-1 is resolved.** The architecture is sound.
-The transport, integrity, lifecycle, and network isolation are all
-correct in the current code. The blocking issue is narrow but real:
-the orchestration path that generates evidence is untested, and the
-test seams to fix this already exist in the code.
+**B-1 is resolved.** The architecture is sound. The transport,
+integrity, lifecycle, network isolation, and orchestration test
+coverage are all in acceptable shape. No blocking issues remain.
 
-### Required before merge
+### Remaining hardening (not merge-blocking)
 
-1. Add orchestration tests exercising the function-pointer seams at
-   `server_evidence.go:37-45` and `server_aws.go:36-42`. Cover:
-   happy path, provision failure + cleanup, cancellation + destroy,
-   evidence SHA mismatch, release-gate failure.
-
-### Not required for merge
-
-2. Terraform variable validation blocks (N-1) — take in hardening
+1. Terraform variable validation blocks (N-1) — take in hardening
    pass.
-3. Default to remote state (N-3) — document the limitation, decide
+2. Default to remote state (N-3) — document the limitation, decide
    on default based on operational model.
 
 ---

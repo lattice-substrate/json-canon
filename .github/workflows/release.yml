@@ -87,6 +87,7 @@ jobs:
             echo "PATH=$(dirname "$JCS_TOOL_GO"):$(dirname "$JCS_TOOL_JQ"):$(dirname "$JCS_TOOL_TOFU"):$PATH"
             echo "JCS_TOOL_GO=$JCS_TOOL_GO"
             echo "JCS_TOOL_JQ=$JCS_TOOL_JQ"
+            echo "JCS_TOOL_TOFU=$JCS_TOOL_TOFU"
           } >> "$GITHUB_ENV"
       - name: go vet
         run: go vet ./...
@@ -194,6 +195,7 @@ jobs:
             echo "PATH=$(dirname "$JCS_TOOL_GO"):$(dirname "$JCS_TOOL_JQ"):$(dirname "$JCS_TOOL_TOFU"):$PATH"
             echo "JCS_TOOL_GO=$JCS_TOOL_GO"
             echo "JCS_TOOL_JQ=$JCS_TOOL_JQ"
+            echo "JCS_TOOL_TOFU=$JCS_TOOL_TOFU"
           } >> "$GITHUB_ENV"
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
