@@ -9,21 +9,6 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
-func TestParseSSHTarget(t *testing.T) {
-	t.Parallel()
-
-	user, addr, err := parseSSHTarget("admin@203.0.113.7")
-	if err != nil {
-		t.Fatalf("parseSSHTarget: %v", err)
-	}
-	if user != "admin" {
-		t.Fatalf("user mismatch: got %q want %q", user, "admin")
-	}
-	if addr != "203.0.113.7:22" {
-		t.Fatalf("addr mismatch: got %q want %q", addr, "203.0.113.7:22")
-	}
-}
-
 func TestResolveGitHeadCommitLooseGitDir(t *testing.T) {
 	t.Parallel()
 
@@ -52,7 +37,7 @@ func TestResolveGitHeadCommitLooseGitDir(t *testing.T) {
 	}
 }
 
-func TestBuildRemoteReplayCommandNativeVM(t *testing.T) {
+func TestBuildRemoteReplaySSMCommandNativeVM(t *testing.T) {
 	t.Parallel()
 
 	node := replay.NodeSpec{
@@ -61,16 +46,24 @@ func TestBuildRemoteReplayCommandNativeVM(t *testing.T) {
 		Distro:       "debian-13",
 		KernelFamily: "cloud-amd",
 	}
-	cmd, err := buildRemoteReplayCommand(node, 3, "/tmp/run", replay.EvidenceSchemaVersionV2)
+	cmd, err := buildRemoteReplaySSMCommand(
+		node,
+		3,
+		"https://example.com/bundle",
+		"https://example.com/worker",
+		"https://example.com/evidence",
+	)
 	if err != nil {
-		t.Fatalf("buildRemoteReplayCommand: %v", err)
+		t.Fatalf("buildRemoteReplaySSMCommand: %v", err)
 	}
 	for _, needle := range []string{
-		"/tmp/run/jcs-offline-worker",
-		"--bundle '/tmp/run/bundle.tgz'",
-		"--evidence '/tmp/run/evidence.json'",
+		`curl -fsSL 'https://example.com/bundle' -o "$tmp/bundle.tgz"`,
+		`curl -fsSL 'https://example.com/worker' -o "$tmp/jcs-offline-worker"`,
+		`--bundle "$tmp/bundle.tgz"`,
+		`--evidence "$tmp/evidence.json"`,
 		"--schema-version",
-		replay.EvidenceSchemaVersionV2,
+		replay.EvidenceSchemaVersionV3,
+		`curl -fsS -X PUT -T "$tmp/evidence.json" 'https://example.com/evidence'`,
 	} {
 		if !strings.Contains(cmd, needle) {
 			t.Fatalf("native vm command missing %q in %q", needle, cmd)
@@ -78,12 +71,11 @@ func TestBuildRemoteReplayCommandNativeVM(t *testing.T) {
 	}
 }
 
-func TestServerSSHTargetEnvKey(t *testing.T) {
+func TestParseEvidenceSHA256(t *testing.T) {
 	t.Parallel()
 
-	got := serverSSHTargetEnvKey("aws-native-ubuntu2404-minimal-arm64")
-	want := "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_MINIMAL_ARM64"
-	if got != want {
-		t.Fatalf("env key mismatch: got %q want %q", got, want)
+	got := parseEvidenceSHA256("noise\nevidence_sha256=abc123\nmore-noise\n")
+	if got != "abc123" {
+		t.Fatalf("sha mismatch: got %q want %q", got, "abc123")
 	}
 }

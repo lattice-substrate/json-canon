@@ -7,8 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
 : "${TAG:?'TAG is required (e.g. v0.4.0)'}"
-: "${SSH_KEY_PATH:?'SSH_KEY_PATH must point to a private key file'}"
-: "${SSH_INGRESS_CIDR:?'SSH_INGRESS_CIDR is required (for example 203.0.113.10/32)'}"
+AMI_LOCK_PATH="${AMI_LOCK_PATH:-$ROOT/infra/aws_release_hosts.lock.json}"
 
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
 if [[ -z "${AWS_PROFILE:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then
@@ -16,10 +15,9 @@ if [[ -z "${AWS_PROFILE:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then
   exit 2
 fi
 
-SSH_KEY_PATH="$(cd "$(dirname "$SSH_KEY_PATH")" && pwd)/$(basename "$SSH_KEY_PATH")"
-SSH_PUB_PATH="${SSH_KEY_PATH}.pub"
-if [[ ! -f "$SSH_PUB_PATH" ]]; then
-  echo "error: public key not found at $SSH_PUB_PATH" >&2
+AMI_LOCK_PATH="$(cd "$(dirname "$AMI_LOCK_PATH")" && pwd)/$(basename "$AMI_LOCK_PATH")"
+if [[ ! -f "$AMI_LOCK_PATH" ]]; then
+  echo "error: aws ami lock not found at $AMI_LOCK_PATH" >&2
   exit 2
 fi
 
@@ -66,8 +64,7 @@ source "$TOOLCHAIN_ENV"
 "$JCS_TOOL_GO" run -mod=readonly "$ROOT/cmd/jcs-offline-replay" server-evidence \
   --tag "$TAG" \
   --aws-region "$AWS_REGION" \
-  --ssh-key-path "$SSH_KEY_PATH" \
-  --ssh-ingress-cidr "$SSH_INGRESS_CIDR" \
+  --ami-lock "$AMI_LOCK_PATH" \
   --toolchain-lock "$TOOL_LOCK" \
   --toolchain-root "$TOOLCHAIN_ROOT" \
   --host-arch "$HOST_ARCH" \

@@ -1,0 +1,271 @@
+{
+  "schema_version": "aws-release-host-lock.v1",
+  "generated_at_utc": "2026-04-02T00:00:00Z",
+  "aws_region": "us-east-1",
+  "hosts": [
+    {
+      "host_id": "aws-native-debian13-amd-x86_64",
+      "node_id": "aws-native-debian13-amd-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-amd",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0a5609b2733a894f0",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian13-intel-x86_64",
+      "node_id": "aws-native-debian13-intel-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-intel",
+      "instance_type": "t3.small",
+      "ami_id": "ami-0a5609b2733a894f0",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian12-x86_64",
+      "node_id": "aws-native-debian12-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-12",
+      "kernel_family": "oldstable",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-09029d7971250079d",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-12-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian11-x86_64",
+      "node_id": "aws-native-debian11-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-11",
+      "kernel_family": "previous-oldstable",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0ead771ee9e01a9da",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-11-amd64-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-server-x86_64",
+      "node_id": "aws-native-ubuntu2004-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0fb0b230890ccd1e6",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2004-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0ecebadeebb6208bd",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server-minimal/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-server-x86_64",
+      "node_id": "aws-native-ubuntu2204-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-00de3875b03809ec5",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2204-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0d22e1bb5879573b7",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server-minimal/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-server-x86_64",
+      "node_id": "aws-native-ubuntu2404-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-04eaa218f1349d88b",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2404-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0e3fa4eda109694b4",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server-minimal/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
+    },
+    {
+      "host_id": "aws-native-amzn2-x86_64",
+      "node_id": "aws-native-amzn2-x86_64",
+      "architecture": "x86_64",
+      "distro": "amazon-linux-2",
+      "kernel_family": "amzn2",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0622c21dd3d2b1075",
+      "ami_owner": "137112412989",
+      "ami_name": "amzn2-ami-hvm-2.0.*-x86_64-gp2"
+    },
+    {
+      "host_id": "aws-native-al2023-x86_64",
+      "node_id": "aws-native-al2023-x86_64",
+      "architecture": "x86_64",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023",
+      "instance_type": "t3a.small",
+      "ami_id": "ami-0446b021dec428a7b",
+      "ami_owner": "137112412989",
+      "ami_name": "al2023-ami-2023.*-x86_64"
+    },
+    {
+      "host_id": "aws-native-debian13-g2-arm64",
+      "node_id": "aws-native-debian13-g2-arm64",
+      "architecture": "arm64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-g2",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-04e875997c09a0ac9",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian13-g3-arm64",
+      "node_id": "aws-native-debian13-g3-arm64",
+      "architecture": "arm64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-g3",
+      "instance_type": "c7g.medium",
+      "ami_id": "ami-04e875997c09a0ac9",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian12-arm64",
+      "node_id": "aws-native-debian12-arm64",
+      "architecture": "arm64",
+      "distro": "debian-12",
+      "kernel_family": "oldstable",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0acc7839f8e621b75",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-12-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian11-arm64",
+      "node_id": "aws-native-debian11-arm64",
+      "architecture": "arm64",
+      "distro": "debian-11",
+      "kernel_family": "previous-oldstable",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-056a2e91b2e138412",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-11-arm64-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-server-arm64",
+      "node_id": "aws-native-ubuntu2004-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0c7114fa3eac14de1",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/20.04/stable/current/arm64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-al2023-g3-arm64",
+      "node_id": "aws-native-al2023-g3-arm64",
+      "architecture": "arm64",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023-g3",
+      "instance_type": "c7g.medium",
+      "ami_id": "ami-037d882b31eae26a2",
+      "ami_owner": "137112412989",
+      "ami_name": "al2023-ami-2023.*-arm64"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-server-arm64",
+      "node_id": "aws-native-ubuntu2204-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0db50222d99e370c2",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-minimal-arm64",
+      "node_id": "aws-native-ubuntu2204-minimal-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "minimal",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0bfda2d910bf1ebbe",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server-minimal/22.04/stable/current/arm64/hvm/ebs-gp2/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-server-arm64",
+      "node_id": "aws-native-ubuntu2404-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0bc0f64eea5d47edf",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-minimal-arm64",
+      "node_id": "aws-native-ubuntu2404-minimal-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "minimal",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-0847eec46356274fb",
+      "ami_source": "ssm",
+      "ami_ssm_parameter": "/aws/service/canonical/ubuntu/server-minimal/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+    },
+    {
+      "host_id": "aws-native-amzn2-arm64",
+      "node_id": "aws-native-amzn2-arm64",
+      "architecture": "arm64",
+      "distro": "amazon-linux-2",
+      "kernel_family": "amzn2",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-09f00cfabf8f20116",
+      "ami_owner": "137112412989",
+      "ami_name": "amzn2-ami-hvm-2.0.*-arm64-gp2"
+    },
+    {
+      "host_id": "aws-native-al2023-arm64",
+      "node_id": "aws-native-al2023-arm64",
+      "architecture": "arm64",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023",
+      "instance_type": "t4g.small",
+      "ami_id": "ami-07588980091994c40",
+      "ami_owner": "137112412989",
+      "ami_name": "al2023-ami-2023.*-arm64"
+    }
+  ]
+}

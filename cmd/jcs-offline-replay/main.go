@@ -76,6 +76,8 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		return 0, cmdSyncToolchain(flags, stdout)
 	case "init-infra-lock":
 		return 0, cmdInitInfraLock(flags, stdout)
+	case "refresh-aws-ami-lock":
+		return 0, cmdRefreshAWSAMILock(flags, stdout)
 	case "server-evidence":
 		return 0, cmdServerEvidence(flags, stdout)
 	case "write-infra-manifest":
@@ -335,7 +337,7 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		return fmt.Errorf("load verification digests: %w", err)
 	}
 	expectedSourceCommit, expectedSourceTag := resolveExpectedSourceIdentity(flags)
-	expectedInfraManifestSHA, expectedInfraRepoURL, expectedInfraRepoCommit, err := resolveExpectedInfraBinding(flags, evidence, profile)
+	expectedInfraManifestSHA, expectedInfraRepoURL, expectedInfraRepoCommit, expectedInfraManifest, err := resolveExpectedInfraBinding(flags, evidence, profile)
 	if err != nil {
 		return err
 	}
@@ -351,37 +353,38 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		ExpectedInfraManifestSHA256: expectedInfraManifestSHA,
 		ExpectedInfraRepoURL:        expectedInfraRepoURL,
 		ExpectedInfraRepoCommit:     expectedInfraRepoCommit,
+		ExpectedInfraManifest:       expectedInfraManifest,
 	}); err != nil {
 		return fmt.Errorf("validate evidence bundle: %w", err)
 	}
 	return writeLine(stdout, "ok")
 }
 
-func resolveExpectedInfraBinding(flags map[string]string, evidence *replay.EvidenceBundle, profile *replay.Profile) (string, string, string, error) {
+func resolveExpectedInfraBinding(flags map[string]string, evidence *replay.EvidenceBundle, profile *replay.Profile) (string, string, string, *replay.InfraManifest, error) {
 	manifestPath := requireFlag(flags, "--infra-manifest")
 	if manifestPath == "" {
 		if replayProfileRequiresInfraBinding(profile) {
-			return "", "", "", fmt.Errorf("verify-evidence requires --infra-manifest for infra-substrate-binding profiles")
+			return "", "", "", nil, fmt.Errorf("verify-evidence requires --infra-manifest for infra-substrate-binding profiles")
 		}
-		return "", "", "", nil
+		return "", "", "", nil, nil
 	}
 	im, err := replay.LoadInfraManifest(manifestPath)
 	if err != nil {
-		return "", "", "", fmt.Errorf("load infra manifest: %w", err)
+		return "", "", "", nil, fmt.Errorf("load infra manifest: %w", err)
 	}
 	manifestSHA, err := fileSHA256(manifestPath)
 	if err != nil {
-		return "", "", "", fmt.Errorf("sha256 infra manifest: %w", err)
+		return "", "", "", nil, fmt.Errorf("sha256 infra manifest: %w", err)
 	}
-	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 {
+	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 || evidence.SchemaVersion == replay.EvidenceSchemaVersionV3 {
 		if evidence.InfraRepoURL != im.InfraRepoURL {
-			return "", "", "", fmt.Errorf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
+			return "", "", "", nil, fmt.Errorf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
 		}
 		if evidence.InfraRepoCommit != im.InfraRepoCommit {
-			return "", "", "", fmt.Errorf("evidence infra_repo_commit %q does not match manifest infra_repo_commit %q", evidence.InfraRepoCommit, im.InfraRepoCommit)
+			return "", "", "", nil, fmt.Errorf("evidence infra_repo_commit %q does not match manifest infra_repo_commit %q", evidence.InfraRepoCommit, im.InfraRepoCommit)
 		}
 	}
-	return manifestSHA, im.InfraRepoURL, im.InfraRepoCommit, nil
+	return manifestSHA, im.InfraRepoURL, im.InfraRepoCommit, im, nil
 }
 
 func replayProfileRequiresInfraBinding(profile *replay.Profile) bool {
@@ -788,7 +791,7 @@ const matrixArchitectureARM64 = "arm64"
 
 func usageLines() []string {
 	return []string{
-		"usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|sync-toolchain|init-infra-lock|server-evidence|write-infra-manifest|inspect-matrix> [flags]",
+		"usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|sync-toolchain|init-infra-lock|refresh-aws-ami-lock|server-evidence|write-infra-manifest|inspect-matrix> [flags]",
 		"  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]",
 		"  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--infra-manifest <path>] [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]",
 		"  preflight --matrix <path> [--strict] [--no-strict]",
@@ -799,7 +802,8 @@ func usageLines() []string {
 		"  report --evidence <path>",
 		"  sync-toolchain --lock <path> --output-dir <path> [--env-file <path>] [--host-arch <amd64|arm64>] [--purposes <csv>]",
 		"  init-infra-lock [--infra-dir <path>]",
-		"  server-evidence --tag <tag> --ssh-key-path <path> --ssh-ingress-cidr <cidr> [--aws-region <region>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>]",
+		"  refresh-aws-ami-lock [--input <path>] [--output <path>] [--aws-region <region>]",
+		"  server-evidence --tag <tag> [--aws-region <region>] [--ami-lock <path>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>]",
 		"  write-infra-manifest --output <path> --toolchain-lock <path> --toolchain-root <path> [--host-arch <amd64|arm64>] --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>",
 		"  inspect-matrix --matrix <path>",
 	}

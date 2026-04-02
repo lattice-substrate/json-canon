@@ -1,61 +1,52 @@
 locals {
-  aws_release_hosts_raw = jsondecode(file("${path.module}/aws_release_hosts.json"))
+  aws_release_hosts_lock_raw = jsondecode(file(var.aws_release_host_lock_path))
   aws_release_hosts = {
-    for host in local.aws_release_hosts_raw.hosts : host.host_id => host
+    for host in local.aws_release_hosts_lock_raw.hosts : host.host_id => host
   }
-  aws_release_hosts_by_name = {
-    for host_id, host in local.aws_release_hosts : host_id => host
-    if try(host.ami_source, "name") == "name"
+  replay_subnet_ids = [for key in sort(keys(aws_subnet.replay)) : aws_subnet.replay[key].id]
+  aws_release_host_ids = sort(keys(local.aws_release_hosts))
+  aws_release_host_subnet_index = {
+    for index, host_id in local.aws_release_host_ids : host_id => index % length(local.replay_subnet_ids)
   }
-  aws_release_hosts_by_ssm = {
-    for host_id, host in local.aws_release_hosts : host_id => host
-    if try(host.ami_source, "name") == "ssm"
-  }
-}
-
-data "aws_ami" "release_host" {
-  for_each    = local.aws_release_hosts_by_name
-  most_recent = true
-  owners      = [each.value.ami_owner]
-
-  filter {
-    name   = "name"
-    values = [each.value.ami_name]
-  }
-
-  filter {
-    name   = "architecture"
-    values = [each.value.architecture]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-data "aws_ssm_parameter" "release_host" {
-  for_each = local.aws_release_hosts_by_ssm
-  name     = each.value.ami_ssm_parameter
 }
 
 resource "aws_instance" "release_host" {
   for_each = local.aws_release_hosts
 
-  ami = (
-    try(each.value.ami_source, "name") == "ssm"
-    ? data.aws_ssm_parameter.release_host[each.key].value
-    : data.aws_ami.release_host[each.key].id
-  )
+  ami                         = each.value.ami_id
   instance_type               = each.value.instance_type
-  associate_public_ip_address = true
-  key_name                    = aws_key_pair.replay.key_name
-  vpc_security_group_ids      = [aws_security_group.replay.id]
+  subnet_id                   = local.replay_subnet_ids[local.aws_release_host_subnet_index[each.key]]
+  associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.replay_instance.name
+  vpc_security_group_ids      = [aws_security_group.replay_instance.id]
 
   root_block_device {
     volume_size = 10
     volume_type = "gp3"
   }
+
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  user_data = <<-EOT
+    #!/bin/sh
+    set -eu
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl enable amazon-ssm-agent >/dev/null 2>&1 || true
+      systemctl restart amazon-ssm-agent >/dev/null 2>&1 || true
+    else
+      service amazon-ssm-agent start >/dev/null 2>&1 || true
+    fi
+  EOT
+
+  depends_on = [
+    aws_vpc_endpoint.s3,
+    aws_vpc_endpoint.ssm,
+    aws_vpc_endpoint.ssmmessages,
+    aws_vpc_endpoint.ec2messages,
+    aws_iam_role_policy_attachment.replay_instance_ssm,
+  ]
 
   tags = {
     Name         = each.key
@@ -64,5 +55,7 @@ resource "aws_instance" "release_host" {
     NodeID       = each.value.node_id
     Distro       = each.value.distro
     KernelFamily = each.value.kernel_family
+    Transport    = "ssm"
+    Subnet       = "private"
   }
 }

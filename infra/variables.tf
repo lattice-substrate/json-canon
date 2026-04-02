@@ -3,8 +3,8 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "ssh_public_key" {
-  description = "PEM public key content for the EC2 key pair (contents of ~/.ssh/id_rsa.pub)."
+variable "aws_release_host_lock_path" {
+  description = "Absolute or module-relative path to the checked-in AWS AMI lock document."
   type        = string
 }
 
@@ -26,9 +26,4 @@ variable "provider_lock_sha256" {
 variable "tofu_version" {
   description = "OpenTofu CLI version used to apply this configuration."
   default     = "1.8.0"
-}
-
-variable "ssh_ingress_cidr" {
-  description = "CIDR block allowed to SSH to the replay instances."
-  type        = string
 }

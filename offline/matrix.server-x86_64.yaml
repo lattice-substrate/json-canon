@@ -9,12 +9,9 @@
       "kernel_family": "cloud-amd",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN13_AMD_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -25,12 +22,9 @@
       "kernel_family": "cloud-intel",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN13_INTEL_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -41,12 +35,9 @@
       "kernel_family": "oldstable",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN12_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -57,12 +48,9 @@
       "kernel_family": "previous-oldstable",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN11_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -73,12 +61,9 @@
       "kernel_family": "server",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2004_SERVER_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -89,12 +74,9 @@
       "kernel_family": "minimal",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2004_MINIMAL_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -105,12 +87,9 @@
       "kernel_family": "server",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2204_SERVER_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -121,12 +100,9 @@
       "kernel_family": "minimal",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2204_MINIMAL_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -137,12 +113,9 @@
       "kernel_family": "server",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_SERVER_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -153,12 +126,9 @@
       "kernel_family": "minimal",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_MINIMAL_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -169,12 +139,9 @@
       "kernel_family": "amzn2",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_AMZN2_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     },
@@ -185,12 +152,9 @@
       "kernel_family": "al2023",
       "replays": 5,
       "runner": {
-        "kind": "vm_ssh",
-        "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_AL2023_X86_64"
-        },
+        "kind": "vm_ssm",
         "replay": [
-          "./offline/scripts/replay-ssh.sh"
+          "./offline/scripts/replay-aws-ssm.sh"
         ]
       }
     }

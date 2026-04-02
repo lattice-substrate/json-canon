@@ -74,10 +74,43 @@ func validInfraManifestFixture() *replay.InfraManifest {
 	}
 }
 
+func validInfraManifestV2Fixture() *replay.InfraManifest {
+	im := validInfraManifestFixture()
+	im.SchemaVersion = replay.InfraManifestSchemaVersionV2
+	im.Hosts[0].AvailabilityZone = "us-east-1a"
+	im.Hosts[0].InstanceID = "i-0123456789abcdef0"
+	im.Hosts[0].OSID = "debian"
+	im.Hosts[0].OSVersionID = "13"
+	im.Hosts[0].CPU = "Intel(R) Xeon(R)"
+	im.Hosts[0].Kernel = "6.1.0-28-cloud-amd64"
+	im.Hosts[0].IIDDocumentSHA256 = strings.Repeat("1", 64)
+	im.Hosts[0].IIDSignatureSHA256 = strings.Repeat("2", 64)
+	im.Hosts[0].Transport = "ssh"
+	im.Hosts[0].SubnetVisibility = "public"
+	im.Hosts[1].AvailabilityZone = "us-east-1b"
+	im.Hosts[1].InstanceID = "i-abcdef01234567890"
+	im.Hosts[1].OSID = "debian"
+	im.Hosts[1].OSVersionID = "13"
+	im.Hosts[1].CPU = "Neoverse"
+	im.Hosts[1].Kernel = "6.1.0-28-cloud-arm64"
+	im.Hosts[1].IIDDocumentSHA256 = strings.Repeat("3", 64)
+	im.Hosts[1].IIDSignatureSHA256 = strings.Repeat("4", 64)
+	im.Hosts[1].Transport = "ssh"
+	im.Hosts[1].SubnetVisibility = "public"
+	return im
+}
+
 func TestValidateInfraManifest(t *testing.T) {
 	im := validInfraManifestFixture()
 	if err := replay.ValidateInfraManifest(im); err != nil {
 		t.Fatalf("valid manifest failed: %v", err)
+	}
+}
+
+func TestValidateInfraManifestV2(t *testing.T) {
+	im := validInfraManifestV2Fixture()
+	if err := replay.ValidateInfraManifest(im); err != nil {
+		t.Fatalf("valid v2 manifest failed: %v", err)
 	}
 }
 
@@ -106,7 +139,7 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 		{
 			name: "wrong schema version",
 			mutate: func(im *replay.InfraManifest) {
-				im.SchemaVersion = "infra-manifest.v2"
+				im.SchemaVersion = "infra-manifest.v99"
 			},
 			want: "unsupported infra manifest schema_version",
 		},
@@ -123,6 +156,13 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 				im.InfraRepoURL = ""
 			},
 			want: "infra_repo_url is required",
+		},
+		{
+			name: "non-https infra_repo_url",
+			mutate: func(im *replay.InfraManifest) {
+				im.InfraRepoURL = "http://example.com/repo"
+			},
+			want: "infra_repo_url must use https",
 		},
 		{
 			name: "bad infra_repo_commit",
@@ -246,6 +286,18 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 				t.Fatalf("expected error containing %q, got %v", tc.want, err)
 			}
 		})
+	}
+}
+
+func TestValidateInfraManifestV2RejectsMissingAttestationFields(t *testing.T) {
+	im := validInfraManifestV2Fixture()
+	im.Hosts[0].IIDDocumentSHA256 = ""
+	err := replay.ValidateInfraManifest(im)
+	if err == nil {
+		t.Fatal("expected v2 attestation validation error")
+	}
+	if !strings.Contains(err.Error(), "iid_document_sha256") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -190,3 +190,23 @@ func assertExecutableMode(t *testing.T, path string) {
 		t.Fatalf("expected owner-executable mode for %s, got %o", path, info.Mode().Perm())
 	}
 }
+
+func TestExtractTarEntryRejectsSymlink(t *testing.T) {
+	err := extractTarEntry(t.TempDir(), &tar.Header{
+		Name:     "link",
+		Typeflag: tar.TypeSymlink,
+	}, bytes.NewReader(nil))
+	if err == nil || !strings.Contains(err.Error(), "unsupported tar link entry") {
+		t.Fatalf("expected tar symlink rejection, got %v", err)
+	}
+}
+
+func TestExtractZIPEntryRejectsSymlink(t *testing.T) {
+	header := &zip.FileHeader{Name: "link"}
+	header.SetMode(os.ModeSymlink | 0o777)
+	file := &zip.File{FileHeader: *header}
+	err := extractZIPEntry(t.TempDir(), file)
+	if err == nil || !strings.Contains(err.Error(), "unsupported zip symlink entry") {
+		t.Fatalf("expected zip symlink rejection, got %v", err)
+	}
+}

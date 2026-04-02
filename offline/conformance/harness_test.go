@@ -107,6 +107,9 @@ func assertMatrixReplayBreadth(matrixPath string, nodes []replay.NodeSpec, wantV
 		if wantVMOnly && node.Mode != replay.NodeModeVM {
 			return fmt.Errorf("official aws matrix %s must be vm-only, found %s for node %s", matrixPath, node.Mode, node.ID)
 		}
+		if wantVMOnly && node.Runner.Kind != "vm_ssm" {
+			return fmt.Errorf("official aws matrix %s must use runner.kind=vm_ssm, found %s for node %s", matrixPath, node.Runner.Kind, node.ID)
+		}
 	}
 	if totalRuns != 60 {
 		return fmt.Errorf("expected 60 total replays for %s, got %d", matrixPath, totalRuns)
@@ -154,21 +157,48 @@ func TestOfflineEvidenceV2SchemaPresent(t *testing.T) {
 	}
 }
 
+func TestOfflineEvidenceV3SchemaPresent(t *testing.T) {
+	root := repoRoot(t)
+	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v3.json")
+	data, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("read evidence.v3 schema: %v", err)
+	}
+	for _, needle := range []string{
+		"evidence.v3",
+		"measured_architecture",
+		"measured_os_id",
+		"measured_os_version_id",
+		"measured_kernel",
+		"measured_cpu",
+		"aws_instance_id",
+		"aws_image_id",
+	} {
+		if !strings.Contains(string(data), needle) {
+			t.Fatalf("evidence.v3 schema missing %q", needle)
+		}
+	}
+}
+
 func TestOfflineInfraManifestSchemaPresent(t *testing.T) {
 	root := repoRoot(t)
-	schemaPath := filepath.Join(root, "offline", "schema", "infra-manifest.v1.json")
+	schemaPath := filepath.Join(root, "offline", "schema", "infra-manifest.v2.json")
 	// #nosec G304 -- conformance test intentionally reads repository schema path.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatalf("read infra-manifest.v1 schema: %v", err)
+		t.Fatalf("read infra-manifest.v2 schema: %v", err)
 	}
 	for _, needle := range []string{
-		"infra-manifest.v1",
+		"infra-manifest.v2",
 		"infra_repo_url",
 		"infra_repo_commit",
 		"provider_engine",
 		"provider_lock_sha256",
 		"hosts",
+		"instance_id",
+		"availability_zone",
+		"iid_document_sha256",
+		"iid_signature_sha256",
 		"instance_type",
 		"image_id",
 	} {
@@ -260,6 +290,12 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if strings.Contains(releaseWorkflow, "evidence.v1)") {
 		t.Fatal("release workflow must not accept evidence.v1 for official aws release gating")
 	}
+	if !strings.Contains(releaseWorkflow, "evidence.v3") {
+		t.Fatal("release workflow must require evidence.v3 for official aws release gating")
+	}
+	if !strings.Contains(releaseWorkflow, "infra-manifest.v2.json") {
+		t.Fatal("release workflow must bind official aws gates to infra-manifest.v2.json")
+	}
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")
 	}
@@ -316,7 +352,7 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		t.Fatalf("load evidence: %v", err)
 	}
 	infraManifestPath := lookupEnvTrimmed("JCS_OFFLINE_INFRA_MANIFEST")
-	expectedInfraManifestSHA256 := validateInfraManifestForGate(t, infraManifestPath, evidence, profile)
+	expectedInfraManifestSHA256, expectedInfraManifest := validateInfraManifestForGate(t, infraManifestPath, evidence, profile)
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        mustFileSHA256(t, bundlePath),
 		ExpectedControlBinarySHA256: mustFileSHA256(t, controlBinaryPath),
@@ -326,6 +362,7 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		ExpectedSourceGitCommit:     lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
 		ExpectedSourceGitTag:        lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),
 		ExpectedInfraManifestSHA256: expectedInfraManifestSHA256,
+		ExpectedInfraManifest:       expectedInfraManifest,
 	}); err != nil {
 		t.Fatalf("offline evidence gate failed: %v", err)
 	}
@@ -369,20 +406,20 @@ func mustFileSHA256(t *testing.T, path string) string {
 // When infraManifestPath is non-empty it loads, validates, and cross-checks the manifest against
 // the evidence bundle. When the profile requires infra-substrate-binding the path must be set.
 // Returns the expected SHA-256 to pass to EvidenceValidationOptions.
-func validateInfraManifestForGate(t *testing.T, infraManifestPath string, evidence *replay.EvidenceBundle, profile *replay.Profile) string {
+func validateInfraManifestForGate(t *testing.T, infraManifestPath string, evidence *replay.EvidenceBundle, profile *replay.Profile) (string, *replay.InfraManifest) {
 	t.Helper()
 	requiresInfra := profileRequiresInfraBinding(profile)
 	if infraManifestPath == "" {
 		if requiresInfra {
 			t.Fatal("profile requires infra-substrate-binding but JCS_OFFLINE_INFRA_MANIFEST is not set")
 		}
-		return ""
+		return "", nil
 	}
 	im, err := replay.LoadInfraManifest(infraManifestPath)
 	if err != nil {
 		t.Fatalf("load infra manifest: %v", err)
 	}
-	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 {
+	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 || evidence.SchemaVersion == replay.EvidenceSchemaVersionV3 {
 		if evidence.InfraRepoURL != im.InfraRepoURL {
 			t.Fatalf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
 		}
@@ -390,7 +427,7 @@ func validateInfraManifestForGate(t *testing.T, infraManifestPath string, eviden
 			t.Fatalf("evidence infra_repo_commit %q does not match manifest infra_repo_commit %q", evidence.InfraRepoCommit, im.InfraRepoCommit)
 		}
 	}
-	return mustFileSHA256(t, infraManifestPath)
+	return mustFileSHA256(t, infraManifestPath), im
 }
 
 func profileRequiresInfraBinding(profile *replay.Profile) bool {

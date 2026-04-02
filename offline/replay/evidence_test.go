@@ -234,6 +234,91 @@ func validEvidenceV2Fixture() (*replay.Matrix, *replay.Profile, *replay.Evidence
 	return m, p, e, opts
 }
 
+func validEvidenceV3Fixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
+	m, p, e, opts := validEvidenceFixture()
+	m.Nodes = []replay.NodeSpec{
+		{ID: "v1", Mode: replay.NodeModeVM, Distro: "ubuntu", KernelFamily: "ga", Replays: 2, Runner: replay.RunnerConfig{Kind: "libvirt_command", Replay: []string{"true"}}},
+	}
+	infraDigest := strings.Repeat("c", 64)
+	infraCommit := strings.Repeat("d", 40)
+	manifest := validInfraManifestV2Fixture()
+	manifest.InfraRepoCommit = infraCommit
+	manifest.Hosts = []replay.InfraManifestHost{
+		manifest.Hosts[0],
+	}
+	manifest.Hosts[0].NodeIDs = []string{"v1"}
+	manifest.Hosts[0].Architecture = "x86_64"
+	manifest.Hosts[0].ImageID = "ami-0abc1234"
+	manifest.Hosts[0].InstanceID = "i-0123456789abcdef0"
+	manifest.Hosts[0].OSID = "ubuntu"
+	manifest.Hosts[0].OSVersionID = "22.04"
+	manifest.Hosts[0].CPU = "Neoverse"
+	manifest.Hosts[0].Kernel = testKernel610
+
+	e.SchemaVersion = replay.EvidenceSchemaVersionV3
+	e.InfraManifestSHA256 = infraDigest
+	e.InfraRepoURL = manifest.InfraRepoURL
+	e.InfraRepoCommit = infraCommit
+	e.NodeReplays = []replay.NodeRunEvidence{
+		{
+			NodeID:               "v1",
+			Mode:                 "vm",
+			Distro:               "ubuntu",
+			KernelFamily:         "ga",
+			ReplayIndex:          1,
+			SessionID:            "sess-v3-1",
+			StartedAtUTC:         "2026-01-01T00:00:00Z",
+			CompletedAtUTC:       "2026-01-01T00:00:01Z",
+			CaseCount:            10,
+			Passed:               true,
+			CanonicalSHA256:      strings.Repeat("a", 64),
+			VerifySHA256:         strings.Repeat("a", 64),
+			FailureClassSHA256:   strings.Repeat("a", 64),
+			ExitCodeSHA256:       strings.Repeat("a", 64),
+			MeasuredArchitecture: "x86_64",
+			MeasuredOSID:         "ubuntu",
+			MeasuredOSVersionID:  "22.04",
+			MeasuredKernel:       testKernel610,
+			MeasuredCPU:          "Neoverse",
+			AWSInstanceID:        "i-0123456789abcdef0",
+			AWSImageID:           "ami-0abc1234",
+		},
+		{
+			NodeID:               "v1",
+			Mode:                 "vm",
+			Distro:               "ubuntu",
+			KernelFamily:         "ga",
+			ReplayIndex:          2,
+			SessionID:            "sess-v3-2",
+			StartedAtUTC:         "2026-01-01T00:00:02Z",
+			CompletedAtUTC:       "2026-01-01T00:00:03Z",
+			CaseCount:            10,
+			Passed:               true,
+			CanonicalSHA256:      strings.Repeat("a", 64),
+			VerifySHA256:         strings.Repeat("a", 64),
+			FailureClassSHA256:   strings.Repeat("a", 64),
+			ExitCodeSHA256:       strings.Repeat("a", 64),
+			MeasuredArchitecture: "x86_64",
+			MeasuredOSID:         "ubuntu",
+			MeasuredOSVersionID:  "22.04",
+			MeasuredKernel:       testKernel610,
+			MeasuredCPU:          "Neoverse",
+			AWSInstanceID:        "i-0123456789abcdef0",
+			AWSImageID:           "ami-0abc1234",
+		},
+	}
+	e.AggregateCanonical = strings.Repeat("a", 64)
+	e.AggregateVerify = strings.Repeat("a", 64)
+	e.AggregateClass = strings.Repeat("a", 64)
+	e.AggregateExitCode = strings.Repeat("a", 64)
+
+	opts.ExpectedInfraManifestSHA256 = infraDigest
+	opts.ExpectedInfraRepoURL = manifest.InfraRepoURL
+	opts.ExpectedInfraRepoCommit = infraCommit
+	opts.ExpectedInfraManifest = manifest
+	return m, p, e, opts
+}
+
 func TestValidateEvidenceBundleV1StillValid(t *testing.T) {
 	m, p, e, opts := validEvidenceFixture()
 	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
@@ -245,6 +330,13 @@ func TestValidateEvidenceBundleV2Parity(t *testing.T) {
 	m, p, e, opts := validEvidenceV2Fixture()
 	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
 		t.Fatalf("validate v2 evidence: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleV3Parity(t *testing.T) {
+	m, p, e, opts := validEvidenceV3Fixture()
+	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
+		t.Fatalf("validate v3 evidence: %v", err)
 	}
 }
 
@@ -312,7 +404,7 @@ func TestValidateEvidenceBundleDowngradePrevented(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error: v1 schema must not carry v2 infra fields")
 	}
-	if !strings.Contains(err.Error(), "v2 infra fields") {
+	if !strings.Contains(err.Error(), "v2/v3 infra fields") {
 		t.Fatalf("unexpected error message: %v", err)
 	}
 }
@@ -324,7 +416,7 @@ func TestValidateEvidenceBundleRejectsNodeLevelV2FieldsInV1(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for v1 node-level v2 fields")
 	}
-	if !strings.Contains(err.Error(), "v2-only node fields") {
+	if !strings.Contains(err.Error(), "v2/v3-only node fields") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -393,6 +485,18 @@ func TestValidateEvidenceBundleV2InfraRepoBindingMismatch(t *testing.T) {
 		t.Fatal("expected infra_repo_url mismatch error")
 	}
 	if !strings.Contains(err.Error(), "infra_repo_url mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleV3ManifestMismatch(t *testing.T) {
+	m, p, e, opts := validEvidenceV3Fixture()
+	e.NodeReplays[0].AWSInstanceID = "i-wrong"
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected manifest-bound v3 mismatch")
+	}
+	if !strings.Contains(err.Error(), "aws_instance_id mismatch") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

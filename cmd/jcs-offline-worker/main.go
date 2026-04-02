@@ -13,10 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +28,12 @@ import (
 )
 
 const maxVectorLineBytes = 4 * 1024 * 1024
+
+const (
+	imdsAddress        = "http://169.254.169.254"
+	imdsTokenTTL       = "21600"
+	imdsRequestTimeout = 2 * time.Second
+)
 
 type vectorCase struct {
 	ID                 string   `json:"id"`
@@ -60,6 +68,27 @@ type workerArgs struct {
 	schemaVersion string
 }
 
+type hostInspection struct {
+	Architecture       string `json:"architecture"`
+	OSID               string `json:"os_id"`
+	OSVersionID        string `json:"os_version_id"`
+	Kernel             string `json:"kernel"`
+	CPU                string `json:"cpu"`
+	InstanceID         string `json:"instance_id"`
+	ImageID            string `json:"image_id"`
+	AvailabilityZone   string `json:"availability_zone"`
+	Region             string `json:"region"`
+	IIDDocumentSHA256  string `json:"iid_document_sha256"`
+	IIDSignatureSHA256 string `json:"iid_signature_sha256"`
+}
+
+type instanceIdentityDocument struct {
+	AvailabilityZone string `json:"availabilityZone"`
+	ImageID          string `json:"imageId"`
+	InstanceID       string `json:"instanceId"`
+	Region           string `json:"region"`
+}
+
 func (d *digestAccumulator) Add(parts ...string) {
 	for i, part := range parts {
 		if i > 0 {
@@ -80,6 +109,13 @@ func main() {
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "inspect-host" {
+		if err := runInspectHost(stdout); err != nil {
+			writeErrorLine(stderr, err)
+			return 2
+		}
+		return 0
+	}
 	cfg, err := parseWorkerArgs(args)
 	if err != nil {
 		writeErrorLine(stderr, err)
@@ -150,6 +186,20 @@ func runWorker(cfg workerArgs, stdout io.Writer) error {
 		evidence.DiscoveredKernel = discoverKernel()
 		evidence.ImageDigest = cfg.imageDigest
 	}
+	if cfg.schemaVersion == replay.EvidenceSchemaVersionV3 {
+		inspection, err := inspectHost()
+		if err != nil {
+			return fmt.Errorf("inspect host: %w", err)
+		}
+		evidence.MeasuredArchitecture = inspection.Architecture
+		evidence.MeasuredOSID = inspection.OSID
+		evidence.MeasuredOSVersionID = inspection.OSVersionID
+		evidence.MeasuredKernel = inspection.Kernel
+		evidence.MeasuredCPU = inspection.CPU
+		evidence.AWSInstanceID = inspection.InstanceID
+		evidence.AWSImageID = inspection.ImageID
+		evidence.ImageDigest = cfg.imageDigest
+	}
 
 	if err := writeEvidence(cfg.evidencePath, evidence); err != nil {
 		return err
@@ -186,7 +236,7 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 		return workerArgs{}, fmt.Errorf("invalid --replay-index %q", replayIndexRaw)
 	}
 	switch cfg.schemaVersion {
-	case replay.EvidenceSchemaVersion, replay.EvidenceSchemaVersionV2:
+	case replay.EvidenceSchemaVersion, replay.EvidenceSchemaVersionV2, replay.EvidenceSchemaVersionV3:
 	default:
 		return workerArgs{}, fmt.Errorf("invalid --schema-version %q", cfg.schemaVersion)
 	}
@@ -232,10 +282,22 @@ func writeEvidence(path string, evidence replay.NodeRunEvidence) error {
 		return fmt.Errorf("encode evidence: %w", err)
 	}
 	encoded = append(encoded, '\n')
-	if err := os.WriteFile(path, encoded, 0o600); err != nil {
+	if err := atomicWriteFile(path, encoded, 0o600); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
 	return nil
+}
+
+func runInspectHost(stdout io.Writer) error {
+	inspection, err := inspectHost()
+	if err != nil {
+		return err
+	}
+	encoded, err := json.MarshalIndent(inspection, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode host inspection: %w", err)
+	}
+	return writef(stdout, "%s\n", encoded)
 }
 
 func runVectors(binaryPath, root string, manifest *replay.BundleManifest, canonicalAcc, verifyAcc, classAcc, exitAcc *digestAccumulator) (int, error) {
@@ -469,7 +531,13 @@ func extractBundle(bundlePath, outDir string) (*replay.BundleManifest, error) {
 		if nextErr != nil {
 			return nil, fmt.Errorf("read tar entry: %w", nextErr)
 		}
-		if hdr.Typeflag != tar.TypeReg {
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			continue
+		case tar.TypeReg:
+		case tar.TypeSymlink, tar.TypeLink:
+			return nil, fmt.Errorf("unsupported tar entry type %q for %s", hdr.Typeflag, hdr.Name)
+		default:
 			continue
 		}
 		extractErr := extractTarFile(tr, outDir, hdr)
@@ -662,6 +730,169 @@ func discoverKernel() string {
 		return fields[2]
 	}
 	return ""
+}
+
+func inspectHost() (hostInspection, error) {
+	doc, sig, err := fetchInstanceIdentity()
+	if err != nil {
+		return hostInspection{}, err
+	}
+	osRelease := readOSRelease()
+	return hostInspection{
+		Architecture:       discoverArchitecture(),
+		OSID:               osRelease["ID"],
+		OSVersionID:        osRelease["VERSION_ID"],
+		Kernel:             discoverKernel(),
+		CPU:                discoverCPU(),
+		InstanceID:         doc.InstanceID,
+		ImageID:            doc.ImageID,
+		AvailabilityZone:   doc.AvailabilityZone,
+		Region:             doc.Region,
+		IIDDocumentSHA256:  sha256Hex([]byte(doc.raw)),
+		IIDSignatureSHA256: sha256Hex([]byte(sig)),
+	}, nil
+}
+
+type rawInstanceIdentityDocument struct {
+	instanceIdentityDocument
+	raw string
+}
+
+func fetchInstanceIdentity() (rawInstanceIdentityDocument, string, error) {
+	token, err := fetchIMDSToken()
+	if err != nil {
+		return rawInstanceIdentityDocument{}, "", err
+	}
+	documentRaw, err := fetchIMDSPath(token, "/latest/dynamic/instance-identity/document")
+	if err != nil {
+		return rawInstanceIdentityDocument{}, "", err
+	}
+	signatureRaw, err := fetchIMDSPath(token, "/latest/dynamic/instance-identity/signature")
+	if err != nil {
+		return rawInstanceIdentityDocument{}, "", err
+	}
+	var doc instanceIdentityDocument
+	if err := json.Unmarshal([]byte(documentRaw), &doc); err != nil {
+		return rawInstanceIdentityDocument{}, "", fmt.Errorf("decode instance identity document: %w", err)
+	}
+	return rawInstanceIdentityDocument{
+		instanceIdentityDocument: doc,
+		raw:                      documentRaw,
+	}, strings.TrimSpace(signatureRaw), nil
+}
+
+func fetchIMDSToken() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), imdsRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, imdsAddress+"/latest/api/token", nil)
+	if err != nil {
+		return "", fmt.Errorf("build imds token request: %w", err)
+	}
+	req.Header.Set("X-aws-ec2-metadata-token-ttl-seconds", imdsTokenTTL)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request imds token: %w", err)
+	}
+	defer closeBestEffort(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("request imds token: unexpected status %s", resp.Status)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read imds token: %w", err)
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return "", fmt.Errorf("empty imds token")
+	}
+	return token, nil
+}
+
+func fetchIMDSPath(token, rel string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), imdsRequestTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imdsAddress+rel, nil)
+	if err != nil {
+		return "", fmt.Errorf("build imds request %s: %w", rel, err)
+	}
+	req.Header.Set("X-aws-ec2-metadata-token", token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request imds path %s: %w", rel, err)
+	}
+	defer closeBestEffort(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("request imds path %s: unexpected status %s", rel, resp.Status)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read imds path %s: %w", rel, err)
+	}
+	return string(data), nil
+}
+
+func discoverArchitecture() string {
+	switch runtime.GOARCH {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "arm64"
+	default:
+		return runtime.GOARCH
+	}
+}
+
+func readOSRelease() map[string]string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return map[string]string{}
+	}
+	fields := make(map[string]string)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		fields[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), `"`)
+	}
+	return fields
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return fmt.Errorf("create parent dir: %w", err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		_ = os.Remove(tmpPath)
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		closeBestEffort(tmp)
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return fmt.Errorf("chmod temp file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename temp file: %w", err)
+	}
+	return nil
 }
 
 func parseCPUInfoFields(raw string) map[string]string {

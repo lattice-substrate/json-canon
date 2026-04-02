@@ -22,20 +22,22 @@ type AdapterFactory func(node NodeSpec) (NodeAdapter, error)
 
 // RunOptions configures matrix orchestration.
 type RunOptions struct {
-	BundlePath          string
-	BundleSHA256        string
-	ControlBinarySHA256 string
-	MatrixSHA256        string
-	ProfileSHA256       string
-	SourceGitCommit     string
-	SourceGitTag        string
-	Orchestrator        string
-	GlobalEnv           map[string]string
-	Now                 func() time.Time
+	BundlePath            string
+	BundleSHA256          string
+	ControlBinarySHA256   string
+	MatrixSHA256          string
+	ProfileSHA256         string
+	SourceGitCommit       string
+	SourceGitTag          string
+	Orchestrator          string
+	EvidenceSchemaVersion string
+	GlobalEnv             map[string]string
+	Now                   func() time.Time
 	// v2 fields: when InfraManifestSHA256 is non-empty, evidence.v2 is emitted.
 	InfraManifestSHA256 string
 	InfraRepoURL        string
 	InfraRepoCommit     string
+	InfraManifest       *InfraManifest
 }
 
 // RunMatrix orchestrates replay execution across required nodes and replays.
@@ -81,7 +83,9 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	}
 
 	schemaVersion := EvidenceSchemaVersion
-	if strings.TrimSpace(opts.InfraManifestSHA256) != "" {
+	if requested := strings.TrimSpace(opts.EvidenceSchemaVersion); requested != "" {
+		schemaVersion = requested
+	} else if strings.TrimSpace(opts.InfraManifestSHA256) != "" {
 		schemaVersion = EvidenceSchemaVersionV2
 	}
 	if opts.GlobalEnv == nil {
@@ -183,6 +187,7 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ExpectedInfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
 		ExpectedInfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
 		ExpectedInfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
+		ExpectedInfraManifest:       opts.InfraManifest,
 	}); err != nil {
 		return nil, err
 	}

@@ -17,10 +17,14 @@ const EvidenceSchemaVersion = "evidence.v1"
 // EvidenceSchemaVersionV2 is the schema identifier for evidence bundles with infra-manifest binding.
 const EvidenceSchemaVersionV2 = "evidence.v2"
 
+// EvidenceSchemaVersionV3 is the schema identifier for attested AWS evidence bundles.
+const EvidenceSchemaVersionV3 = "evidence.v3"
+
 // supportedEvidenceSchemaVersions lists all schema versions accepted by ValidateEvidenceBundle.
 var supportedEvidenceSchemaVersions = map[string]bool{
 	EvidenceSchemaVersion:   true,
 	EvidenceSchemaVersionV2: true,
+	EvidenceSchemaVersionV3: true,
 }
 
 // EvidenceBundle is the machine-consumed replay output artifact.
@@ -69,6 +73,14 @@ type NodeRunEvidence struct {
 	DiscoveredCPU    string `json:"discovered_cpu,omitempty"`
 	DiscoveredKernel string `json:"discovered_kernel,omitempty"`
 	ImageDigest      string `json:"image_digest,omitempty"`
+	// v3 fields: measured host identity for attested AWS evidence.
+	MeasuredArchitecture string `json:"measured_architecture,omitempty"`
+	MeasuredOSID         string `json:"measured_os_id,omitempty"`
+	MeasuredOSVersionID  string `json:"measured_os_version_id,omitempty"`
+	MeasuredKernel       string `json:"measured_kernel,omitempty"`
+	MeasuredCPU          string `json:"measured_cpu,omitempty"`
+	AWSInstanceID        string `json:"aws_instance_id,omitempty"`
+	AWSImageID           string `json:"aws_image_id,omitempty"`
 }
 
 // EvidenceValidationOptions binds evidence metadata to expected immutable inputs.
@@ -83,6 +95,7 @@ type EvidenceValidationOptions struct {
 	ExpectedInfraManifestSHA256 string
 	ExpectedInfraRepoURL        string
 	ExpectedInfraRepoCommit     string
+	ExpectedInfraManifest       *InfraManifest
 }
 
 // WriteEvidence writes a canonical JSON evidence bundle to disk.
@@ -125,9 +138,10 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		return fmt.Errorf("unsupported schema_version %q", e.SchemaVersion)
 	}
 	isV2 := e.SchemaVersion == EvidenceSchemaVersionV2
+	isV3 := e.SchemaVersion == EvidenceSchemaVersionV3
 	// Reject mixed state: v2-only fields must not appear in a v1 schema bundle.
-	if !isV2 && (e.InfraManifestSHA256 != "" || e.InfraRepoURL != "" || e.InfraRepoCommit != "") {
-		return fmt.Errorf("evidence schema_version is %q but contains v2 infra fields; use schema_version %q", e.SchemaVersion, EvidenceSchemaVersionV2)
+	if !isV2 && !isV3 && (e.InfraManifestSHA256 != "" || e.InfraRepoURL != "" || e.InfraRepoCommit != "") {
+		return fmt.Errorf("evidence schema_version is %q but contains v2/v3 infra fields; use schema_version %q or %q", e.SchemaVersion, EvidenceSchemaVersionV2, EvidenceSchemaVersionV3)
 	}
 	if e.ProfileName != p.Name {
 		return fmt.Errorf("profile mismatch: evidence=%q profile=%q", e.ProfileName, p.Name)
@@ -182,10 +196,13 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		e.SourceGitTag != expectedTag {
 		return fmt.Errorf("source_git_tag mismatch: evidence=%q expected=%q", e.SourceGitTag, expectedTag)
 	}
-	if isV2 {
+	if isV2 || isV3 {
 		if err := validateEvidenceV2InfraFields(e, opts); err != nil {
 			return err
 		}
+	}
+	if err := validateOfficialAWSAttestationExpectation(e.SchemaVersion, opts.ExpectedInfraManifest); err != nil {
+		return err
 	}
 	if !e.HardReleaseGate {
 		return fmt.Errorf("evidence must record hard_release_gate=true")
@@ -201,6 +218,10 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	matrixByID := make(map[string]NodeSpec, len(m.Nodes))
 	for _, node := range m.Nodes {
 		matrixByID[node.ID] = node
+	}
+	manifestIndex, err := buildInfraManifestNodeIndex(opts.ExpectedInfraManifest, requiredNodes)
+	if err != nil {
+		return err
 	}
 
 	byNode := make(map[string][]NodeRunEvidence)
@@ -255,7 +276,10 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 				return err
 			}
 		}
-		if err := validateNodeRunEvidenceVersionFields(r, node, isV2, requiresInfraBinding); err != nil {
+		if err := validateNodeRunEvidenceVersionFields(r, node, e.SchemaVersion, requiresInfraBinding); err != nil {
+			return err
+		}
+		if err := validateNodeRunEvidenceAgainstManifest(r, manifestIndex); err != nil {
 			return err
 		}
 		byNode[r.NodeID] = append(byNode[r.NodeID], r)
@@ -320,8 +344,8 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		return fmt.Errorf("required_suites mismatch")
 	}
 
-	if requiresInfraBinding && !isV2 {
-		return fmt.Errorf("profile requires infra-substrate-binding but evidence schema is %q, want %q", e.SchemaVersion, EvidenceSchemaVersionV2)
+	if requiresInfraBinding && !isV2 && !isV3 {
+		return fmt.Errorf("profile requires infra-substrate-binding but evidence schema is %q, want %q or %q", e.SchemaVersion, EvidenceSchemaVersionV2, EvidenceSchemaVersionV3)
 	}
 
 	return nil
@@ -354,10 +378,21 @@ func validateEvidenceV2InfraFields(e *EvidenceBundle, opts EvidenceValidationOpt
 	return nil
 }
 
-func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, isV2 bool, requiresInfraBinding bool) error {
+func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, schemaVersion string, requiresInfraBinding bool) error {
 	hasV2Fields := nodeRunEvidenceHasV2Fields(r)
-	if !isV2 && hasV2Fields {
-		return fmt.Errorf("node %s replay %d contains v2-only node fields in schema %q", r.NodeID, r.ReplayIndex, EvidenceSchemaVersion)
+	hasV3Fields := nodeRunEvidenceHasV3Fields(r)
+	switch schemaVersion {
+	case EvidenceSchemaVersion:
+		if hasV2Fields || hasV3Fields {
+			return fmt.Errorf("node %s replay %d contains v2/v3-only node fields in schema %q", r.NodeID, r.ReplayIndex, EvidenceSchemaVersion)
+		}
+	case EvidenceSchemaVersionV2:
+		if hasV3Fields {
+			return fmt.Errorf("node %s replay %d contains v3-only node fields in schema %q", r.NodeID, r.ReplayIndex, EvidenceSchemaVersionV2)
+		}
+	case EvidenceSchemaVersionV3:
+	default:
+		return fmt.Errorf("unsupported schema_version %q", schemaVersion)
 	}
 	if node.Mode != NodeModeContainer && strings.TrimSpace(r.ImageDigest) != "" {
 		return fmt.Errorf("node %s replay %d image_digest is only allowed for container lanes", r.NodeID, r.ReplayIndex)
@@ -365,7 +400,7 @@ func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, isV2
 	if !requiresInfraBinding {
 		return nil
 	}
-	return validateInfraBindingNodeFields(r, node)
+	return validateInfraBindingNodeFields(r, node, schemaVersion)
 }
 
 func nodeRunEvidenceHasV2Fields(r NodeRunEvidence) bool {
@@ -374,15 +409,127 @@ func nodeRunEvidenceHasV2Fields(r NodeRunEvidence) bool {
 		strings.TrimSpace(r.ImageDigest) != ""
 }
 
-func validateInfraBindingNodeFields(r NodeRunEvidence, node NodeSpec) error {
-	if strings.TrimSpace(r.DiscoveredCPU) == "" {
-		return fmt.Errorf("node %s replay %d missing discovered_cpu for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
-	}
-	if strings.TrimSpace(r.DiscoveredKernel) == "" {
-		return fmt.Errorf("node %s replay %d missing discovered_kernel for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+func nodeRunEvidenceHasV3Fields(r NodeRunEvidence) bool {
+	return strings.TrimSpace(r.MeasuredArchitecture) != "" ||
+		strings.TrimSpace(r.MeasuredOSID) != "" ||
+		strings.TrimSpace(r.MeasuredOSVersionID) != "" ||
+		strings.TrimSpace(r.MeasuredKernel) != "" ||
+		strings.TrimSpace(r.MeasuredCPU) != "" ||
+		strings.TrimSpace(r.AWSInstanceID) != "" ||
+		strings.TrimSpace(r.AWSImageID) != ""
+}
+
+func validateInfraBindingNodeFields(r NodeRunEvidence, node NodeSpec, schemaVersion string) error {
+	switch schemaVersion {
+	case EvidenceSchemaVersionV2:
+		if strings.TrimSpace(r.DiscoveredCPU) == "" {
+			return fmt.Errorf("node %s replay %d missing discovered_cpu for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+		}
+		if strings.TrimSpace(r.DiscoveredKernel) == "" {
+			return fmt.Errorf("node %s replay %d missing discovered_kernel for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+		}
+	case EvidenceSchemaVersionV3:
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"measured_architecture", r.MeasuredArchitecture},
+			{"measured_os_id", r.MeasuredOSID},
+			{"measured_os_version_id", r.MeasuredOSVersionID},
+			{"measured_kernel", r.MeasuredKernel},
+			{"measured_cpu", r.MeasuredCPU},
+			{"aws_instance_id", r.AWSInstanceID},
+			{"aws_image_id", r.AWSImageID},
+		} {
+			if strings.TrimSpace(field.value) == "" {
+				return fmt.Errorf("node %s replay %d missing %s for infra-substrate-binding profile", r.NodeID, r.ReplayIndex, field.name)
+			}
+		}
+	default:
+		return fmt.Errorf("unsupported schema_version %q for infra-substrate-binding profile", schemaVersion)
 	}
 	if node.Mode == NodeModeContainer && strings.TrimSpace(r.ImageDigest) == "" {
 		return fmt.Errorf("node %s replay %d missing image_digest for container lane in infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
+	}
+	return nil
+}
+
+func validateOfficialAWSAttestationExpectation(schemaVersion string, manifest *InfraManifest) error {
+	if manifest == nil || manifest.SchemaVersion != InfraManifestSchemaVersionV2 {
+		return nil
+	}
+	if schemaVersion != EvidenceSchemaVersionV3 {
+		return fmt.Errorf(
+			"infra manifest schema %q requires evidence schema %q, got %q",
+			InfraManifestSchemaVersionV2,
+			EvidenceSchemaVersionV3,
+			schemaVersion,
+		)
+	}
+	return nil
+}
+
+func buildInfraManifestNodeIndex(manifest *InfraManifest, requiredNodes []string) (map[string]InfraManifestHost, error) {
+	if manifest == nil {
+		return nil, nil
+	}
+	index := make(map[string]InfraManifestHost, len(manifest.Hosts))
+	for _, host := range manifest.Hosts {
+		for _, nodeID := range host.NodeIDs {
+			if _, ok := index[nodeID]; ok {
+				return nil, fmt.Errorf("infra manifest maps node %s more than once", nodeID)
+			}
+			index[nodeID] = host
+		}
+	}
+	for _, nodeID := range requiredNodes {
+		if _, ok := index[nodeID]; !ok {
+			return nil, fmt.Errorf("infra manifest missing host binding for required node %s", nodeID)
+		}
+	}
+	return index, nil
+}
+
+func validateNodeRunEvidenceAgainstManifest(r NodeRunEvidence, manifestIndex map[string]InfraManifestHost) error {
+	if manifestIndex == nil {
+		return nil
+	}
+	host, ok := manifestIndex[r.NodeID]
+	if !ok {
+		return fmt.Errorf("node %s replay %d missing infra manifest host binding", r.NodeID, r.ReplayIndex)
+	}
+	if strings.TrimSpace(r.MeasuredArchitecture) == "" &&
+		strings.TrimSpace(r.MeasuredOSID) == "" &&
+		strings.TrimSpace(r.MeasuredOSVersionID) == "" &&
+		strings.TrimSpace(r.MeasuredKernel) == "" &&
+		strings.TrimSpace(r.MeasuredCPU) == "" &&
+		strings.TrimSpace(r.AWSInstanceID) == "" &&
+		strings.TrimSpace(r.AWSImageID) == "" {
+		return nil
+	}
+	for _, field := range []struct {
+		name     string
+		evidence string
+		manifest string
+	}{
+		{"measured_architecture", r.MeasuredArchitecture, host.Architecture},
+		{"measured_os_id", r.MeasuredOSID, host.OSID},
+		{"measured_os_version_id", r.MeasuredOSVersionID, host.OSVersionID},
+		{"measured_kernel", r.MeasuredKernel, host.Kernel},
+		{"measured_cpu", r.MeasuredCPU, host.CPU},
+		{"aws_instance_id", r.AWSInstanceID, host.InstanceID},
+		{"aws_image_id", r.AWSImageID, host.ImageID},
+	} {
+		if strings.TrimSpace(field.evidence) != strings.TrimSpace(field.manifest) {
+			return fmt.Errorf(
+				"node %s replay %d %s mismatch: evidence=%q manifest=%q",
+				r.NodeID,
+				r.ReplayIndex,
+				field.name,
+				field.evidence,
+				field.manifest,
+			)
+		}
 	}
 	return nil
 }

@@ -9,8 +9,12 @@ import (
 	"strings"
 )
 
-// InfraManifestSchemaVersion is the stable schema identifier for infrastructure manifests.
-const InfraManifestSchemaVersion = "infra-manifest.v1"
+const (
+	// InfraManifestSchemaVersion is the legacy schema identifier for infrastructure manifests.
+	InfraManifestSchemaVersion = "infra-manifest.v1"
+	// InfraManifestSchemaVersionV2 is the official AWS schema identifier for attested infrastructure manifests.
+	InfraManifestSchemaVersionV2 = "infra-manifest.v2"
+)
 
 // InfraManifest records the IaC-provisioned substrate identity for a conformance run.
 // It captures what was requested (AMI, instance type, IaC commit) and optionally
@@ -29,15 +33,25 @@ type InfraManifest struct {
 
 // InfraManifestHost describes one provisioned cloud host.
 type InfraManifestHost struct {
-	Architecture     string   `json:"architecture"`
-	NodeIDs          []string `json:"node_ids"`
-	Role             string   `json:"role"`
-	CloudProvider    string   `json:"cloud_provider"`
-	Region           string   `json:"region"`
-	InstanceType     string   `json:"instance_type"`
-	ImageID          string   `json:"image_id"`
-	DiscoveredCPU    string   `json:"discovered_cpu,omitempty"`
-	DiscoveredKernel string   `json:"discovered_kernel,omitempty"`
+	Architecture       string   `json:"architecture"`
+	NodeIDs            []string `json:"node_ids"`
+	Role               string   `json:"role"`
+	CloudProvider      string   `json:"cloud_provider"`
+	Region             string   `json:"region"`
+	AvailabilityZone   string   `json:"availability_zone,omitempty"`
+	InstanceType       string   `json:"instance_type"`
+	InstanceID         string   `json:"instance_id,omitempty"`
+	ImageID            string   `json:"image_id"`
+	OSID               string   `json:"os_id,omitempty"`
+	OSVersionID        string   `json:"os_version_id,omitempty"`
+	CPU                string   `json:"cpu,omitempty"`
+	Kernel             string   `json:"kernel,omitempty"`
+	IIDDocumentSHA256  string   `json:"iid_document_sha256,omitempty"`
+	IIDSignatureSHA256 string   `json:"iid_signature_sha256,omitempty"`
+	Transport          string   `json:"transport,omitempty"`
+	SubnetVisibility   string   `json:"subnet_visibility,omitempty"`
+	DiscoveredCPU      string   `json:"discovered_cpu,omitempty"`
+	DiscoveredKernel   string   `json:"discovered_kernel,omitempty"`
 }
 
 // InfraManifestTool records one pinned tool artifact used in the evidenced release flow.
@@ -98,8 +112,9 @@ func ValidateInfraManifest(im *InfraManifest) error {
 		return fmt.Errorf("infra manifest must include at least one pinned tool artifact")
 	}
 	seenRoles := make(map[string]struct{}, len(im.Hosts))
+	seenNodeIDs := make(map[string]string, len(im.Hosts))
 	for i, h := range im.Hosts {
-		if err := validateInfraManifestHost(i, h, seenRoles); err != nil {
+		if err := validateInfraManifestHost(i, h, seenRoles, seenNodeIDs, im.SchemaVersion); err != nil {
 			return err
 		}
 	}
@@ -115,7 +130,9 @@ func ValidateInfraManifest(im *InfraManifest) error {
 // validateInfraManifestScalars checks all required scalar fields in an InfraManifest.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
 func validateInfraManifestScalars(im *InfraManifest) error {
-	if im.SchemaVersion != InfraManifestSchemaVersion {
+	switch im.SchemaVersion {
+	case InfraManifestSchemaVersion, InfraManifestSchemaVersionV2:
+	default:
 		return fmt.Errorf("unsupported infra manifest schema_version %q", im.SchemaVersion)
 	}
 	if strings.TrimSpace(im.GeneratedAtUTC) == "" {
@@ -123,6 +140,9 @@ func validateInfraManifestScalars(im *InfraManifest) error {
 	}
 	if strings.TrimSpace(im.InfraRepoURL) == "" {
 		return fmt.Errorf("infra manifest infra_repo_url is required")
+	}
+	if !strings.HasPrefix(strings.TrimSpace(im.InfraRepoURL), "https://") {
+		return fmt.Errorf("infra manifest infra_repo_url must use https")
 	}
 	if err := validateGitCommitToken("infra_repo_commit", im.InfraRepoCommit); err != nil {
 		return fmt.Errorf("infra manifest %w", err)
@@ -141,11 +161,17 @@ func validateInfraManifestScalars(im *InfraManifest) error {
 
 // validateInfraManifestHost checks one host entry and records its role in seenRoles.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
-func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]struct{}) error {
+func validateInfraManifestHost(
+	i int,
+	h InfraManifestHost,
+	seenRoles map[string]struct{},
+	seenNodeIDs map[string]string,
+	schemaVersion string,
+) error {
 	if err := validateInfraManifestHostIdentity(i, h, seenRoles); err != nil {
 		return err
 	}
-	if err := validateInfraManifestHostNodeIDs(i, h.NodeIDs); err != nil {
+	if err := validateInfraManifestHostNodeIDs(i, h.NodeIDs, seenNodeIDs, h.Role); err != nil {
 		return err
 	}
 	for _, field := range []struct{ name, value string }{
@@ -156,6 +182,40 @@ func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]
 	} {
 		if strings.TrimSpace(field.value) == "" {
 			return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
+		}
+	}
+	if schemaVersion == InfraManifestSchemaVersionV2 {
+		for _, field := range []struct{ name, value string }{
+			{"availability_zone", h.AvailabilityZone},
+			{"instance_id", h.InstanceID},
+			{"os_id", h.OSID},
+			{"os_version_id", h.OSVersionID},
+			{"cpu", h.CPU},
+			{"kernel", h.Kernel},
+			{"transport", h.Transport},
+			{"subnet_visibility", h.SubnetVisibility},
+		} {
+			if strings.TrimSpace(field.value) == "" {
+				return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
+			}
+		}
+		for _, field := range []struct{ name, value string }{
+			{"iid_document_sha256", h.IIDDocumentSHA256},
+			{"iid_signature_sha256", h.IIDSignatureSHA256},
+		} {
+			if err := validateSHA256Token(field.name, field.value); err != nil {
+				return fmt.Errorf("infra manifest host[%d] %w", i, err)
+			}
+		}
+		switch h.Transport {
+		case "ssh", "ssm":
+		default:
+			return fmt.Errorf("infra manifest host[%d] transport must be ssh or ssm, got %q", i, h.Transport)
+		}
+		switch h.SubnetVisibility {
+		case "public", "private":
+		default:
+			return fmt.Errorf("infra manifest host[%d] subnet_visibility must be public or private, got %q", i, h.SubnetVisibility)
 		}
 	}
 	return nil
@@ -177,20 +237,24 @@ func validateInfraManifestHostIdentity(i int, h InfraManifestHost, seenRoles map
 	}
 }
 
-func validateInfraManifestHostNodeIDs(i int, nodeIDs []string) error {
+func validateInfraManifestHostNodeIDs(i int, nodeIDs []string, seenNodeIDs map[string]string, role string) error {
 	if len(nodeIDs) == 0 {
 		return fmt.Errorf("infra manifest host[%d] node_ids is required", i)
 	}
-	seenNodeIDs := make(map[string]struct{}, len(nodeIDs))
+	seenHostNodeIDs := make(map[string]struct{}, len(nodeIDs))
 	for _, nodeID := range nodeIDs {
 		nodeID = strings.TrimSpace(nodeID)
 		if nodeID == "" {
 			return fmt.Errorf("infra manifest host[%d] node_ids must not contain empty values", i)
 		}
-		if _, ok := seenNodeIDs[nodeID]; ok {
+		if _, ok := seenHostNodeIDs[nodeID]; ok {
 			return fmt.Errorf("infra manifest host[%d] duplicate node_id %q", i, nodeID)
 		}
-		seenNodeIDs[nodeID] = struct{}{}
+		if existingRole, ok := seenNodeIDs[nodeID]; ok {
+			return fmt.Errorf("infra manifest node_id %q appears in multiple hosts: %s and %s", nodeID, existingRole, role)
+		}
+		seenHostNodeIDs[nodeID] = struct{}{}
+		seenNodeIDs[nodeID] = role
 	}
 	return nil
 }

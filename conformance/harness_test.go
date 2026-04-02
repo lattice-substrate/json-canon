@@ -2506,7 +2506,7 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT", "release workflow expected git commit env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG", "release workflow expected git tag env")
-	assertContains(t, releaseWorkflow, "release evidence must be evidence.v2", "release workflow v2-only gate")
+	assertContains(t, releaseWorkflow, "release evidence must be evidence.v3", "release workflow v3-only gate")
 }
 
 // TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.
@@ -2663,6 +2663,7 @@ func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
 		HostID          string `json:"host_id"`
 		Architecture    string `json:"architecture"`
 		Distro          string `json:"distro"`
+		AMIID           string `json:"ami_id"`
 		AMIName         string `json:"ami_name"`
 		AMIOwner        string `json:"ami_owner"`
 		AMISource       string `json:"ami_source"`
@@ -2701,16 +2702,42 @@ func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
 		}
 	}
 
+	var lock awsReleaseHostCatalog
+	lockRaw := mustReadText(t, filepath.Join(h.root, "infra", "aws_release_hosts.lock.json"))
+	if err := json.Unmarshal([]byte(lockRaw), &lock); err != nil {
+		t.Fatalf("decode aws release host lock: %v", err)
+	}
+	if lock.SchemaVersion != "aws-release-host-lock.v1" {
+		t.Fatalf("aws release host lock schema mismatch: got %q", lock.SchemaVersion)
+	}
+	if len(lock.Hosts) != len(catalog.Hosts) {
+		t.Fatalf("aws release host lock must include %d hosts, got %d", len(catalog.Hosts), len(lock.Hosts))
+	}
+	for _, host := range lock.Hosts {
+		if strings.TrimSpace(host.AMIID) == "" {
+			t.Fatalf("aws release host lock must pin ami_id for %s", host.HostID)
+		}
+	}
+
 	instancesTF := mustReadText(t, filepath.Join(h.root, "infra", "instances.tf"))
-	assertContains(t, instancesTF, `data "aws_ssm_parameter" "release_host"`, "official aws host catalog ssm resolver")
-	assertContains(t, instancesTF, `try(host.ami_source, "name") == "ssm"`, "official aws host catalog mixed selector dispatch")
+	assertContains(t, instancesTF, `aws_release_hosts_lock_raw`, "official aws host lock loader")
+	assertContains(t, instancesTF, `ami                         = each.value.ami_id`, "official aws host lock ami pinning")
+	assertContains(t, instancesTF, `associate_public_ip_address = false`, "official aws private instance launch")
+	if strings.Contains(instancesTF, `data "aws_ssm_parameter" "release_host"`) || strings.Contains(instancesTF, `data "aws_ami" "release_host"`) {
+		t.Fatal("official aws instances.tf must not resolve mutable ami selectors at apply time")
+	}
 }
 
 func checkOfficialAWSInfraOutputContract(t *testing.T, h *harness) {
 	t.Helper()
+	mainTF := mustReadText(t, filepath.Join(h.root, "infra", "main.tf"))
+	assertContains(t, mainTF, `resource "aws_vpc_endpoint" "ssm"`, "official aws ssm interface endpoint")
+	assertContains(t, mainTF, `resource "aws_vpc_endpoint" "s3"`, "official aws s3 gateway endpoint")
+
 	outputsTF := mustReadText(t, filepath.Join(h.root, "infra", "outputs.tf"))
 	assertContains(t, outputsTF, `output "provisioned_hosts" {`, "official aws provisioned host output")
 	assertContains(t, outputsTF, `sensitive   = true`, "official aws provisioned host output sensitivity")
+	assertContains(t, outputsTF, `private_ip`, "official aws provisioned host private ip output")
 
 	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
 	assertContains(t, serverEvidence, `tofuOutputHosts(toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")`, "official aws provisioned host output consumer")
@@ -2778,6 +2805,9 @@ func checkServerProfileMatrixContract(t *testing.T, tc struct {
 		if node.Mode != replay.NodeModeVM {
 			t.Fatalf("official aws matrix %s must be vm-only, found %s for node %s", tc.matrixPath, node.Mode, node.ID)
 		}
+		if node.Runner.Kind != "vm_ssm" {
+			t.Fatalf("official aws matrix %s node %s must use runner.kind=vm_ssm, got %q", tc.matrixPath, node.ID, node.Runner.Kind)
+		}
 	}
 	if totalRuns != 60 {
 		t.Fatalf("official aws matrix %s must schedule 60 total runs, got %d", tc.matrixPath, totalRuns)
@@ -2799,6 +2829,7 @@ func checkOfflineGoNativeServerAutomation(t *testing.T, h *harness) {
 	mainCLI := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
 	assertContains(t, mainCLI, "server-evidence", "offline replay cli server-evidence subcommand")
 	assertContains(t, mainCLI, "init-infra-lock", "offline replay cli init-infra-lock subcommand")
+	assertContains(t, mainCLI, "refresh-aws-ami-lock", "offline replay cli aws ami lock refresh subcommand")
 
 	releaseScript := mustReadText(t, filepath.Join(h.root, "scripts", "release-server.sh"))
 	assertContains(t, releaseScript, "bootstrap-pinned-toolchain.sh", "release wrapper pinned bootstrap")

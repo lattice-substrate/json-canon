@@ -7,6 +7,13 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `evidence.v3` schema (`offline/schema/evidence.v3.json`) for official AWS release
+  evidence. It binds per-replay measured host identity (`measured_architecture`,
+  `measured_os_id`, `measured_os_version_id`, `measured_kernel`, `measured_cpu`,
+  `aws_instance_id`, `aws_image_id`) to the infrastructure manifest.
+- `infra-manifest.v2` schema (`offline/schema/infra-manifest.v2.json`) for attested
+  official AWS host identity, including instance IDs, availability zones, measured
+  OS/CPU/kernel identity, and IMDS instance-identity digests.
 - `evidence.v2` schema (`offline/schema/evidence.v2.json`) extending evidence.v1
   with three required infrastructure binding fields: `infra_manifest_sha256`,
   `infra_repo_url`, `infra_repo_commit`. Node replay items gain three optional
@@ -51,9 +58,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   generator that executes the pinned OpenTofu binary directly.
 - `jcs-offline-replay server-evidence`: Go-native post-bootstrap server evidence
   orchestrator. It provisions the official AWS host fleet via pinned OpenTofu,
-  manages native replay execution over Go SSH transport, writes the infra manifest
+  manages native replay execution over private SSM/S3 transport, writes the infra manifest
   through the Go CLI, validates both release gates with `JCS_OFFLINE_INFRA_MANIFEST`,
   and destroys instances on exit.
+- `infra/aws_release_hosts.lock.json`: committed AMI lock document for official AWS
+  release runs, plus `jcs-offline-replay refresh-aws-ami-lock` to refresh it from the
+  mutable selector catalog under review.
 - `conformance/nolint_inventory.tsv`: checked-in mechanical inventory of every
   `//nolint` directive, including linter names, requirement IDs, rationale text,
   and directive text. Conformance now fails on drift from the live source tree.

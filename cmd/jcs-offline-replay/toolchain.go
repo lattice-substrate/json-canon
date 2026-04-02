@@ -410,11 +410,18 @@ func extractTarEntry(destRoot string, header *tar.Header, reader io.Reader) erro
 		if closeErr != nil {
 			return fmt.Errorf("close tar file: %w", closeErr)
 		}
+	case tar.TypeSymlink, tar.TypeLink:
+		return fmt.Errorf("unsupported tar link entry %q", header.Name)
+	default:
+		return fmt.Errorf("unsupported tar entry type %q for %s", header.Typeflag, header.Name)
 	}
 	return nil
 }
 
 func extractZIPEntry(destRoot string, file *zip.File) error {
+	if file.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("unsupported zip symlink entry %q", file.Name)
+	}
 	targetPath, err := safeArchivePath(destRoot, file.Name)
 	if err != nil {
 		return err

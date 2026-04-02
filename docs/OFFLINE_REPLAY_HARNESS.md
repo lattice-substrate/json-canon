@@ -18,8 +18,8 @@ Core artifacts:
 - Matrix contract: `offline/matrix.yaml` (x86_64), `offline/matrix.arm64.yaml` (arm64)
 - Profile contract: `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`
 - Offline evidence schema: `offline/schema/evidence.v1.json`
-- Official AWS release evidence schema: `offline/schema/evidence.v2.json`
-- Infra manifest schema: `offline/schema/infra-manifest.v1.json`
+- Official AWS release evidence schema: `offline/schema/evidence.v3.json`
+- Infra manifest schema: `offline/schema/infra-manifest.v2.json`
 - Orchestrator CLI: `cmd/jcs-offline-replay`
 - Worker CLI: `cmd/jcs-offline-worker`
 
@@ -161,18 +161,19 @@ command. In summary:
 
 ### Official AWS release evidence
 
-Use `./scripts/release-server.sh` when generating official AWS `evidence.v2`.
-That wrapper requires `SSH_INGRESS_CIDR`, stages the pinned toolchain under
-`offline/runs/releases/<tag>/toolchain/`, then invokes
-`jcs-offline-replay server-evidence`, which writes `infra-manifest.v1.json` and
+Use `./scripts/release-server.sh` when generating official AWS `evidence.v3`.
+That wrapper stages the pinned toolchain under `offline/runs/releases/<tag>/toolchain/`, then invokes
+`jcs-offline-replay server-evidence`, which requires a clean git worktree, builds
+from a detached source worktree at the recorded commit, writes `infra-manifest.v2.json`, and
 executes the release gates with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
 The committed official AWS matrices are vm-only and run natively on EC2 across 12
 lanes / 60 total replays per architecture.
 
 Official AWS release evidence does not use Docker lanes. Each lane is a native EC2 host
-selected from the committed AWS release host catalog and executed directly over Go-managed SSH.
-Ubuntu lanes in that host catalog resolve through Canonical public SSM parameters rather than
-AMI name globs so the release path is resilient to AMI naming drift.
+selected from the committed AWS release host catalog, pinned through
+`infra/aws_release_hosts.lock.json`, and executed directly over private SSM/S3 transport.
+Ubuntu lanes in the selector catalog resolve through Canonical public SSM parameters rather than
+AMI name globs, but official release applies only the locked AMI document.
 The OpenTofu `provisioned_hosts` output is explicitly marked sensitive because those selectors
 can flow through provider-sensitive values; the Go release orchestrator consumes that named
 JSON output directly.
@@ -198,11 +199,14 @@ After bootstrap, the release-critical entrypoints are:
 ```bash
 source ./.tmp/pinned-toolchain/env.sh
 "$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay init-infra-lock
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay refresh-aws-ami-lock \
+  --input ./infra/aws_release_hosts.json \
+  --output ./infra/aws_release_hosts.lock.json \
+  --aws-region us-east-1
 "$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay server-evidence \
   --tag <tag> \
   --aws-region us-east-1 \
-  --ssh-key-path ~/.ssh/id_rsa \
-  --ssh-ingress-cidr 203.0.113.10/32 \
+  --ami-lock ./infra/aws_release_hosts.lock.json \
   --toolchain-lock ./offline/toolchain.lock.tsv \
   --toolchain-root ./offline/runs/releases/<tag>/toolchain
 ```
@@ -253,8 +257,8 @@ JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
-For official AWS `evidence.v2`, use the committed server matrix/profile pair and
-set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json`.
+For official AWS `evidence.v3`, use the committed server matrix/profile pair and
+set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v2.json`.
 
 **Evidence source binding model:** Evidence records `source_git_commit` at
 generation time (commit A). Evidence files are then committed on top (commit B),

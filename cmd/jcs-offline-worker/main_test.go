@@ -71,6 +71,23 @@ func TestParseWorkerArgs(t *testing.T) {
 		t.Fatalf("unexpected explicit schema version: %q", cfg.schemaVersion)
 	}
 
+	cfg, err = parseWorkerArgs([]string{
+		"--bundle", "/tmp/offline-bundle.tgz",
+		"--evidence", "/tmp/offline-evidence.json",
+		"--node-id", "n1",
+		"--mode", "container",
+		"--distro", "debian",
+		"--kernel-family", "host",
+		"--replay-index", "3",
+		"--schema-version", replay.EvidenceSchemaVersionV3,
+	})
+	if err != nil {
+		t.Fatalf("parseWorkerArgs v3: %v", err)
+	}
+	if cfg.schemaVersion != replay.EvidenceSchemaVersionV3 {
+		t.Fatalf("unexpected explicit schema version: %q", cfg.schemaVersion)
+	}
+
 	_, err = parseWorkerArgs([]string{"--bundle", "b.tgz", "--evidence", "e.json"})
 	if err == nil {
 		t.Fatal("expected missing required flags error")
@@ -97,7 +114,7 @@ func TestParseWorkerArgs(t *testing.T) {
 		"--distro", "debian",
 		"--kernel-family", "host",
 		"--replay-index", "1",
-		"--schema-version", "evidence.v3",
+		"--schema-version", "evidence.v99",
 	})
 	if err == nil {
 		t.Fatal("expected schema version validation error")

@@ -50,7 +50,8 @@ jcs-offline-replay cross-arch \
 - arm64 official AWS release profile: `offline/profiles/server-linux-arm64.yaml`
 - evidence schema v1: `offline/schema/evidence.v1.json`
 - evidence schema v2: `offline/schema/evidence.v2.json`
-- infra manifest schema: `offline/schema/infra-manifest.v1.json`
+- evidence schema v3: `offline/schema/evidence.v3.json`
+- infra manifest schema: `offline/schema/infra-manifest.v2.json`
 - pinned toolchain lock: `offline/toolchain.lock.tsv`
 
 ## Evidence Schemas
@@ -63,10 +64,17 @@ the official release evidence format.
 
 ### evidence.v2
 
-Used for the official AWS release run on provisioned cloud hardware. Extends v1 with three
+Legacy infrastructure-bound format. Extends v1 with three
 required infrastructure binding fields: `infra_manifest_sha256`, `infra_repo_url`,
 `infra_repo_commit`. Node replay items may include optional discovered substrate
 fields: `discovered_cpu`, `discovered_kernel`, `image_digest`.
+
+### evidence.v3
+
+Used for the official AWS release run on provisioned cloud hardware. Extends the infra-bound
+model with measured host identity per replay: `measured_architecture`, `measured_os_id`,
+`measured_os_version_id`, `measured_kernel`, `measured_cpu`, `aws_instance_id`,
+and `aws_image_id`.
 
 The official AWS release matrices are vm-only and execute the release binary natively on EC2.
 They do not use Docker containers as release evidence lanes. `image_digest` remains a schema
@@ -80,20 +88,19 @@ Because those selectors transit provider-sensitive values, `infra/outputs.tf` ma
 `provisioned_hosts` output as sensitive and the Go orchestration path reads that named JSON
 output directly.
 
-Evidence v2 is emitted automatically by `jcs-offline-replay` when
-`RunOptions.InfraManifestSHA256` is populated. `evidence.v1` remains the valid
-local/CI format; node-level v2 fields are rejected from v1 evidence, and release
-gating requires v2.
+`evidence.v1` remains the valid local/CI format. Official AWS release gating now requires
+`evidence.v3`; v2 remains accepted only for legacy non-official infra-bound verification paths.
 
-### infra-manifest.v1
+### infra-manifest.v2
 
 Records the IaC-provisioned substrate identity for a conformance run. Fields:
 - `infra_repo_url` + `infra_repo_commit`: the IaC repo at the exact commit used
 - `provider_engine` + `provider_version`: e.g., `"opentofu"`, `"1.8.0"`
 - `provider_lock_sha256`: SHA-256 of `.terraform.lock.hcl`
 - `hosts`: per-host records with `role`, `architecture`, `node_ids`, `cloud_provider`,
-  `region`, `instance_type`, `image_id`; optional `discovered_cpu` and
-  `discovered_kernel`
+  `region`, `availability_zone`, `instance_type`, `instance_id`, `image_id`, `os_id`,
+  `os_version_id`, `cpu`, `kernel`, `iid_document_sha256`, `iid_signature_sha256`,
+  `transport`, `subnet_visibility`; optional `discovered_cpu` and `discovered_kernel`
 - `tools`: the exact pinned tool artifacts used for the evidenced run,
   including source URL, SHA-256, and relative artifact/executable paths
 
@@ -113,7 +120,7 @@ The official AWS release path records only the pinned binaries it actually execu
 - workflow JSON query tool (`jq`)
 
 `jcs-offline-replay sync-toolchain` materializes these artifacts and
-`write-infra-manifest` records the exact verified files in `infra-manifest.v1.json`.
+`write-infra-manifest` records the exact verified files in the infra manifest.
 Ambient `go`, `tofu`, or package-manager-installed substitutes are not conformant for
 the official AWS evidence path.
 
@@ -124,13 +131,15 @@ Use the shell entrypoints below instead of ambient host binaries:
 
 After pinned Go exists, release-critical automation is Go-native:
 - `jcs-offline-replay init-infra-lock`: runs the pinned OpenTofu binary to generate `infra/.terraform.lock.hcl`
-- `jcs-offline-replay server-evidence`: provisions the official AWS host fleet, resolves substrate facts on each native lane, runs both official AWS matrices over Go-managed SSH transport, writes `infra-manifest.v1.json`, and executes both release gates
+- `jcs-offline-replay server-evidence`: requires a clean git worktree, builds from a detached source worktree at the recorded commit, provisions the official AWS host fleet, resolves attested substrate facts on each native lane, runs both official AWS matrices over private SSM/S3 transport, writes `infra-manifest.v2.json`, and executes both release gates
+- `jcs-offline-replay refresh-aws-ami-lock`: resolves the mutable selector catalog in `infra/aws_release_hosts.json` into the committed `infra/aws_release_hosts.lock.json` document used by official release runs
 
 ## Official AWS Release Profiles
 
 Official AWS release profiles (`server-linux-x86_64.yaml`, `server-linux-arm64.yaml`) include
 `infra-substrate-binding` in `required_suites`. When a profile requires this suite,
-`ValidateEvidenceBundle` rejects evidence that is not v2. This enforces that
+`ValidateEvidenceBundle` rejects evidence that is not infra-bound. When the supplied
+infra manifest is `infra-manifest.v2`, the gate requires `evidence.v3`. This enforces that
 official AWS runs always carry infrastructure identity binding.
 
 The official AWS matrices are vm-only, execute natively on EC2, and schedule 12
@@ -138,11 +147,11 @@ native lanes / 60 total replays per architecture.
 
 ## Official AWS Release Gate
 
-For official AWS evidence (v2) with infra manifest binding:
+For official AWS evidence (`evidence.v3`) with infra manifest binding:
 
 ```bash
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
-JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json \
+JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v2.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.server-x86_64.yaml \
 JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/server-linux-x86_64.yaml \
@@ -183,6 +192,16 @@ Before the first AWS-backed run, generate and commit the infrastructure lockfile
 git add infra/.terraform.lock.hcl
 ```
 
+Before updating official AWS image inputs, refresh and commit the AMI lock:
+
+```bash
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay refresh-aws-ami-lock \
+  --input ./infra/aws_release_hosts.json \
+  --output ./infra/aws_release_hosts.lock.json \
+  --aws-region us-east-1
+git add infra/aws_release_hosts.lock.json
+```
+
 ```bash
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
@@ -194,7 +213,7 @@ JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/arm64/offline-evidence.j
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
 JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.server-arm64.yaml \
 JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/server-linux-arm64.yaml \
-JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json \
+JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v2.json \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1

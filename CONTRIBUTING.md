@@ -235,17 +235,17 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
-### Server-Backed Evidence (evidence.v2)
+### Server-Backed Evidence (evidence.v3)
 
 Official AWS release runs use real AWS EC2 instances (x86_64 + arm64) and produce
-`evidence.v2` with an infrastructure manifest binding. The infra manifest records the
-IaC repo commit, provider lock digest, AMI IDs, instance types, discovered CPU/kernel,
-the native lane-to-host binding, and the exact pinned tool artifacts used for the run.
+`evidence.v3` with an infrastructure manifest binding. The infra manifest records the
+IaC repo commit, provider lock digest, AMI IDs, instance IDs, availability zones,
+measured OS/CPU/kernel identity, IMDS-derived instance-identity digests, the native
+lane-to-host binding, and the exact pinned tool artifacts used for the run.
 
 **Requirements:**
 - AWS credentials with EC2 permissions
-- SSH key pair (private + matching `.pub` file)
-- `SSH_INGRESS_CIDR` for SSH access restriction (for example `203.0.113.10/32`)
+- `infra/aws_release_hosts.lock.json` committed under `infra/`
 - `.terraform.lock.hcl` committed under `infra/`
 
 Before the first billed AWS run, generate the Terraform/OpenTofu lockfile with the
@@ -261,14 +261,26 @@ Go artifact from `offline/toolchain.lock.tsv`, then hands off to
 `jcs-offline-replay init-infra-lock`, which executes the pinned OpenTofu binary
 directly.
 
+Refresh the committed AWS AMI lock whenever the official host selectors need to move:
+
+```bash
+AWS_PROFILE=<profile> \
+AWS_REGION=us-east-1 \
+./scripts/bootstrap-pinned-toolchain.sh --output-dir ./.tmp/pinned-toolchain --env-file ./.tmp/pinned-toolchain/env.sh >/dev/null
+source ./.tmp/pinned-toolchain/env.sh
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay refresh-aws-ami-lock \
+  --input ./infra/aws_release_hosts.json \
+  --output ./infra/aws_release_hosts.lock.json \
+  --aws-region us-east-1
+git add infra/aws_release_hosts.lock.json
+```
+
 **Single command:**
 
 ```bash
 AWS_PROFILE=<profile> \
 AWS_REGION=us-east-1 \
 TAG=<release-tag> \
-SSH_KEY_PATH=~/.ssh/id_rsa \
-SSH_INGRESS_CIDR=203.0.113.10/32 \
 ./scripts/release-server.sh
 ```
 
@@ -278,8 +290,9 @@ long-lived access keys into the shell environment.
 
 The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
 then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
-provisions the committed official AWS host fleet, runs the native vm-only release
-matrices over Go-managed SSH, emits `evidence.v2`, runs
+requires a clean git worktree, creates a detached worktree at the recorded source
+commit, provisions the committed official AWS host fleet, runs the native vm-only
+release matrices over private SSM/S3 transport, emits `evidence.v3`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
 then destroys the instances. The official AWS matrices are vm-only and schedule
 12 native lanes / 60 total replays per architecture.
@@ -287,16 +300,16 @@ then destroys the instances. The official AWS matrices are vm-only and schedule
 **Output:** `offline/runs/releases/<tag>/`
 
 ```
-x86_64/offline-evidence.json   (evidence.v2, schema_version: evidence.v2)
+ x86_64/offline-evidence.json   (evidence.v3, schema_version: evidence.v3)
 x86_64/offline-bundle.tgz
-arm64/offline-evidence.json    (evidence.v2, schema_version: evidence.v2)
+arm64/offline-evidence.json    (evidence.v3, schema_version: evidence.v3)
 arm64/offline-bundle.tgz
-infra-manifest.v1.json         (shared across both arches)
+infra-manifest.v2.json         (shared across both arches)
 toolchain/                     (verified pinned tool artifacts used for the run)
 ```
 
 The `infra_manifest_sha256` in each evidence file must match the SHA-256 of
-`infra-manifest.v1.json`.
+`infra-manifest.v2.json`.
 
 **Release gate with server profiles:**
 
@@ -308,7 +321,7 @@ JCS_OFFLINE_MATRIX=/path/to/matrix.server-x86_64.yaml \
 JCS_OFFLINE_PROFILE=offline/profiles/server-linux-x86_64.yaml \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
-JCS_OFFLINE_INFRA_MANIFEST=offline/runs/releases/<tag>/infra-manifest.v1.json \
+JCS_OFFLINE_INFRA_MANIFEST=offline/runs/releases/<tag>/infra-manifest.v2.json \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
