@@ -102,8 +102,13 @@ type discoveredRemoteFacts struct {
 	ImageID            string `json:"image_id"`
 	AvailabilityZone   string `json:"availability_zone"`
 	Region             string `json:"region"`
+	IIDDocument        string `json:"iid_document,omitempty"`
+	IIDSignature       string `json:"iid_signature,omitempty"`
+	IIDPKCS7           string `json:"iid_pkcs7,omitempty"`
 	IIDDocumentSHA256  string `json:"iid_document_sha256"`
 	IIDSignatureSHA256 string `json:"iid_signature_sha256"`
+	IIDPKCS7SHA256     string `json:"iid_pkcs7_sha256"`
+	IIDVerified        bool   `json:"iid_verified"`
 }
 
 type serverToolchain struct {
@@ -495,12 +500,19 @@ func validateDiscoveredRemoteFacts(hostID string, facts discoveredRemoteFacts) e
 		{"image_id", facts.ImageID},
 		{"availability_zone", facts.AvailabilityZone},
 		{"region", facts.Region},
+		{"iid_document", facts.IIDDocument},
+		{"iid_signature", facts.IIDSignature},
+		{"iid_pkcs7", facts.IIDPKCS7},
 		{"iid_document_sha256", facts.IIDDocumentSHA256},
 		{"iid_signature_sha256", facts.IIDSignatureSHA256},
+		{"iid_pkcs7_sha256", facts.IIDPKCS7SHA256},
 	} {
 		if strings.TrimSpace(field.value) == "" {
 			return fmt.Errorf("failed to discover required remote fact: %s %s", hostID, field.name)
 		}
+	}
+	if !facts.IIDVerified {
+		return fmt.Errorf("failed to discover required remote fact: %s iid_verified", hostID)
 	}
 	return nil
 }
@@ -959,6 +971,8 @@ func buildProvisionedInfraManifestHosts(hosts map[string]provisionedHost, facts 
 			Kernel:             hostFacts.Kernel,
 			IIDDocumentSHA256:  hostFacts.IIDDocumentSHA256,
 			IIDSignatureSHA256: hostFacts.IIDSignatureSHA256,
+			IIDPKCS7SHA256:     hostFacts.IIDPKCS7SHA256,
+			IIDVerified:        hostFacts.IIDVerified,
 			Transport:          "ssm",
 			SubnetVisibility:   "private",
 			DiscoveredCPU:      hostFacts.CPU,

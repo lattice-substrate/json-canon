@@ -84,6 +84,8 @@ func validAttestedInfraManifestFixture() *replay.InfraManifest {
 	im.Hosts[0].Kernel = "6.1.0-28-cloud-amd64"
 	im.Hosts[0].IIDDocumentSHA256 = strings.Repeat("1", 64)
 	im.Hosts[0].IIDSignatureSHA256 = strings.Repeat("2", 64)
+	im.Hosts[0].IIDPKCS7SHA256 = strings.Repeat("5", 64)
+	im.Hosts[0].IIDVerified = true
 	im.Hosts[0].Transport = "ssm"
 	im.Hosts[0].SubnetVisibility = "private"
 	im.Hosts[1].AvailabilityZone = "us-east-1b"
@@ -94,6 +96,8 @@ func validAttestedInfraManifestFixture() *replay.InfraManifest {
 	im.Hosts[1].Kernel = "6.1.0-28-cloud-arm64"
 	im.Hosts[1].IIDDocumentSHA256 = strings.Repeat("3", 64)
 	im.Hosts[1].IIDSignatureSHA256 = strings.Repeat("4", 64)
+	im.Hosts[1].IIDPKCS7SHA256 = strings.Repeat("6", 64)
+	im.Hosts[1].IIDVerified = true
 	im.Hosts[1].Transport = "ssm"
 	im.Hosts[1].SubnetVisibility = "private"
 	return im
@@ -148,6 +152,10 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 		{name: "missing instance_type", mutate: func(im *replay.InfraManifest) { im.Hosts[0].InstanceType = "" }, want: "instance_type is required"},
 		{name: "missing image_id", mutate: func(im *replay.InfraManifest) { im.Hosts[0].ImageID = "" }, want: "image_id is required"},
 		{name: "invalid iid hash", mutate: func(im *replay.InfraManifest) { im.Hosts[0].IIDDocumentSHA256 = "short" }, want: "iid_document_sha256"},
+		{name: "iid pkcs7 requires verified", mutate: func(im *replay.InfraManifest) {
+			im.Hosts[0].IIDPKCS7SHA256 = strings.Repeat("7", 64)
+			im.Hosts[0].IIDVerified = false
+		}, want: "iid_verified must be true"},
 		{name: "invalid transport", mutate: func(im *replay.InfraManifest) { im.Hosts[0].Transport = "rdp" }, want: "transport must be ssh or ssm"},
 		{name: "invalid subnet_visibility", mutate: func(im *replay.InfraManifest) { im.Hosts[0].SubnetVisibility = "dmz" }, want: "subnet_visibility must be public or private"},
 		{name: "host tool missing executable path", mutate: func(im *replay.InfraManifest) { im.Tools[0].ExecutableRelativePath = "" }, want: "executable_relative_path is required"},

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lattice-substrate.github.io/json-canon/offline/schema/transport-attestation.v1.json",
+  "title": "json-canon transport attestation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "challenge",
+    "node_id",
+    "replay_index",
+    "evidence_sha256",
+    "iid_document",
+    "iid_signature",
+    "iid_pkcs7",
+    "iid_document_sha256",
+    "iid_signature_sha256",
+    "iid_pkcs7_sha256",
+    "public_key",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": { "const": "transport-attestation.v1" },
+    "challenge": { "type": "string", "minLength": 1 },
+    "node_id": { "type": "string", "minLength": 1 },
+    "replay_index": { "type": "integer", "minimum": 1 },
+    "evidence_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "iid_document": { "type": "string", "minLength": 1 },
+    "iid_signature": { "type": "string", "minLength": 1 },
+    "iid_pkcs7": { "type": "string", "minLength": 1 },
+    "iid_document_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "iid_signature_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "iid_pkcs7_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "public_key": { "type": "string", "minLength": 1 },
+    "signature": { "type": "string", "minLength": 1 }
+  }
+}

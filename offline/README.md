@@ -64,6 +64,7 @@ optional fields needed by the full conformance DAG when a given profile requires
 - native-host measurement: `measured_architecture`, `measured_os_id`,
   `measured_os_version_id`, `measured_kernel`, `measured_cpu`, `aws_instance_id`,
   `aws_image_id`
+- transport integrity binding: `transport_attestation_sha256`
 
 This follows the Lattice Substrate / ProveMark methodology: determinism is the product,
 strict rejection is preferred to leniency, and release decisions are made from a complete
@@ -87,7 +88,8 @@ Records the IaC-provisioned substrate identity for a conformance run. Fields:
 - `hosts`: per-host records with `role`, `architecture`, `node_ids`, `cloud_provider`,
   `region`, `availability_zone`, `instance_type`, `instance_id`, `image_id`, `os_id`,
   `os_version_id`, `cpu`, `kernel`, `iid_document_sha256`, `iid_signature_sha256`,
-  `transport`, `subnet_visibility`; optional `discovered_cpu` and `discovered_kernel`
+  `iid_pkcs7_sha256`, `iid_verified`, `transport`, `subnet_visibility`; optional
+  `discovered_cpu` and `discovered_kernel`
 - `tools`: the exact pinned tool artifacts used for the evidenced run,
   including source URL, SHA-256, and relative artifact/executable paths
 
@@ -118,7 +120,7 @@ Use the shell entrypoints below instead of ambient host binaries:
 
 After pinned Go exists, release-critical automation is Go-native:
 - `jcs-offline-replay init-infra-lock`: runs the pinned OpenTofu binary to generate `infra/.terraform.lock.hcl`
-- `jcs-offline-replay server-evidence`: requires a clean git worktree, builds from a detached source worktree at the recorded commit, provisions the official AWS host fleet, resolves attested substrate facts on each native lane, runs both official AWS matrices over private SSM/S3 transport, writes `infra-manifest.v1.json`, emits `server-run.v1.json`, and executes both release gates
+- `jcs-offline-replay server-evidence`: requires a clean git worktree, builds from a detached source worktree at the recorded commit, provisions the official AWS host fleet, verifies AWS instance-identity signatures against pinned regional certificates, resolves attested substrate facts on each native lane, runs both official AWS matrices over private SSM/S3 transport, writes `infra-manifest.v1.json`, emits `server-run.v1.json`, and executes both release gates
 - `jcs-offline-replay server-cleanup`: uses `server-run.v1.json` to recover a partial run, delete the staging bucket, and destroy provisioned AWS infrastructure with the recorded backend coordinates
 - `jcs-offline-replay refresh-aws-ami-lock`: resolves the mutable selector catalog in `infra/aws_release_hosts.json` into the committed `infra/aws_release_hosts.lock.json` document used by official release runs
 
@@ -127,8 +129,9 @@ After pinned Go exists, release-critical automation is Go-native:
 Official AWS release profiles (`server-linux-x86_64.yaml`, `server-linux-arm64.yaml`) include
 `infra-substrate-binding` in `required_suites`. When a profile requires this suite,
 `ValidateEvidenceBundle` rejects evidence that omits the required v1 infra-binding,
-discovered substrate, or native-host measurement fields. This enforces that official AWS
-runs always carry infrastructure identity binding inside the same `evidence.v1` contract.
+discovered substrate, native-host measurement, or transport-attestation digest fields.
+This enforces that official AWS runs always carry infrastructure identity binding
+inside the same `evidence.v1` contract.
 
 The official AWS matrices are vm-only, execute natively on EC2, and schedule 12
 native lanes / 60 total replays per architecture.
@@ -151,6 +154,8 @@ go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 `./scripts/release-server.sh` is the supported operator path for this mode. It stages
 the pinned toolchain under `offline/runs/releases/<tag>/toolchain/` and then invokes
 `jcs-offline-replay server-evidence`, which performs the billed native-AWS orchestration in Go.
+The wrapper requires remote OpenTofu state for conformant release runs; `STATE_MODE=local`
+is reserved for debug-only invocations outside the supported release path.
 
 Shared-CI conformance mode requires remote OpenTofu state:
 - `STATE_MODE=remote`
@@ -162,6 +167,11 @@ Shared-CI conformance mode requires remote OpenTofu state:
 These backend and IAM prerequisites are external platform infrastructure. This repo
 does not provision them. Recovery from interrupted runs uses
 `jcs-offline-replay server-cleanup --run-record offline/runs/releases/<tag>/server-run.v1.json`.
+
+For native-host runs, the worker records raw instance-identity material from IMDS and
+the orchestrator verifies the IID signature before accepting the host facts. The
+resulting manifest requires `iid_verified=true`, and replay evidence records only the
+SHA-256 of each verified transport-attestation sidecar.
 
 ## Outputs to Audit
 

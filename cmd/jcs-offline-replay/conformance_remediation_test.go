@@ -170,6 +170,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	oldRunReleaseGate := runServerReleaseGateFunc
 	oldDeleteBucket := deleteStagingBucketFunc
 	oldDestroyInfra := destroyServerInfrastructureFunc
+	oldVerifyIID := verifyAWSInstanceIdentityFunc
 	t.Cleanup(func() {
 		buildServerRunArtifactsFunc = oldBuildArtifacts
 		createStagingBucketFunc = oldCreateBucket
@@ -182,6 +183,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		runServerReleaseGateFunc = oldRunReleaseGate
 		deleteStagingBucketFunc = oldDeleteBucket
 		destroyServerInfrastructureFunc = oldDestroyInfra
+		verifyAWSInstanceIdentityFunc = oldVerifyIID
 	})
 
 	root := t.TempDir()
@@ -273,6 +275,9 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	presignGetObjectURLFunc = func(_ context.Context, _ serverAWSClients, bucket, key string) (string, error) {
 		return "https://example.test/" + bucket + "/" + key, nil
 	}
+	verifyAWSInstanceIdentityFunc = func(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
+		return &awsInstanceIdentityDocument{Region: "us-east-1", InstanceID: host.InstanceID, ImageID: host.ImageID}, nil
+	}
 	runSSMShellScriptFunc = func(_ context.Context, _ serverAWSClients, instanceID, comment, script string, _ time.Duration) (string, error) {
 		if !strings.Contains(script, "inspect-host") {
 			return "", errors.New("unexpected script: " + comment)
@@ -286,8 +291,13 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 			InstanceID:         instanceID,
 			AvailabilityZone:   "us-east-1a",
 			Region:             "us-east-1",
+			IIDDocument:        `{"availabilityZone":"us-east-1a","imageId":"ami-x86","instanceId":"` + instanceID + `","region":"us-east-1"}`,
+			IIDSignature:       "c2lnbmF0dXJl",
+			IIDPKCS7:           "cGtjczc=",
 			IIDDocumentSHA256:  strings.Repeat("1", 64),
 			IIDSignatureSHA256: strings.Repeat("2", 64),
+			IIDPKCS7SHA256:     strings.Repeat("5", 64),
+			IIDVerified:        true,
 		}
 		if instanceID == "i-arm" {
 			facts.Architecture = "arm64"
@@ -297,8 +307,10 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 			facts.Kernel = "6.8.0-arm"
 			facts.ImageID = "ami-arm"
 			facts.AvailabilityZone = "us-east-1b"
+			facts.IIDDocument = `{"availabilityZone":"us-east-1b","imageId":"ami-arm","instanceId":"` + instanceID + `","region":"us-east-1"}`
 			facts.IIDDocumentSHA256 = strings.Repeat("3", 64)
 			facts.IIDSignatureSHA256 = strings.Repeat("4", 64)
+			facts.IIDPKCS7SHA256 = strings.Repeat("6", 64)
 		} else {
 			facts.ImageID = "ami-x86"
 		}
@@ -434,6 +446,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			SubnetVisibility:   "private",
 			IIDDocumentSHA256:  strings.Repeat("1", 64),
 			IIDSignatureSHA256: strings.Repeat("2", 64),
+			IIDPKCS7SHA256:     strings.Repeat("3", 64),
+			IIDVerified:        true,
 		}},
 		Tools: []replay.InfraManifestTool{{
 			ID:                     "go-linux-amd64",
@@ -482,6 +496,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			ProfileSHA256:       opts.ProfileSHA256,
 			SourceGitCommit:     opts.SourceGitCommit,
 			SourceGitTag:        opts.SourceGitTag,
+			GeneratedAtUTC:      "2026-01-01T00:00:00Z",
+			Orchestrator:        "jcs-offline-replay server-evidence",
 			ProfileName:         profile.Name,
 			Architecture:        matrix.Architecture,
 			RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
@@ -489,8 +505,36 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			InfraManifestSHA256: opts.InfraManifestSHA256,
 			InfraRepoURL:        opts.InfraRepoURL,
 			InfraRepoCommit:     opts.InfraRepoCommit,
-			NodeReplays:         []replay.NodeRunEvidence{{NodeID: "aws-native-x86", ReplayIndex: 1, CaseCount: 1}},
-			AggregateCanonical:  strings.Repeat("1", 64),
+			NodeReplays: []replay.NodeRunEvidence{{
+				NodeID:                     "aws-native-x86",
+				Mode:                       "vm",
+				Distro:                     "debian",
+				KernelFamily:               "ga",
+				ReplayIndex:                1,
+				SessionID:                  "session-1",
+				StartedAtUTC:               "2026-01-01T00:00:00Z",
+				CompletedAtUTC:             "2026-01-01T00:00:01Z",
+				CaseCount:                  1,
+				Passed:                     true,
+				CanonicalSHA256:            strings.Repeat("1", 64),
+				VerifySHA256:               strings.Repeat("1", 64),
+				FailureClassSHA256:         strings.Repeat("1", 64),
+				ExitCodeSHA256:             strings.Repeat("1", 64),
+				DiscoveredCPU:              "Example CPU",
+				DiscoveredKernel:           "6.8.0-test",
+				MeasuredArchitecture:       "x86_64",
+				MeasuredOSID:               "debian",
+				MeasuredOSVersionID:        "13",
+				MeasuredKernel:             "6.8.0-test",
+				MeasuredCPU:                "Example CPU",
+				AWSInstanceID:              "i-x86",
+				AWSImageID:                 "ami-x86",
+				TransportAttestationSHA256: strings.Repeat("2", 64),
+			}},
+			AggregateCanonical: strings.Repeat("1", 64),
+			AggregateVerify:    strings.Repeat("1", 64),
+			AggregateClass:     strings.Repeat("1", 64),
+			AggregateExitCode:  strings.Repeat("1", 64),
 		}, nil
 	}
 	loadInfraManifestFunc = replay.LoadInfraManifest

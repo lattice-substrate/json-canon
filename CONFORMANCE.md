@@ -11,7 +11,7 @@ Conformance is defined by the union of:
 - vector corpus in `conformance/vectors/*.jsonl`
 - official external fixtures in `conformance/official/`
 - differential interoperability checks in `conformance/cyberphone_differential_test.go`
-- offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, and `offline/schema/evidence.v1.json`
+- offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/matrix.server-x86_64.yaml`, `offline/matrix.server-arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, `offline/profiles/server-linux-x86_64.yaml`, `offline/profiles/server-linux-arm64.yaml`, `offline/schema/evidence.v1.json`, `offline/schema/infra-manifest.v1.json`, and `offline/schema/transport-attestation.v1.json`
 
 A release is non-conformant if any artifact is inconsistent with the others.
 
@@ -58,15 +58,21 @@ When offline evidence is available for a release candidate, these gates are also
 
 ```bash
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-evidence.json \
+JCS_OFFLINE_BUNDLE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-bundle.tgz \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.server-x86_64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/server-linux-x86_64.yaml \
+JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/arm64/offline-evidence.json \
+JCS_OFFLINE_BUNDLE=$(pwd)/offline/runs/releases/<tag>/arm64/offline-bundle.tgz \
 JCS_OFFLINE_CONTROL_BINARY=/abs/path/to/release-control/jcs-canon \
-JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.arm64.yaml \
-JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/maximal.arm64.yaml \
+JCS_OFFLINE_MATRIX=$(pwd)/offline/matrix.server-arm64.yaml \
+JCS_OFFLINE_PROFILE=$(pwd)/offline/profiles/server-linux-arm64.yaml \
+JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<release-commit-sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1

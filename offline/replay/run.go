@@ -201,6 +201,14 @@ func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	return &run, nil
 }
 
+func LoadNodeRunEvidenceFromBytes(data []byte) (*NodeRunEvidence, error) {
+	var run NodeRunEvidence
+	if err := decodeStrictJSONBytes("node evidence", data, &run); err != nil {
+		return nil, err
+	}
+	return &run, nil
+}
+
 //nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 default runtime clock for evidence generation when no injected clock is provided.
 func wallClockNow() time.Time {
 	return time.Now()

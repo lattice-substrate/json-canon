@@ -91,7 +91,8 @@
           "measured_kernel": { "type": "string", "minLength": 1 },
           "measured_cpu": { "type": "string", "minLength": 1 },
           "aws_instance_id": { "type": "string", "minLength": 1 },
-          "aws_image_id": { "type": "string", "minLength": 1 }
+          "aws_image_id": { "type": "string", "minLength": 1 },
+          "transport_attestation_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
         }
       }
     },

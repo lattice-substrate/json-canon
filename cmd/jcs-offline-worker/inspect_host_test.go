@@ -49,7 +49,12 @@ func TestRunInspectHostSuccess(t *testing.T) {
 			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != "token-123" {
 				t.Fatalf("signature token = %q, want token-123", got)
 			}
-			_, _ = w.Write([]byte("signed"))
+			_, _ = w.Write([]byte("c2lnbmVk"))
+		case "/latest/dynamic/instance-identity/pkcs7":
+			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != "token-123" {
+				t.Fatalf("pkcs7 token = %q, want token-123", got)
+			}
+			_, _ = w.Write([]byte("cGtjczc="))
 		default:
 			http.NotFound(w, r)
 		}
@@ -85,8 +90,11 @@ func TestRunInspectHostSuccess(t *testing.T) {
 	if got.InstanceID != "i-123" || got.ImageID != "ami-123" || got.Region != "us-east-1" {
 		t.Fatalf("unexpected identity fields: %#v", got)
 	}
-	if got.IIDDocumentSHA256 == "" || got.IIDSignatureSHA256 == "" {
+	if got.IIDDocumentSHA256 == "" || got.IIDSignatureSHA256 == "" || got.IIDPKCS7SHA256 == "" {
 		t.Fatalf("expected iid hashes, got %#v", got)
+	}
+	if got.IIDDocument == "" || got.IIDSignature == "" || got.IIDPKCS7 == "" {
+		t.Fatalf("expected raw iid material, got %#v", got)
 	}
 }
 

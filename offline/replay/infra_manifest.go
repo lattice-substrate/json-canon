@@ -1,10 +1,7 @@
 package replay
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 )
@@ -46,6 +43,8 @@ type InfraManifestHost struct {
 	Kernel             string   `json:"kernel,omitempty"`
 	IIDDocumentSHA256  string   `json:"iid_document_sha256,omitempty"`
 	IIDSignatureSHA256 string   `json:"iid_signature_sha256,omitempty"`
+	IIDPKCS7SHA256     string   `json:"iid_pkcs7_sha256,omitempty"`
+	IIDVerified        bool     `json:"iid_verified,omitempty"`
 	Transport          string   `json:"transport,omitempty"`
 	SubnetVisibility   string   `json:"subnet_visibility,omitempty"`
 	DiscoveredCPU      string   `json:"discovered_cpu,omitempty"`
@@ -76,18 +75,12 @@ func LoadInfraManifest(path string) (*InfraManifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read infra manifest: %w", err)
 	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	var im InfraManifest
-	if err := dec.Decode(&im); err != nil {
-		return nil, fmt.Errorf("decode infra manifest json: %w", err)
+	if err := validateSchemaBytes("infra manifest", "infra-manifest.v1.json", data); err != nil {
+		return nil, err
 	}
-	var trailing any
-	if err := dec.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			return nil, fmt.Errorf("decode infra manifest json: unexpected trailing json content")
-		}
-		return nil, fmt.Errorf("decode infra manifest json: decode trailing json token: %w", err)
+	var im InfraManifest
+	if err := decodeStrictJSONBytes("infra manifest json", data, &im); err != nil {
+		return nil, err
 	}
 	if err := ValidateInfraManifest(&im); err != nil {
 		return nil, err
@@ -182,6 +175,7 @@ func validateInfraManifestHost(
 	for _, field := range []struct{ name, value string }{
 		{"iid_document_sha256", h.IIDDocumentSHA256},
 		{"iid_signature_sha256", h.IIDSignatureSHA256},
+		{"iid_pkcs7_sha256", h.IIDPKCS7SHA256},
 	} {
 		if strings.TrimSpace(field.value) == "" {
 			continue
@@ -203,6 +197,9 @@ func validateInfraManifestHost(
 		default:
 			return fmt.Errorf("infra manifest host[%d] subnet_visibility must be public or private, got %q", i, h.SubnetVisibility)
 		}
+	}
+	if strings.TrimSpace(h.IIDPKCS7SHA256) != "" && !h.IIDVerified {
+		return fmt.Errorf("infra manifest host[%d] iid_verified must be true when iid_pkcs7_sha256 is set", i)
 	}
 	return nil
 }

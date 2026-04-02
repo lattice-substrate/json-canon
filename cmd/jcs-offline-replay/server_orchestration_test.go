@@ -269,11 +269,15 @@ func TestServerSSMAdapterRunReplayRejectsEvidenceSHAMismatch(t *testing.T) {
 	oldPresignPut := presignPutObjectURLFunc
 	oldRunSSM := runSSMShellScriptFunc
 	oldDownload := downloadStagingObjectFunc
+	oldChallenge := newTransportAttestationChallenge
+	oldVerifyIID := verifyAWSInstanceIdentityFunc
 	t.Cleanup(func() {
 		presignGetObjectURLFunc = oldPresignGet
 		presignPutObjectURLFunc = oldPresignPut
 		runSSMShellScriptFunc = oldRunSSM
 		downloadStagingObjectFunc = oldDownload
+		newTransportAttestationChallenge = oldChallenge
+		verifyAWSInstanceIdentityFunc = oldVerifyIID
 	})
 
 	presignGetObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
@@ -282,11 +286,20 @@ func TestServerSSMAdapterRunReplayRejectsEvidenceSHAMismatch(t *testing.T) {
 	presignPutObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
 		return "https://example.com/upload", nil
 	}
-	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
-		return "evidence_sha256=" + strings.Repeat("a", 64), nil
+	verifyAWSInstanceIdentityFunc = func(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
+		return &awsInstanceIdentityDocument{Region: "us-east-1", InstanceID: host.InstanceID, ImageID: host.ImageID}, nil
 	}
-	downloadStagingObjectFunc = func(context.Context, serverAWSClients, string, string) ([]byte, error) {
-		return []byte(`{"evidence":"payload"}`), nil
+	newTransportAttestationChallenge = func() (string, error) { return strings.Repeat("d", 64), nil }
+	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
+		return "uploaded_evidence=1", nil
+	}
+	payload := []byte(`{"node_id":"aws-native-ubuntu","mode":"vm","distro":"ubuntu","kernel_family":"ga","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verify_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","failure_class_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","exit_code_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","discovered_cpu":"cpu","discovered_kernel":"kernel","measured_architecture":"x86_64","measured_os_id":"ubuntu","measured_os_version_id":"24.04","measured_kernel":"kernel","measured_cpu":"cpu","aws_instance_id":"i-123","aws_image_id":"ami-123"}`)
+	attestation := mustTestTransportAttestationData(t, payload, strings.Repeat("c", 64), "aws-native-ubuntu", 1)
+	downloadStagingObjectFunc = func(ctx context.Context, clients serverAWSClients, bucket, key string) ([]byte, error) {
+		if strings.HasSuffix(key, "transport-attestation.v1.json") {
+			return attestation, nil
+		}
+		return payload, nil
 	}
 
 	adapter := &serverSSMAdapter{
@@ -296,7 +309,7 @@ func TestServerSSMAdapterRunReplayRejectsEvidenceSHAMismatch(t *testing.T) {
 			workerKey: "worker",
 		},
 		hosts: map[string]provisionedHost{
-			"aws-native-ubuntu": {InstanceID: "i-0123456789abcdef0"},
+			"aws-native-ubuntu": {HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123"},
 		},
 	}
 	evidencePath := filepath.Join(t.TempDir(), "offline-evidence.json")
@@ -306,8 +319,8 @@ func TestServerSSMAdapterRunReplayRejectsEvidenceSHAMismatch(t *testing.T) {
 		Distro:       "ubuntu",
 		KernelFamily: "ga",
 	}, "", evidencePath, 1)
-	if err == nil || !strings.Contains(err.Error(), "downloaded evidence sha256 mismatch") {
-		t.Fatalf("RunReplay error = %v, want evidence sha mismatch", err)
+	if err == nil || !strings.Contains(err.Error(), "transport attestation challenge mismatch") {
+		t.Fatalf("RunReplay error = %v, want attestation challenge mismatch", err)
 	}
 	if _, statErr := os.Stat(evidencePath); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("evidence file unexpectedly written, stat error = %v", statErr)
@@ -319,14 +332,22 @@ func TestServerSSMAdapterRunReplayWritesVerifiedEvidence(t *testing.T) {
 	oldPresignPut := presignPutObjectURLFunc
 	oldRunSSM := runSSMShellScriptFunc
 	oldDownload := downloadStagingObjectFunc
+	oldChallenge := newTransportAttestationChallenge
+	oldVerifyIID := verifyAWSInstanceIdentityFunc
 	t.Cleanup(func() {
 		presignGetObjectURLFunc = oldPresignGet
 		presignPutObjectURLFunc = oldPresignPut
 		runSSMShellScriptFunc = oldRunSSM
 		downloadStagingObjectFunc = oldDownload
+		verifyAWSInstanceIdentityFunc = oldVerifyIID
+		newTransportAttestationChallenge = oldChallenge
 	})
 
-	payload := []byte(`{"evidence":"payload"}`)
+	payload := []byte(`{"node_id":"aws-native-ubuntu","mode":"vm","distro":"ubuntu","kernel_family":"ga","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verify_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","failure_class_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","exit_code_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","discovered_cpu":"cpu","discovered_kernel":"kernel","measured_architecture":"x86_64","measured_os_id":"ubuntu","measured_os_version_id":"24.04","measured_kernel":"kernel","measured_cpu":"cpu","aws_instance_id":"i-123","aws_image_id":"ami-123"}`)
+	verifyAWSInstanceIdentityFunc = func(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
+		return &awsInstanceIdentityDocument{Region: "us-east-1", InstanceID: host.InstanceID, ImageID: host.ImageID}, nil
+	}
+	newTransportAttestationChallenge = func() (string, error) { return strings.Repeat("c", 64), nil }
 	presignGetObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
 		return "https://example.com/object", nil
 	}
@@ -334,9 +355,13 @@ func TestServerSSMAdapterRunReplayWritesVerifiedEvidence(t *testing.T) {
 		return "https://example.com/upload", nil
 	}
 	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
-		return "evidence_sha256=" + sha256HexString(string(payload)), nil
+		return "uploaded_evidence=1", nil
 	}
-	downloadStagingObjectFunc = func(context.Context, serverAWSClients, string, string) ([]byte, error) {
+	attestation := mustTestTransportAttestationData(t, payload, strings.Repeat("c", 64), "aws-native-ubuntu", 1)
+	downloadStagingObjectFunc = func(ctx context.Context, clients serverAWSClients, bucket, key string) ([]byte, error) {
+		if strings.HasSuffix(key, "transport-attestation.v1.json") {
+			return attestation, nil
+		}
 		return payload, nil
 	}
 
@@ -347,7 +372,7 @@ func TestServerSSMAdapterRunReplayWritesVerifiedEvidence(t *testing.T) {
 			workerKey: "worker",
 		},
 		hosts: map[string]provisionedHost{
-			"aws-native-ubuntu": {InstanceID: "i-0123456789abcdef0"},
+			"aws-native-ubuntu": {HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123"},
 		},
 	}
 	evidencePath := filepath.Join(t.TempDir(), "offline-evidence.json")
@@ -364,8 +389,8 @@ func TestServerSSMAdapterRunReplayWritesVerifiedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read evidence file: %v", err)
 	}
-	if string(data) != string(payload) {
-		t.Fatalf("evidence payload = %q, want %q", string(data), string(payload))
+	if !strings.Contains(string(data), `"transport_attestation_sha256"`) {
+		t.Fatalf("verified evidence missing transport attestation digest: %s", string(data))
 	}
 }
 
@@ -388,7 +413,7 @@ func TestServerSSMAdapterRunReplayPropagatesOversizeDownloadFailure(t *testing.T
 		return "https://example.com/upload", nil
 	}
 	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
-		return "evidence_sha256=" + strings.Repeat("a", 64), nil
+		return "uploaded_evidence=1", nil
 	}
 	downloadStagingObjectFunc = func(context.Context, serverAWSClients, string, string) ([]byte, error) {
 		return nil, fmt.Errorf("read staging object s3://bucket/evidence exceeds maximum")
@@ -577,17 +602,22 @@ func TestPrepareStagingUploadsArchitectureArtifacts(t *testing.T) {
 func TestDiscoverHostFactsReadsAndValidatesNativeIdentity(t *testing.T) {
 	oldPresignGet := presignGetObjectURLFunc
 	oldRunSSM := runSSMShellScriptFunc
+	oldVerifyIID := verifyAWSInstanceIdentityFunc
 	t.Cleanup(func() {
 		presignGetObjectURLFunc = oldPresignGet
 		runSSMShellScriptFunc = oldRunSSM
+		verifyAWSInstanceIdentityFunc = oldVerifyIID
 	})
 
 	presignGetObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
 		return "https://example.com/worker", nil
 	}
+	verifyAWSInstanceIdentityFunc = func(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
+		return &awsInstanceIdentityDocument{Region: "us-east-1", InstanceID: host.InstanceID, ImageID: host.ImageID}, nil
+	}
 	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
-		return `{"architecture":"x86_64","os_id":"ubuntu","os_version_id":"24.04","cpu":"Intel","kernel":"6.8.0","instance_id":"i-0123456789abcdef0","image_id":"ami-0abc1234","availability_zone":"us-east-1a","region":"us-east-1","iid_document_sha256":"` +
-			strings.Repeat("1", 64) + `","iid_signature_sha256":"` + strings.Repeat("2", 64) + `"}`, nil
+		return `{"architecture":"x86_64","os_id":"ubuntu","os_version_id":"24.04","cpu":"Intel","kernel":"6.8.0","instance_id":"i-0123456789abcdef0","image_id":"ami-0abc1234","availability_zone":"us-east-1a","region":"us-east-1","iid_document":"{\"availabilityZone\":\"us-east-1a\",\"imageId\":\"ami-0abc1234\",\"instanceId\":\"i-0123456789abcdef0\",\"region\":\"us-east-1\"}","iid_signature":"c2lnbmF0dXJl","iid_pkcs7":"cGtjczc=","iid_document_sha256":"` +
+			strings.Repeat("1", 64) + `","iid_signature_sha256":"` + strings.Repeat("2", 64) + `","iid_pkcs7_sha256":"` + strings.Repeat("3", 64) + `","iid_verified":false}`, nil
 	}
 
 	runtimeState := &serverEvidenceRuntime{

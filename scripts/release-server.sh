@@ -8,11 +8,20 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 : "${TAG:?'TAG is required (e.g. v0.4.0)'}"
 AMI_LOCK_PATH="${AMI_LOCK_PATH:-$ROOT/infra/aws_release_hosts.lock.json}"
-STATE_MODE="${STATE_MODE:-local}"
+STATE_MODE="${STATE_MODE:-remote}"
 STATE_BUCKET="${STATE_BUCKET:-}"
 STATE_REGION="${STATE_REGION:-$AWS_REGION}"
 STATE_LOCK_TABLE="${STATE_LOCK_TABLE:-}"
 STATE_KEY="${STATE_KEY:-server-evidence/$TAG/terraform.tfstate}"
+
+if [[ "$STATE_MODE" != "remote" ]]; then
+  echo "error: release-server.sh only supports STATE_MODE=remote; local state is debug-only and non-conformant" >&2
+  exit 2
+fi
+if [[ -z "$STATE_BUCKET" || -z "$STATE_LOCK_TABLE" ]]; then
+  echo "error: remote state requires STATE_BUCKET and STATE_LOCK_TABLE" >&2
+  exit 2
+fi
 
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
 if [[ -z "${AWS_PROFILE:-}" && -z "${AWS_ACCESS_KEY_ID:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then

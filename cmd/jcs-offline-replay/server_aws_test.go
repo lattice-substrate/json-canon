@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 )
@@ -61,3 +64,36 @@ func TestReadBoundedStagingObject(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizeBucketToken(t *testing.T) {
+	if got := sanitizeBucketToken("v1.2.3-rc1"); got != "1-2-3-rc1" {
+		t.Fatalf("sanitizeBucketToken = %q", got)
+	}
+	if got := sanitizeBucketToken("   !!!   "); got != "release" {
+		t.Fatalf("sanitizeBucketToken fallback = %q", got)
+	}
+}
+
+func TestRandomBucketSuffix(t *testing.T) {
+	oldReader := rand.Reader
+	t.Cleanup(func() {
+		rand.Reader = oldReader
+	})
+
+	got := randomBucketSuffix()
+	if len(got) != 10 {
+		t.Fatalf("randomBucketSuffix length = %d, want 10", len(got))
+	}
+	rand.Reader = errReader{}
+	if got := randomBucketSuffix(); got != "fallback1234" {
+		t.Fatalf("randomBucketSuffix fallback = %q", got)
+	}
+}
+
+type errReader struct{}
+
+func (errReader) Read(_ []byte) (int, error) {
+	return 0, errors.New("boom")
+}
+
+var _ io.Reader = errReader{}

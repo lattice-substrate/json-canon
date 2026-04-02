@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -92,6 +93,10 @@ func (r *serverEvidenceRuntime) discoverHostFacts(host provisionedHost) (discove
 	if facts.ImageID != host.ImageID {
 		return discoveredRemoteFacts{}, fmt.Errorf("image id mismatch for %s: discovered=%s provisioned=%s", host.HostID, facts.ImageID, host.ImageID)
 	}
+	if _, err := verifyAWSInstanceIdentityFunc(facts.IIDDocument, facts.IIDSignature, host, r.opts.awsRegion); err != nil {
+		return discoveredRemoteFacts{}, err
+	}
+	facts.IIDVerified = true
 	return facts, nil
 }
 
@@ -138,42 +143,66 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 		return err
 	}
 	evidenceKey := fmt.Sprintf("evidence/%s/%03d/offline-evidence.json", node.ID, replayIndex)
+	attestationKey := fmt.Sprintf("evidence/%s/%03d/transport-attestation.v1.json", node.ID, replayIndex)
 	evidencePutURL, err := presignPutObjectURLFunc(ctx, a.aws, a.bucket, evidenceKey)
 	if err != nil {
 		return err
 	}
-	runCmd, err := buildRemoteReplaySSMCommand(node, replayIndex, bundleURL, workerURL, evidencePutURL)
+	attestationPutURL, err := presignPutObjectURLFunc(ctx, a.aws, a.bucket, attestationKey)
 	if err != nil {
 		return err
 	}
-	stdout, err := runSSMShellScriptFunc(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute)
+	challenge, err := newTransportAttestationChallenge()
 	if err != nil {
 		return err
 	}
-	remoteSHA := parseEvidenceSHA256(stdout)
-	if remoteSHA == "" {
-		return fmt.Errorf("ssm replay for %s did not emit evidence sha256", node.ID)
+	runCmd, err := buildRemoteReplaySSMCommand(node, replayIndex, challenge, bundleURL, workerURL, evidencePutURL, attestationPutURL)
+	if err != nil {
+		return err
+	}
+	if _, err := runSSMShellScriptFunc(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute); err != nil {
+		return err
 	}
 	data, err := downloadStagingObjectFunc(ctx, a.aws, a.bucket, evidenceKey)
 	if err != nil {
 		return err
 	}
-	if sha256HexString(string(data)) != remoteSHA {
-		return fmt.Errorf("downloaded evidence sha256 mismatch for %s replay %d", node.ID, replayIndex)
+	attestationData, err := downloadStagingObjectFunc(ctx, a.aws, a.bucket, attestationKey)
+	if err != nil {
+		return err
 	}
-	if err := atomicWriteFile(evidencePath, data, filePerm); err != nil {
+	if _, err := verifyTransportAttestation(attestationData, data, challenge, node.ID, replayIndex, host, a.aws.config.Region); err != nil {
+		return err
+	}
+	runEvidence, err := replay.LoadNodeRunEvidenceFromBytes(data)
+	if err != nil {
+		return err
+	}
+	runEvidence.TransportAttestationSHA256 = sha256HexString(string(attestationData))
+	encodedEvidence, err := json.MarshalIndent(runEvidence, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode verified node evidence: %w", err)
+	}
+	encodedEvidence = append(encodedEvidence, '\n')
+	attestationPath := strings.TrimSuffix(evidencePath, filepath.Ext(evidencePath)) + ".transport-attestation.v1.json"
+	if err := atomicWriteFile(attestationPath, attestationData, filePerm); err != nil {
+		return err
+	}
+	if err := atomicWriteFile(evidencePath, encodedEvidence, filePerm); err != nil {
 		return err
 	}
 	return nil
 }
 
-func buildRemoteReplaySSMCommand(node replay.NodeSpec, replayIndex int, bundleURL, workerURL, evidencePutURL string) (string, error) {
+func buildRemoteReplaySSMCommand(node replay.NodeSpec, replayIndex int, challenge, bundleURL, workerURL, evidencePutURL, attestationPutURL string) (string, error) {
 	if node.Mode != replay.NodeModeVM {
 		return "", fmt.Errorf("node %s remote aws release mode must be vm", node.ID)
 	}
 	workerArgs := []string{
 		"--bundle", `"$tmp/bundle.tgz"`,
 		"--evidence", `"$tmp/evidence.json"`,
+		"--challenge", shellQuote(challenge),
+		"--attestation-out", `"$tmp/transport-attestation.json"`,
 		"--node-id", shellQuote(node.ID),
 		"--mode", shellQuote(string(node.Mode)),
 		"--distro", shellQuote(node.Distro),
@@ -191,19 +220,8 @@ func buildRemoteReplaySSMCommand(node replay.NodeSpec, replayIndex int, bundleUR
 		"curl -fsSL " + shellQuote(workerURL) + ` -o "$tmp/jcs-offline-worker"`,
 		`chmod +x "$tmp/jcs-offline-worker"`,
 		`LC_ALL=C LANG=C TZ=UTC "$tmp/jcs-offline-worker" ` + strings.Join(workerArgs, " "),
-		`sha="$(sha256sum "$tmp/evidence.json" | awk '{print $1}')"`,
 		`curl -fsS -X PUT -T "$tmp/evidence.json" ` + shellQuote(evidencePutURL),
-		`printf 'evidence_sha256=%s\n' "$sha"`,
+		`curl -fsS -X PUT -T "$tmp/transport-attestation.json" ` + shellQuote(attestationPutURL),
+		`printf 'uploaded_evidence=1\n'`,
 	}, "\n"), nil
-}
-
-func parseEvidenceSHA256(stdout string) string {
-	for _, line := range strings.Split(stdout, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "evidence_sha256=") {
-			continue
-		}
-		return strings.TrimSpace(strings.TrimPrefix(line, "evidence_sha256="))
-	}
-	return ""
 }

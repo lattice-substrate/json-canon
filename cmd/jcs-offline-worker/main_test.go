@@ -38,6 +38,8 @@ func TestParseWorkerArgs(t *testing.T) {
 	cfg, err := parseWorkerArgs([]string{
 		"--bundle", "/tmp/offline-bundle.tgz",
 		"--evidence", "/tmp/offline-evidence.json",
+		"--challenge", "challenge",
+		"--attestation-out", "/tmp/transport-attestation.json",
 		"--node-id", "n1",
 		"--mode", "container",
 		"--distro", "debian",
@@ -49,6 +51,9 @@ func TestParseWorkerArgs(t *testing.T) {
 	}
 	if cfg.replayIndex != 3 || cfg.nodeID != "n1" {
 		t.Fatalf("unexpected worker args: %#v", cfg)
+	}
+	if cfg.challenge != "challenge" || cfg.attestationPath == "" {
+		t.Fatalf("unexpected attestation args: %#v", cfg)
 	}
 	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
 		t.Fatalf("unexpected default schema version: %q", cfg.schemaVersion)
@@ -99,6 +104,20 @@ func TestParseWorkerArgs(t *testing.T) {
 	_, err = parseWorkerArgs([]string{"--bundle", "b.tgz", "--evidence", "e.json"})
 	if err == nil {
 		t.Fatal("expected missing required flags error")
+	}
+
+	_, err = parseWorkerArgs([]string{
+		"--bundle", "b.tgz",
+		"--evidence", "e.json",
+		"--challenge", "challenge",
+		"--node-id", "n1",
+		"--mode", "container",
+		"--distro", "debian",
+		"--kernel-family", "host",
+		"--replay-index", "1",
+	})
+	if err == nil {
+		t.Fatal("expected attestation flag pairing validation error")
 	}
 
 	_, err = parseWorkerArgs([]string{

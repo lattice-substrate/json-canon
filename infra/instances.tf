@@ -1,5 +1,6 @@
 locals {
   aws_release_hosts_lock_raw = jsondecode(file(var.aws_release_host_lock_path))
+  aws_release_hosts_lock_region = trimspace(try(local.aws_release_hosts_lock_raw.aws_region, ""))
   aws_release_hosts = {
     for host in local.aws_release_hosts_lock_raw.hosts : host.host_id => host
   }
@@ -47,6 +48,13 @@ resource "aws_instance" "release_host" {
     aws_vpc_endpoint.ec2messages,
     aws_iam_role_policy_attachment.replay_instance_ssm,
   ]
+
+  lifecycle {
+    precondition {
+      condition     = local.aws_release_hosts_lock_region != "" && local.aws_release_hosts_lock_region == var.aws_region
+      error_message = "aws_region must match the aws_release_hosts.lock.json region for conformant runs."
+    }
+  }
 
   tags = {
     Name         = each.key

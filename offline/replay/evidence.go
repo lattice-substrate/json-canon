@@ -1,11 +1,9 @@
 package replay
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -61,13 +59,14 @@ type NodeRunEvidence struct {
 	DiscoveredKernel string `json:"discovered_kernel,omitempty"`
 	ImageDigest      string `json:"image_digest,omitempty"`
 	// Optional measured host identity for native-host attestation.
-	MeasuredArchitecture string `json:"measured_architecture,omitempty"`
-	MeasuredOSID         string `json:"measured_os_id,omitempty"`
-	MeasuredOSVersionID  string `json:"measured_os_version_id,omitempty"`
-	MeasuredKernel       string `json:"measured_kernel,omitempty"`
-	MeasuredCPU          string `json:"measured_cpu,omitempty"`
-	AWSInstanceID        string `json:"aws_instance_id,omitempty"`
-	AWSImageID           string `json:"aws_image_id,omitempty"`
+	MeasuredArchitecture       string `json:"measured_architecture,omitempty"`
+	MeasuredOSID               string `json:"measured_os_id,omitempty"`
+	MeasuredOSVersionID        string `json:"measured_os_version_id,omitempty"`
+	MeasuredKernel             string `json:"measured_kernel,omitempty"`
+	MeasuredCPU                string `json:"measured_cpu,omitempty"`
+	AWSInstanceID              string `json:"aws_instance_id,omitempty"`
+	AWSImageID                 string `json:"aws_image_id,omitempty"`
+	TransportAttestationSHA256 string `json:"transport_attestation_sha256,omitempty"`
 }
 
 // EvidenceValidationOptions binds evidence metadata to expected immutable inputs.
@@ -103,8 +102,15 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 
 // LoadEvidence loads an evidence bundle from disk.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read evidence: %w", err)
+	}
+	if err := validateSchemaBytes("evidence", "evidence.v1.json", data); err != nil {
+		return nil, err
+	}
 	var e EvidenceBundle
-	if err := decodeStrictJSONFile(path, "evidence", &e); err != nil {
+	if err := decodeStrictJSONBytes("evidence", data, &e); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -411,10 +417,14 @@ func validateNodeRunEvidenceFields(
 			{"measured_cpu", r.MeasuredCPU},
 			{"aws_instance_id", r.AWSInstanceID},
 			{"aws_image_id", r.AWSImageID},
+			{"transport_attestation_sha256", r.TransportAttestationSHA256},
 		} {
 			if strings.TrimSpace(field.value) == "" {
 				return fmt.Errorf("node %s replay %d missing %s for infra-substrate-binding profile", r.NodeID, r.ReplayIndex, field.name)
 			}
+		}
+		if err := validateSHA256Token("transport_attestation_sha256", r.TransportAttestationSHA256); err != nil {
+			return err
 		}
 	}
 	if node.Mode == NodeModeContainer && strings.TrimSpace(r.ImageDigest) == "" {
@@ -476,12 +486,16 @@ func validateRequiredManifestBindings(
 			{"kernel", host.Kernel},
 			{"iid_document_sha256", host.IIDDocumentSHA256},
 			{"iid_signature_sha256", host.IIDSignatureSHA256},
+			{"iid_pkcs7_sha256", host.IIDPKCS7SHA256},
 			{"transport", host.Transport},
 			{"subnet_visibility", host.SubnetVisibility},
 		} {
 			if strings.TrimSpace(field.value) == "" {
 				return fmt.Errorf("infra manifest host for node %s missing %s", nodeID, field.name)
 			}
+		}
+		if !host.IIDVerified {
+			return fmt.Errorf("infra manifest host for node %s requires iid_verified=true", nodeID)
 		}
 	}
 	return nil
@@ -624,27 +638,6 @@ func profileRequiresNativeHostBinding(matrix *Matrix, profile *Profile) bool {
 		}
 	}
 	return false
-}
-
-//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 strict JSON decoding reads explicit operator/runtime artifact paths.
-func decodeStrictJSONFile(path string, kind string, target any) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", kind, err)
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(target); err != nil {
-		return fmt.Errorf("decode %s: %w", kind, err)
-	}
-	var trailing any
-	if err := dec.Decode(&trailing); err != io.EOF {
-		if err == nil {
-			return fmt.Errorf("decode %s: unexpected trailing json content", kind)
-		}
-		return fmt.Errorf("decode %s: decode trailing json token: %w", kind, err)
-	}
-	return nil
 }
 
 func validateSHA256Token(name, value string) error {

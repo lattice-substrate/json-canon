@@ -407,6 +407,8 @@ func nativeHostManifestFixture(commit string) *replay.InfraManifest {
 				Kernel:             testKernel610,
 				IIDDocumentSHA256:  strings.Repeat("1", 64),
 				IIDSignatureSHA256: strings.Repeat("2", 64),
+				IIDPKCS7SHA256:     strings.Repeat("3", 64),
+				IIDVerified:        true,
 				Transport:          "ssm",
 				SubnetVisibility:   "private",
 				DiscoveredCPU:      testCPUArm,
@@ -473,5 +475,6 @@ func nativeRun(nodeID string, replayIndex int, digest string) replay.NodeRunEvid
 	run.MeasuredCPU = testCPUArm
 	run.AWSInstanceID = "i-0123456789abcdef0"
 	run.AWSImageID = "ami-0abc1234"
+	run.TransportAttestationSHA256 = strings.Repeat("9", 64)
 	return run
 }

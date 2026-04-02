@@ -58,6 +58,8 @@
           "kernel": { "type": "string", "minLength": 1 },
           "iid_document_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
           "iid_signature_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "iid_pkcs7_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "iid_verified": { "type": "boolean" },
           "transport": { "type": "string", "enum": ["ssh", "ssm"] },
           "subnet_visibility": { "type": "string", "enum": ["public", "private"] },
           "discovered_cpu": { "type": "string", "minLength": 1 },
@@ -95,8 +97,8 @@
           "format": { "type": "string", "enum": ["raw", "tar.gz", "zip"] },
           "source_url": { "type": "string", "pattern": "^https://.+" },
           "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
-          "artifact_relative_path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" },
-          "executable_relative_path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" }
+          "artifact_relative_path": { "type": "string", "minLength": 1 },
+          "executable_relative_path": { "type": "string", "minLength": 1 }
         }
       }
     }

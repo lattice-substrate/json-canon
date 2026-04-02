@@ -241,12 +241,15 @@ Official AWS release runs use real AWS EC2 instances (x86_64 + arm64) and produc
 `evidence.v1` with an infrastructure manifest binding. The infra manifest records the
 IaC repo commit, provider lock digest, AMI IDs, instance IDs, availability zones,
 measured OS/CPU/kernel identity, IMDS-derived instance-identity digests, the native
-lane-to-host binding, and the exact pinned tool artifacts used for the run.
+lane-to-host binding, `iid_pkcs7_sha256`, `iid_verified`, and the exact pinned tool
+artifacts used for the run. Each replay also records `transport_attestation_sha256`
+inside `evidence.v1`.
 
 This does not replace the offline harness. Following the Lattice Substrate / ProveMark
 methodology, the full deterministic conformance DAG remains the product: pinned toolchain,
-lint/vet/tests, offline replay proof, infra binding, native-host measurement, and the
-release gate must all compose into one fail-closed evidence trail.
+lint/vet/tests, offline replay proof, infra binding, verified native-host measurement,
+transport attestation, and the release gate must all compose into one fail-closed
+evidence trail.
 
 **Requirements:**
 - AWS credentials with EC2 permissions
@@ -279,6 +282,10 @@ export STATE_REGION=us-east-1
 export STATE_LOCK_TABLE=<dynamodb-table>
 export STATE_KEY=server-evidence/<tag>/terraform.tfstate
 ```
+
+`./scripts/release-server.sh` enforces `STATE_MODE=remote`. Local state is retained
+only for ad hoc debugging through direct `jcs-offline-replay server-evidence`
+invocation and is not a conformant release mode.
 
 Interrupted or failed AWS runs are recovered with:
 
@@ -318,7 +325,8 @@ The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
 then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
 requires a clean git worktree, creates a detached worktree at the recorded source
 commit, provisions the committed official AWS host fleet, runs the native vm-only
-release matrices over private SSM/S3 transport, emits `evidence.v1`, runs
+release matrices over private SSM/S3 transport, verifies AWS instance-identity
+signatures against pinned regional certificates, emits `evidence.v1`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
 then destroys the instances. The official AWS matrices are vm-only and schedule
 12 native lanes / 60 total replays per architecture.

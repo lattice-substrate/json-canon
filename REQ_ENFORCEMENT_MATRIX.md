@@ -151,8 +151,8 @@ OFFLINE-EVIDENCE-002,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle
 OFFLINE-EVIDENCE-002,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleNativeHostV1Parity,TEST
 OFFLINE-EVIDENCE-002,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBindingRequiresDiscoveredFields,TEST
 OFFLINE-EVIDENCE-002,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleNativeHostRequiresMeasuredFields,TEST
-OFFLINE-EVIDENCE-002,policy,L1,cmd/jcs-offline-worker/main.go,discoverCPU,730,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBoundV1Parity,TEST
-OFFLINE-EVIDENCE-002,policy,L1,cmd/jcs-offline-worker/main.go,discoverKernel,750,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBoundV1Parity,TEST
+OFFLINE-EVIDENCE-002,policy,L1,cmd/jcs-offline-worker/main.go,discoverCPU,786,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBoundV1Parity,TEST
+OFFLINE-EVIDENCE-002,policy,L1,cmd/jcs-offline-worker/main.go,discoverKernel,806,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBoundV1Parity,TEST
 OFFLINE-EVIDENCE-002,policy,L3,conformance/harness_test.go,checkOfflineEvidenceV1InfraSchemaPresent,2565,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-EVIDENCE-002,CONFORMANCE
 OFFLINE-INFRA-001,policy,L1,offline/replay/infra_manifest.go,ValidateInfraManifest,101,offline/replay/infra_manifest_test.go,TestValidateInfraManifest,TEST
 OFFLINE-INFRA-001,policy,L1,offline/replay/infra_manifest.go,ValidateInfraManifest,101,offline/replay/infra_manifest_test.go,TestValidateInfraManifestRejectsInvalid,TEST
@@ -163,7 +163,7 @@ OFFLINE-TOOLCHAIN-001,policy,L1,offline/replay/toolchain_lock.go,LoadToolchainLo
 OFFLINE-TOOLCHAIN-001,policy,L1,cmd/jcs-offline-replay/toolchain.go,cmdSyncToolchain,36,cmd/jcs-offline-replay/toolchain_test.go,TestCmdSyncToolchainAndCollectEvidence,TEST
 OFFLINE-TOOLCHAIN-001,policy,L1,cmd/jcs-offline-replay/toolchain.go,collectToolchainEvidence,68,cmd/jcs-offline-replay/toolchain_test.go,TestCmdSyncToolchainAndCollectEvidence,TEST
 OFFLINE-TOOLCHAIN-001,policy,L3,conformance/harness_test.go,checkOfflineToolchainLockPresent,2606,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-TOOLCHAIN-001,CONFORMANCE
-OFFLINE-AUTO-001,policy,L1,cmd/jcs-offline-replay/server_evidence.go,runServerEvidence,193,cmd/jcs-offline-replay/server_evidence_test.go,TestBuildRemoteReplaySSMCommandNativeVM,TEST
+OFFLINE-AUTO-001,policy,L1,cmd/jcs-offline-replay/server_evidence.go,runServerEvidence,198,cmd/jcs-offline-replay/server_evidence_test.go,TestBuildRemoteReplaySSMCommandNativeVM,TEST
 OFFLINE-AUTO-001,policy,L3,conformance/harness_test.go,checkOfflineGoNativeServerAutomation,2829,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-AUTO-001,CONFORMANCE
 OFFLINE-SERVER-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBindingRequiresManifest,TEST
 OFFLINE-SERVER-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleNativeHostManifestMismatch,TEST

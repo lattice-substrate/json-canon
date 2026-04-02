@@ -7,7 +7,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -64,6 +67,8 @@ type digestAccumulator struct {
 type workerArgs struct {
 	bundlePath           string
 	evidencePath         string
+	attestationPath      string
+	challenge            string
 	nodeID               string
 	mode                 string
 	distro               string
@@ -85,8 +90,13 @@ type hostInspection struct {
 	ImageID            string `json:"image_id"`
 	AvailabilityZone   string `json:"availability_zone"`
 	Region             string `json:"region"`
+	IIDDocument        string `json:"iid_document,omitempty"`
+	IIDSignature       string `json:"iid_signature,omitempty"`
+	IIDPKCS7           string `json:"iid_pkcs7,omitempty"`
 	IIDDocumentSHA256  string `json:"iid_document_sha256"`
 	IIDSignatureSHA256 string `json:"iid_signature_sha256"`
+	IIDPKCS7SHA256     string `json:"iid_pkcs7_sha256"`
+	IIDVerified        bool   `json:"iid_verified"`
 }
 
 type instanceIdentityDocument struct {
@@ -211,7 +221,48 @@ func runWorker(cfg workerArgs, stdout io.Writer) error {
 	if err := writeEvidence(cfg.evidencePath, evidence); err != nil {
 		return err
 	}
+	if cfg.attestationPath != "" {
+		if err := writeTransportAttestation(cfg, evidence); err != nil {
+			return err
+		}
+	}
 	if err := writef(stdout, "ok node=%s replay=%d cases=%d\n", cfg.nodeID, cfg.replayIndex, caseCount); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeTransportAttestation(cfg workerArgs, evidence replay.NodeRunEvidence) error {
+	inspection, err := inspectHost()
+	if err != nil {
+		return fmt.Errorf("inspect host for transport attestation: %w", err)
+	}
+	evidenceData, err := os.ReadFile(cfg.evidencePath)
+	if err != nil {
+		return fmt.Errorf("read evidence for transport attestation: %w", err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate transport attestation key: %w", err)
+	}
+	attestation := replay.TransportAttestation{
+		SchemaVersion:      replay.TransportAttestationSchemaVersion,
+		Challenge:          cfg.challenge,
+		NodeID:             evidence.NodeID,
+		ReplayIndex:        evidence.ReplayIndex,
+		EvidenceSHA256:     sha256Hex(evidenceData),
+		IIDDocument:        inspection.IIDDocument,
+		IIDSignature:       inspection.IIDSignature,
+		IIDPKCS7:           inspection.IIDPKCS7,
+		IIDDocumentSHA256:  inspection.IIDDocumentSHA256,
+		IIDSignatureSHA256: inspection.IIDSignatureSHA256,
+		IIDPKCS7SHA256:     inspection.IIDPKCS7SHA256,
+		PublicKey:          base64.StdEncoding.EncodeToString(publicKey),
+	}
+	attestation.Signature = base64.StdEncoding.EncodeToString(
+		ed25519.Sign(privateKey, []byte(replay.TransportAttestationSigningPayload(&attestation))),
+	)
+	if err := replay.WriteTransportAttestation(cfg.attestationPath, &attestation); err != nil {
 		return err
 	}
 	return nil
@@ -224,14 +275,16 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 	}
 
 	cfg := workerArgs{
-		bundlePath:    strings.TrimSpace(flags["--bundle"]),
-		evidencePath:  strings.TrimSpace(flags["--evidence"]),
-		nodeID:        strings.TrimSpace(flags["--node-id"]),
-		mode:          strings.TrimSpace(flags["--mode"]),
-		distro:        strings.TrimSpace(flags["--distro"]),
-		kernelFamily:  strings.TrimSpace(flags["--kernel-family"]),
-		imageDigest:   strings.TrimSpace(flags["--image-digest"]),
-		schemaVersion: resolveWorkerSchemaVersion(flags),
+		bundlePath:      strings.TrimSpace(flags["--bundle"]),
+		evidencePath:    strings.TrimSpace(flags["--evidence"]),
+		attestationPath: strings.TrimSpace(flags["--attestation-out"]),
+		challenge:       strings.TrimSpace(flags["--challenge"]),
+		nodeID:          strings.TrimSpace(flags["--node-id"]),
+		mode:            strings.TrimSpace(flags["--mode"]),
+		distro:          strings.TrimSpace(flags["--distro"]),
+		kernelFamily:    strings.TrimSpace(flags["--kernel-family"]),
+		imageDigest:     strings.TrimSpace(flags["--image-digest"]),
+		schemaVersion:   resolveWorkerSchemaVersion(flags),
 	}
 	cfg.infraBindingEvidence, err = parseBoolFlag(flags, "--infra-binding-evidence")
 	if err != nil {
@@ -255,6 +308,9 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 	}
 	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
 		return workerArgs{}, fmt.Errorf("invalid --schema-version %q", cfg.schemaVersion)
+	}
+	if (cfg.attestationPath == "") != (cfg.challenge == "") {
+		return workerArgs{}, fmt.Errorf("--challenge and --attestation-out must be provided together")
 	}
 	return cfg, nil
 }
@@ -761,7 +817,7 @@ func discoverKernel() string {
 }
 
 func inspectHost() (hostInspection, error) {
-	doc, sig, err := fetchInstanceIdentity()
+	identity, err := fetchInstanceIdentity()
 	if err != nil {
 		return hostInspection{}, err
 	}
@@ -772,41 +828,54 @@ func inspectHost() (hostInspection, error) {
 		OSVersionID:        osRelease["VERSION_ID"],
 		Kernel:             discoverKernel(),
 		CPU:                discoverCPU(),
-		InstanceID:         doc.InstanceID,
-		ImageID:            doc.ImageID,
-		AvailabilityZone:   doc.AvailabilityZone,
-		Region:             doc.Region,
-		IIDDocumentSHA256:  sha256Hex([]byte(doc.raw)),
-		IIDSignatureSHA256: sha256Hex([]byte(sig)),
+		InstanceID:         identity.InstanceID,
+		ImageID:            identity.ImageID,
+		AvailabilityZone:   identity.AvailabilityZone,
+		Region:             identity.Region,
+		IIDDocument:        identity.raw,
+		IIDSignature:       identity.signature,
+		IIDPKCS7:           identity.pkcs7,
+		IIDDocumentSHA256:  sha256Hex([]byte(identity.raw)),
+		IIDSignatureSHA256: sha256Hex([]byte(identity.signature)),
+		IIDPKCS7SHA256:     sha256Hex([]byte(identity.pkcs7)),
+		IIDVerified:        false,
 	}, nil
 }
 
 type rawInstanceIdentityDocument struct {
 	instanceIdentityDocument
-	raw string
+	raw       string
+	signature string
+	pkcs7     string
 }
 
-func fetchInstanceIdentity() (rawInstanceIdentityDocument, string, error) {
+func fetchInstanceIdentity() (rawInstanceIdentityDocument, error) {
 	token, err := fetchIMDSToken()
 	if err != nil {
-		return rawInstanceIdentityDocument{}, "", err
+		return rawInstanceIdentityDocument{}, err
 	}
 	documentRaw, err := fetchIMDSPath(token, "/latest/dynamic/instance-identity/document")
 	if err != nil {
-		return rawInstanceIdentityDocument{}, "", err
+		return rawInstanceIdentityDocument{}, err
 	}
 	signatureRaw, err := fetchIMDSPath(token, "/latest/dynamic/instance-identity/signature")
 	if err != nil {
-		return rawInstanceIdentityDocument{}, "", err
+		return rawInstanceIdentityDocument{}, err
+	}
+	pkcs7Raw, err := fetchIMDSPath(token, "/latest/dynamic/instance-identity/pkcs7")
+	if err != nil {
+		return rawInstanceIdentityDocument{}, err
 	}
 	var doc instanceIdentityDocument
 	if err := json.Unmarshal([]byte(documentRaw), &doc); err != nil {
-		return rawInstanceIdentityDocument{}, "", fmt.Errorf("decode instance identity document: %w", err)
+		return rawInstanceIdentityDocument{}, fmt.Errorf("decode instance identity document: %w", err)
 	}
 	return rawInstanceIdentityDocument{
 		instanceIdentityDocument: doc,
-		raw:                      documentRaw,
-	}, strings.TrimSpace(signatureRaw), nil
+		raw:                      strings.TrimSpace(documentRaw),
+		signature:                strings.TrimSpace(signatureRaw),
+		pkcs7:                    strings.TrimSpace(pkcs7Raw),
+	}, nil
 }
 
 func fetchIMDSToken() (string, error) {

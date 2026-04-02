@@ -12,7 +12,8 @@ lived in shell. That left release-critical automation split across:
 
 - `scripts/init-infra-lock.sh`
 - `scripts/release-server.sh`
-- ambient host `ssh` / `scp` binaries transitively reached through replay scripts
+- transport integrity and host-discovery steps that were not yet fully governed in
+  the Go-native path
 
 This conflicted with the project policy that required validation and
 release-critical automation be Go-native once the trusted toolchain existed.
@@ -31,14 +32,17 @@ The supported model is:
 3. `jcs-offline-replay server-evidence` performs the full billed AWS workflow:
    - pinned OpenTofu init/apply/output/destroy
    - remote CPU / kernel discovery on each native lane
+   - AWS instance-identity verification against pinned regional certificates
+   - per-replay transport attestation binding evidence bytes to a caller nonce
    - infra-manifest emission
    - per-architecture control/worker builds
    - replay execution
    - release gate execution
-4. Remote SSH transport for the billed path is implemented in Go, eliminating
-   ambient host `ssh` / `scp` binaries from post-bootstrap orchestration.
+4. The billed path uses AWS SSM plus private S3 staging; post-bootstrap
+   orchestration no longer depends on ambient host `ssh` / `scp`.
 5. `scripts/init-infra-lock.sh` and `scripts/release-server.sh` are reduced to
-   bootstrap wrappers that invoke the Go subcommands.
+   bootstrap wrappers that invoke the Go subcommands, and conformant
+   `release-server.sh` execution requires remote OpenTofu state.
 
 ## Consequences
 
@@ -52,7 +56,7 @@ Positive:
 Costs:
 
 - The CLI surface expands with `init-infra-lock` and `server-evidence`.
-- The repository now carries a Go SSH client dependency in source form.
+- The repository now carries AWS SDK and schema-validation dependencies in source form.
 
 ## Rejected Alternative
 

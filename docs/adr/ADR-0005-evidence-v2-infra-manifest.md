@@ -31,6 +31,7 @@ not version around unfinished work.
    - top-level infra binding in `evidence.v1`
    - node-level discovered substrate identity in `evidence.v1`
    - node-level native-host measurement in `evidence.v1`
+   - node-level transport-attestation digest binding in `evidence.v1`
    - host-level native-host attestation in `infra-manifest.v1`
 4. Validation strictness is driven by profile/matrix intent, not by schema version:
    - plain offline profiles require only the base evidence chain
@@ -56,5 +57,7 @@ selected profile demands more proof.
 - External validators need only one evidence schema and one infra-manifest schema.
 - The offline harness remains first-class and mandatory.
 - AWS native evidence becomes additive, not substitutive.
+- AWS native evidence includes verified instance-identity material in the manifest
+  and challenge-bound transport-attestation digests in replay evidence.
 - Release policy can be expressed directly as fail-closed profile/matrix requirements
   instead of version branching.

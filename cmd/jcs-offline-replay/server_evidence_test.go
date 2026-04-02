@@ -49,9 +49,11 @@ func TestBuildRemoteReplaySSMCommandNativeVM(t *testing.T) {
 	cmd, err := buildRemoteReplaySSMCommand(
 		node,
 		3,
+		"challenge-token",
 		"https://example.com/bundle",
 		"https://example.com/worker",
 		"https://example.com/evidence",
+		"https://example.com/attestation",
 	)
 	if err != nil {
 		t.Fatalf("buildRemoteReplaySSMCommand: %v", err)
@@ -61,23 +63,17 @@ func TestBuildRemoteReplaySSMCommandNativeVM(t *testing.T) {
 		`curl -fsSL 'https://example.com/worker' -o "$tmp/jcs-offline-worker"`,
 		`--bundle "$tmp/bundle.tgz"`,
 		`--evidence "$tmp/evidence.json"`,
+		`--challenge 'challenge-token'`,
+		`--attestation-out "$tmp/transport-attestation.json"`,
 		"--schema-version",
 		replay.EvidenceSchemaVersion,
 		"--infra-binding-evidence",
 		"--native-host-evidence",
 		`curl -fsS -X PUT -T "$tmp/evidence.json" 'https://example.com/evidence'`,
+		`curl -fsS -X PUT -T "$tmp/transport-attestation.json" 'https://example.com/attestation'`,
 	} {
 		if !strings.Contains(cmd, needle) {
 			t.Fatalf("native vm command missing %q in %q", needle, cmd)
 		}
-	}
-}
-
-func TestParseEvidenceSHA256(t *testing.T) {
-	t.Parallel()
-
-	got := parseEvidenceSHA256("noise\nevidence_sha256=abc123\nmore-noise\n")
-	if got != "abc123" {
-		t.Fatalf("sha mismatch: got %q want %q", got, "abc123")
 	}
 }

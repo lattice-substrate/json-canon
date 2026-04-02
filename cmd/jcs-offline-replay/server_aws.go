@@ -148,6 +148,54 @@ func createStagingBucket(ctx context.Context, clients serverAWSClients, tag stri
 	if _, err := clients.s3.CreateBucket(ctx, input); err != nil {
 		return "", fmt.Errorf("create staging bucket %s: %w", bucket, err)
 	}
+	if _, err := clients.s3.PutBucketEncryption(ctx, &s3.PutBucketEncryptionInput{
+		Bucket: aws.String(bucket),
+		ServerSideEncryptionConfiguration: &s3types.ServerSideEncryptionConfiguration{
+			Rules: []s3types.ServerSideEncryptionRule{{
+				ApplyServerSideEncryptionByDefault: &s3types.ServerSideEncryptionByDefault{
+					SSEAlgorithm: s3types.ServerSideEncryptionAes256,
+				},
+			}},
+		},
+	}); err != nil {
+		return "", fmt.Errorf("set staging bucket encryption %s: %w", bucket, err)
+	}
+	if _, err := clients.s3.PutBucketVersioning(ctx, &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucket),
+		VersioningConfiguration: &s3types.VersioningConfiguration{
+			Status: s3types.BucketVersioningStatusEnabled,
+		},
+	}); err != nil {
+		return "", fmt.Errorf("enable staging bucket versioning %s: %w", bucket, err)
+	}
+	if _, err := clients.s3.PutPublicAccessBlock(ctx, &s3.PutPublicAccessBlockInput{
+		Bucket: aws.String(bucket),
+		PublicAccessBlockConfiguration: &s3types.PublicAccessBlockConfiguration{
+			BlockPublicAcls:       aws.Bool(true),
+			IgnorePublicAcls:      aws.Bool(true),
+			BlockPublicPolicy:     aws.Bool(true),
+			RestrictPublicBuckets: aws.Bool(true),
+		},
+	}); err != nil {
+		return "", fmt.Errorf("set staging bucket public access block %s: %w", bucket, err)
+	}
+	if _, err := clients.s3.PutBucketOwnershipControls(ctx, &s3.PutBucketOwnershipControlsInput{
+		Bucket: aws.String(bucket),
+		OwnershipControls: &s3types.OwnershipControls{
+			Rules: []s3types.OwnershipControlsRule{{
+				ObjectOwnership: s3types.ObjectOwnershipBucketOwnerEnforced,
+			}},
+		},
+	}); err != nil {
+		return "", fmt.Errorf("set staging bucket ownership controls %s: %w", bucket, err)
+	}
+	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Sid":"DenyInsecureTransport","Effect":"Deny","Principal":"*","Action":"s3:*","Resource":["arn:aws:s3:::%[1]s","arn:aws:s3:::%[1]s/*"],"Condition":{"Bool":{"aws:SecureTransport":"false"}}}]}`, bucket)
+	if _, err := clients.s3.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+		Bucket: aws.String(bucket),
+		Policy: aws.String(policy),
+	}); err != nil {
+		return "", fmt.Errorf("set staging bucket policy %s: %w", bucket, err)
+	}
 	return bucket, nil
 }
 
@@ -155,23 +203,29 @@ func deleteStagingBucket(ctx context.Context, clients serverAWSClients, bucket s
 	if strings.TrimSpace(bucket) == "" {
 		return nil
 	}
-	paginator := s3.NewListObjectsV2Paginator(clients.s3, &s3.ListObjectsV2Input{
+	versionPaginator := s3.NewListObjectVersionsPaginator(clients.s3, &s3.ListObjectVersionsInput{
 		Bucket: aws.String(bucket),
 	})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
+	for versionPaginator.HasMorePages() {
+		page, err := versionPaginator.NextPage(ctx)
 		if err != nil {
-			return fmt.Errorf("list staging bucket objects %s: %w", bucket, err)
+			return fmt.Errorf("list staging bucket object versions %s: %w", bucket, err)
 		}
-		if len(page.Contents) == 0 {
+		if len(page.Versions) == 0 && len(page.DeleteMarkers) == 0 {
 			continue
 		}
-		objects := make([]s3types.ObjectIdentifier, 0, len(page.Contents))
-		for _, obj := range page.Contents {
-			if obj.Key == nil {
+		objects := make([]s3types.ObjectIdentifier, 0, len(page.Versions)+len(page.DeleteMarkers))
+		for _, obj := range page.Versions {
+			if obj.Key == nil || obj.VersionId == nil {
 				continue
 			}
-			objects = append(objects, s3types.ObjectIdentifier{Key: obj.Key})
+			objects = append(objects, s3types.ObjectIdentifier{Key: obj.Key, VersionId: obj.VersionId})
+		}
+		for _, obj := range page.DeleteMarkers {
+			if obj.Key == nil || obj.VersionId == nil {
+				continue
+			}
+			objects = append(objects, s3types.ObjectIdentifier{Key: obj.Key, VersionId: obj.VersionId})
 		}
 		if len(objects) == 0 {
 			continue
@@ -180,7 +234,7 @@ func deleteStagingBucket(ctx context.Context, clients serverAWSClients, bucket s
 			Bucket: aws.String(bucket),
 			Delete: &s3types.Delete{Objects: objects},
 		}); err != nil {
-			return fmt.Errorf("delete staging bucket objects %s: %w", bucket, err)
+			return fmt.Errorf("delete staging bucket object versions %s: %w", bucket, err)
 		}
 	}
 	if _, err := clients.s3.DeleteBucket(ctx, &s3.DeleteBucketInput{
