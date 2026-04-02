@@ -30,8 +30,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - `--infra-manifest <path>` flag on `jcs-offline-replay run`, `run-suite`, and
   `cross-arch`. When set the manifest is loaded, validated, and its SHA-256 and
   identity fields are bound into the emitted evidence.v2.
-- OpenTofu IaC in `infra/` provisions two AWS EC2 instances (c5.xlarge x86_64,
-  c6g.xlarge arm64 Graviton2) with Debian 12. The IaC now requires an explicit
+- OpenTofu IaC in `infra/` provisions two AWS EC2 instances (`t3a.small` x86_64,
+  `t4g.small` arm64 Graviton2) with Debian 12. The IaC now requires an explicit
   `ssh_ingress_cidr` and sets `associate_public_ip_address = true` on both hosts.
 - `offline/scripts/replay-ssh.sh`: SSH-based replay runner (no virsh/libvirt).
   Polls SSH readiness (90 × 2 s), copies bundle and worker binary to the remote
