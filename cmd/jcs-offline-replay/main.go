@@ -72,6 +72,12 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		return 0, cmdVerifyEvidence(flags, stdout)
 	case "report":
 		return 0, cmdReport(flags, stdout)
+	case "sync-toolchain":
+		return 0, cmdSyncToolchain(flags, stdout)
+	case "init-infra-lock":
+		return 0, cmdInitInfraLock(flags, stdout)
+	case "server-evidence":
+		return 0, cmdServerEvidence(flags, stdout)
 	case "write-infra-manifest":
 		return 0, cmdWriteInfraManifest(flags, stdout)
 	case "inspect-matrix":
@@ -104,8 +110,8 @@ func cmdPrepare(flags map[string]string, stdout io.Writer) error {
 	if _, loadErr := replay.LoadProfile(profilePath); loadErr != nil {
 		return fmt.Errorf("load profile: %w", loadErr)
 	}
-	if err := validateExecutableArchitecture(binaryPath, matrix.Architecture, "control binary"); err != nil {
-		return err
+	if archErr := validateExecutableArchitecture(binaryPath, matrix.Architecture, "control binary"); archErr != nil {
+		return archErr
 	}
 
 	workerPath, cleanupWorker, err := resolveWorkerPath(flags, matrix.Architecture)
@@ -447,7 +453,7 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 	}
 	manifest := &replay.InfraManifest{
 		SchemaVersion:      replay.InfraManifestSchemaVersion,
-		GeneratedAtUTC:     time.Now().UTC().Format(time.RFC3339Nano),
+		GeneratedAtUTC:     manifestNowUTC().Format(time.RFC3339Nano),
 		InfraRepoURL:       requireFlag(flags, "--infra-repo-url"),
 		InfraRepoCommit:    requireFlag(flags, "--infra-repo-commit"),
 		ProviderEngine:     requireFlag(flags, "--provider-engine"),
@@ -474,8 +480,13 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 			},
 		},
 	}
-	if err := replay.ValidateInfraManifest(manifest); err != nil {
-		return fmt.Errorf("validate infra manifest: %w", err)
+	tools, err := collectToolchainEvidence(flags, outputPath)
+	if err != nil {
+		return err
+	}
+	manifest.Tools = tools
+	if validateErr := replay.ValidateInfraManifest(manifest); validateErr != nil {
+		return fmt.Errorf("validate infra manifest: %w", validateErr)
 	}
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -669,37 +680,12 @@ func fileSHA256(path string) (string, error) {
 }
 
 func writeUsage(w io.Writer) error {
-	if err := writeLine(w, "usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|inspect-matrix> [flags]"); err != nil {
-		return err
+	for _, line := range usageLines() {
+		if err := writeLine(w, line); err != nil {
+			return err
+		}
 	}
-	if err := writeLine(w, "  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--infra-manifest <path>] [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  preflight --matrix <path> [--strict] [--no-strict]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  audit-summary --matrix <path> --profile <path> --evidence <path> [--output-dir <path>]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  run-suite --matrix <path> --profile <path> [--infra-manifest <path>] [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--infra-manifest <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--infra-manifest <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  report --evidence <path>"); err != nil {
-		return err
-	}
-	if err := writeLine(w, "  write-infra-manifest --output <path> --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>"); err != nil {
-		return err
-	}
-	return writeLine(w, "  inspect-matrix --matrix <path>")
+	return nil
 }
 
 func writeLine(w io.Writer, msg string) error {
@@ -746,8 +732,8 @@ func goArchForMatrixArch(matrixArch string) (string, error) {
 	switch strings.TrimSpace(matrixArch) {
 	case "x86_64":
 		return "amd64", nil
-	case "arm64":
-		return "arm64", nil
+	case matrixArchitectureARM64:
+		return matrixArchitectureARM64, nil
 	default:
 		return "", fmt.Errorf("unsupported matrix architecture %q", matrixArch)
 	}
@@ -763,7 +749,9 @@ func validateExecutableArchitecture(path string, matrixArch string, label string
 		return fmt.Errorf("%s %s is not a readable ELF binary: %w", label, path, err)
 	}
 	defer func() {
-		_ = f.Close()
+		if closeErr := f.Close(); closeErr != nil {
+			_ = closeErr
+		}
 	}()
 	if f.FileHeader.Class != elf.ELFCLASS64 {
 		return fmt.Errorf("%s %s must be a 64-bit Linux ELF binary", label, path)
@@ -778,9 +766,35 @@ func elfMachineForMatrixArch(matrixArch string) (elf.Machine, error) {
 	switch strings.TrimSpace(matrixArch) {
 	case "x86_64":
 		return elf.EM_X86_64, nil
-	case "arm64":
+	case matrixArchitectureARM64:
 		return elf.EM_AARCH64, nil
 	default:
 		return 0, fmt.Errorf("unsupported matrix architecture %q", matrixArch)
 	}
+}
+
+const matrixArchitectureARM64 = "arm64"
+
+func usageLines() []string {
+	return []string{
+		"usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|sync-toolchain|init-infra-lock|server-evidence|write-infra-manifest|inspect-matrix> [flags]",
+		"  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]",
+		"  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--infra-manifest <path>] [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]",
+		"  preflight --matrix <path> [--strict] [--no-strict]",
+		"  audit-summary --matrix <path> --profile <path> --evidence <path> [--output-dir <path>]",
+		"  run-suite --matrix <path> --profile <path> [--infra-manifest <path>] [--output-dir <path>] [--timeout 12h] [--version v0.0.0-dev] [--skip-preflight] [--skip-release-gate]",
+		"  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--infra-manifest <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]",
+		"  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--infra-manifest <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]",
+		"  report --evidence <path>",
+		"  sync-toolchain --lock <path> --output-dir <path> [--env-file <path>] [--host-arch <amd64|arm64>]",
+		"  init-infra-lock [--infra-dir <path>]",
+		"  server-evidence --tag <tag> --ssh-key-path <path> --ssh-ingress-cidr <cidr> [--aws-region <region>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>] [--server-container-image-tag <image>]",
+		"  write-infra-manifest --output <path> --toolchain-lock <path> --toolchain-root <path> [--host-arch <amd64|arm64>] --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>",
+		"  inspect-matrix --matrix <path>",
+	}
+}
+
+//nolint:forbidigo // REQ:OFFLINE-INFRA-001 manifest generation intentionally records wall-clock creation time.
+func manifestNowUTC() time.Time {
+	return time.Now().UTC()
 }

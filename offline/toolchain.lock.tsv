@@ -1,0 +1,10 @@
+# schema_version=toolchain-lock.v1
+id	scope	purpose	name	version	os	arch	format	source_url	sha256	executable_path
+go-linux-amd64	host	build	go	1.24.13	linux	amd64	tar.gz	https://go.dev/dl/go1.24.13.linux-amd64.tar.gz	1fc94b57134d51669c72173ad5d49fd62afb0f1db9bf3f798fd98ee423f8d730	go/bin/go
+go-linux-arm64	host	build	go	1.24.13	linux	arm64	tar.gz	https://go.dev/dl/go1.24.13.linux-arm64.tar.gz	74d97be1cc3a474129590c67ebf748a96e72d9f3a2b6fef3ed3275de591d49b3	go/bin/go
+tofu-linux-amd64	host	provision	opentofu	1.10.6	linux	amd64	zip	https://github.com/opentofu/opentofu/releases/download/v1.10.6/tofu_1.10.6_linux_amd64.zip	15b7bed76420b50da3e121769c43341df8cd57d751ca14e6dbe9c850124c6dac	tofu
+tofu-linux-arm64	host	provision	opentofu	1.10.6	linux	arm64	zip	https://github.com/opentofu/opentofu/releases/download/v1.10.6/tofu_1.10.6_linux_arm64.zip	a32f653d686a8cad9b9be82101eb5b5e834fbfa8d095842fa1820c5d27fad967	tofu
+jq-linux-amd64	host	workflow-json-query	jq	1.8.1	linux	amd64	raw	https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64	020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d	jq-linux-amd64
+jq-linux-arm64	host	workflow-json-query	jq	1.8.1	linux	arm64	raw	https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-arm64	6bc62f25981328edd3cfcfe6fe51b073f2d7e7710d7ef7fcdac28d4e384fc3d4	jq-linux-arm64
+docker-static-linux-amd64	remote	container-runtime	docker	29.3.1	linux	amd64	tar.gz	https://download.docker.com/linux/static/stable/x86_64/docker-29.3.1.tgz	653965a027971307147c1164d44ca96e61c714e7a924a2a9fcba22ca037728cf	
+docker-static-linux-arm64	remote	container-runtime	docker	29.3.1	linux	arm64	tar.gz	https://download.docker.com/linux/static/stable/aarch64/docker-29.3.1.tgz	847584cec43ec05bfb0485824f3f3d458dd57cd287017c672b8a9ccdede34c58	

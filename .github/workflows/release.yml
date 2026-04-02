@@ -19,9 +19,74 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 2
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version: '1.24.13'
+      - name: install pinned host toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_lock="${GITHUB_WORKSPACE}/offline/toolchain.lock.tsv"
+          tool_root="${GITHUB_WORKSPACE}/.tmp/toolchain"
+          host_arch="amd64"
+
+          lookup_tool_field() {
+            local artifact_id="$1"
+            local field_name="$2"
+            awk -F '\t' -v artifact_id="$artifact_id" -v field_name="$field_name" '
+              /^#/ || NF == 0 { next }
+              $1 == "id" {
+                for (i = 1; i <= NF; i++) {
+                  idx[$i] = i
+                }
+                next
+              }
+              $1 == artifact_id {
+                print $(idx[field_name])
+                found = 1
+                exit
+              }
+              END { if (!found) exit 1 }
+            ' "$tool_lock"
+          }
+
+          download_bootstrap_tool() {
+            local artifact_id="$1"
+            local url sha dest
+            url="$(lookup_tool_field "$artifact_id" source_url)"
+            sha="$(lookup_tool_field "$artifact_id" sha256)"
+            dest="$tool_root/downloads/$artifact_id/$(basename "$url")"
+            mkdir -p "$(dirname "$dest")"
+            curl -fsSL "$url" -o "$dest"
+            if [[ "$(sha256sum "$dest" | awk '{print $1}')" != "$sha" ]]; then
+              echo "::error::bootstrap tool sha256 mismatch for ${artifact_id}"
+              exit 1
+            fi
+            printf '%s\n' "$dest"
+          }
+
+          bootstrap_go() {
+            local artifact_id archive_path extract_root
+            artifact_id="go-linux-${host_arch}"
+            archive_path="$(download_bootstrap_tool "$artifact_id")"
+            extract_root="$tool_root/extracted/$artifact_id"
+            rm -rf "$extract_root"
+            mkdir -p "$extract_root"
+            tar -xzf "$archive_path" -C "$extract_root"
+            printf '%s\n' "$extract_root/go/bin/go"
+          }
+
+          go_bin="$(bootstrap_go)"
+          "$go_bin" run -mod=readonly ./cmd/jcs-offline-replay sync-toolchain \
+            --lock "$tool_lock" \
+            --output-dir "$tool_root" \
+            --env-file "$tool_root/env.sh" \
+            --host-arch "$host_arch" >/dev/null
+          # shellcheck disable=SC1090
+          source "$tool_root/env.sh"
+
+          {
+            echo "PATH=$(dirname "$JCS_TOOL_GO"):$(dirname "$JCS_TOOL_JQ"):$(dirname "$JCS_TOOL_TOFU"):$PATH"
+            echo "JCS_TOOL_GO=$JCS_TOOL_GO"
+            echo "JCS_TOOL_JQ=$JCS_TOOL_JQ"
+          } >> "$GITHUB_ENV"
       - name: go vet
         run: go vet ./...
       - name: unit tests
@@ -179,9 +244,73 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 2
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version: '1.24.13'
+      - name: install pinned host toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_lock="${GITHUB_WORKSPACE}/offline/toolchain.lock.tsv"
+          tool_root="${GITHUB_WORKSPACE}/.tmp/toolchain-build"
+          host_arch="amd64"
+
+          lookup_tool_field() {
+            local artifact_id="$1"
+            local field_name="$2"
+            awk -F '\t' -v artifact_id="$artifact_id" -v field_name="$field_name" '
+              /^#/ || NF == 0 { next }
+              $1 == "id" {
+                for (i = 1; i <= NF; i++) {
+                  idx[$i] = i
+                }
+                next
+              }
+              $1 == artifact_id {
+                print $(idx[field_name])
+                found = 1
+                exit
+              }
+              END { if (!found) exit 1 }
+            ' "$tool_lock"
+          }
+
+          download_bootstrap_tool() {
+            local artifact_id="$1"
+            local url sha dest
+            url="$(lookup_tool_field "$artifact_id" source_url)"
+            sha="$(lookup_tool_field "$artifact_id" sha256)"
+            dest="$tool_root/downloads/$artifact_id/$(basename "$url")"
+            mkdir -p "$(dirname "$dest")"
+            curl -fsSL "$url" -o "$dest"
+            if [[ "$(sha256sum "$dest" | awk '{print $1}')" != "$sha" ]]; then
+              echo "::error::bootstrap tool sha256 mismatch for ${artifact_id}"
+              exit 1
+            fi
+            printf '%s\n' "$dest"
+          }
+
+          bootstrap_go() {
+            local artifact_id archive_path extract_root
+            artifact_id="go-linux-${host_arch}"
+            archive_path="$(download_bootstrap_tool "$artifact_id")"
+            extract_root="$tool_root/extracted/$artifact_id"
+            rm -rf "$extract_root"
+            mkdir -p "$extract_root"
+            tar -xzf "$archive_path" -C "$extract_root"
+            printf '%s\n' "$extract_root/go/bin/go"
+          }
+
+          go_bin="$(bootstrap_go)"
+          "$go_bin" run -mod=readonly ./cmd/jcs-offline-replay sync-toolchain \
+            --lock "$tool_lock" \
+            --output-dir "$tool_root" \
+            --env-file "$tool_root/env.sh" \
+            --host-arch "$host_arch" >/dev/null
+          # shellcheck disable=SC1090
+          source "$tool_root/env.sh"
+
+          {
+            echo "PATH=$(dirname "$JCS_TOOL_GO"):$(dirname "$JCS_TOOL_JQ"):$(dirname "$JCS_TOOL_TOFU"):$PATH"
+            echo "JCS_TOOL_GO=$JCS_TOOL_GO"
+          } >> "$GITHUB_ENV"
       - name: Build binary
         shell: bash
         run: |

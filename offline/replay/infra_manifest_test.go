@@ -35,6 +35,35 @@ func validInfraManifestFixture() *replay.InfraManifest {
 				ImageID:       "ami-0def5678",
 			},
 		},
+		Tools: []replay.InfraManifestTool{
+			{
+				ID:                     "go-linux-amd64",
+				Scope:                  replay.ToolchainScopeHost,
+				Purpose:                "build",
+				Name:                   "go",
+				Version:                "1.24.13",
+				OS:                     "linux",
+				Arch:                   "amd64",
+				Format:                 "tar.gz",
+				SourceURL:              "https://go.dev/dl/go1.24.13.linux-amd64.tar.gz",
+				SHA256:                 strings.Repeat("c", 64),
+				ArtifactRelativePath:   "toolchain/downloads/go-linux-amd64/go1.24.13.linux-amd64.tar.gz",
+				ExecutableRelativePath: "toolchain/extracted/go-linux-amd64/go/bin/go",
+			},
+			{
+				ID:                   "docker-static-linux-arm64",
+				Scope:                replay.ToolchainScopeRemote,
+				Purpose:              "container-runtime",
+				Name:                 "docker",
+				Version:              "29.3.1",
+				OS:                   "linux",
+				Arch:                 "arm64",
+				Format:               "tar.gz",
+				SourceURL:            "https://download.docker.com/linux/static/stable/aarch64/docker-29.3.1.tgz",
+				SHA256:               strings.Repeat("d", 64),
+				ArtifactRelativePath: "toolchain/downloads/docker-static-linux-arm64/docker-29.3.1.tgz",
+			},
+		},
 	}
 }
 
@@ -124,6 +153,13 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 			want: "at least one host",
 		},
 		{
+			name: "no tools",
+			mutate: func(im *replay.InfraManifest) {
+				im.Tools = nil
+			},
+			want: "at least one pinned tool artifact",
+		},
+		{
 			name: "invalid role",
 			mutate: func(im *replay.InfraManifest) {
 				im.Hosts[0].Role = "mips64"
@@ -164,6 +200,20 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 				im.Hosts[0].ImageID = ""
 			},
 			want: "image_id is required",
+		},
+		{
+			name: "host tool missing executable path",
+			mutate: func(im *replay.InfraManifest) {
+				im.Tools[0].ExecutableRelativePath = ""
+			},
+			want: "executable_relative_path is required",
+		},
+		{
+			name: "tool artifact path must be relative",
+			mutate: func(im *replay.InfraManifest) {
+				im.Tools[0].ArtifactRelativePath = "/tmp/go.tar.gz"
+			},
+			want: "artifact_relative_path must be relative",
 		},
 	}
 
@@ -213,6 +263,9 @@ func TestLoadInfraManifest(t *testing.T) {
 	if len(loaded.Hosts) != 2 {
 		t.Fatalf("expected 2 hosts, got %d", len(loaded.Hosts))
 	}
+	if len(loaded.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(loaded.Tools))
+	}
 	if loaded.Hosts[0].Role != "x86_64" {
 		t.Fatalf("expected host[0].role=x86_64, got %q", loaded.Hosts[0].Role)
 	}
@@ -233,6 +286,7 @@ func TestLoadInfraManifestRejectsUnknownFields(t *testing.T) {
   "provider_version": "1.8.0",
   "provider_lock_sha256": "` + strings.Repeat("b", 64) + `",
   "hosts": [{"role":"x86_64","cloud_provider":"aws","region":"us-east-1","instance_type":"c6i.large","image_id":"ami-0abc"}],
+  "tools": [{"id":"go-linux-amd64","scope":"host","purpose":"build","name":"go","version":"1.24.13","os":"linux","arch":"amd64","format":"tar.gz","source_url":"https://go.dev/dl/go1.24.13.linux-amd64.tar.gz","sha256":"` + strings.Repeat("c", 64) + `","artifact_relative_path":"toolchain/downloads/go/go.tar.gz","executable_relative_path":"toolchain/extracted/go/bin/go"}],
   "unknown_field": "should_fail"
 }`
 	if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {

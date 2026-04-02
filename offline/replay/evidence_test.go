@@ -9,6 +9,11 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+const (
+	testCPUIntel  = "Intel"
+	testKernel610 = "6.1.0"
+)
+
 func TestValidateEvidenceBundleParity(t *testing.T) {
 	m, p, e, opts := validEvidenceFixture()
 	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
@@ -213,16 +218,16 @@ func validEvidenceV2Fixture() (*replay.Matrix, *replay.Profile, *replay.Evidence
 	e.InfraManifestSHA256 = infraDigest
 	e.InfraRepoURL = "https://github.com/example/json-canon-conformance-infra"
 	e.InfraRepoCommit = infraCommit
-	e.NodeReplays[0].DiscoveredCPU = "Intel"
-	e.NodeReplays[0].DiscoveredKernel = "6.1.0"
+	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
+	e.NodeReplays[0].DiscoveredKernel = testKernel610
 	e.NodeReplays[0].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
-	e.NodeReplays[1].DiscoveredCPU = "Intel"
-	e.NodeReplays[1].DiscoveredKernel = "6.1.0"
+	e.NodeReplays[1].DiscoveredCPU = testCPUIntel
+	e.NodeReplays[1].DiscoveredKernel = testKernel610
 	e.NodeReplays[1].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
 	e.NodeReplays[2].DiscoveredCPU = "Neoverse"
-	e.NodeReplays[2].DiscoveredKernel = "6.1.0"
+	e.NodeReplays[2].DiscoveredKernel = testKernel610
 	e.NodeReplays[3].DiscoveredCPU = "Neoverse"
-	e.NodeReplays[3].DiscoveredKernel = "6.1.0"
+	e.NodeReplays[3].DiscoveredKernel = testKernel610
 	opts.ExpectedInfraManifestSHA256 = infraDigest
 	opts.ExpectedInfraRepoURL = e.InfraRepoURL
 	opts.ExpectedInfraRepoCommit = infraCommit
@@ -314,7 +319,7 @@ func TestValidateEvidenceBundleDowngradePrevented(t *testing.T) {
 
 func TestValidateEvidenceBundleRejectsNodeLevelV2FieldsInV1(t *testing.T) {
 	m, p, e, opts := validEvidenceFixture()
-	e.NodeReplays[0].DiscoveredCPU = "Intel"
+	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
 	err := replay.ValidateEvidenceBundle(e, m, p, opts)
 	if err == nil {
 		t.Fatal("expected error for v1 node-level v2 fields")

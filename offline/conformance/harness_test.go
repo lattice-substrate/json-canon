@@ -222,8 +222,11 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")
 	}
-	if !strings.Contains(releaseWorkflow, "go-version: '1.24.13'") {
-		t.Fatal("release workflow must pin go-version to exact patch for offline evidence control-binary determinism")
+	if !strings.Contains(releaseWorkflow, "offline/toolchain.lock.tsv") {
+		t.Fatal("release workflow must consume the pinned toolchain lock for offline evidence control-binary determinism")
+	}
+	if !strings.Contains(releaseWorkflow, "sync-toolchain") {
+		t.Fatal("release workflow must install pinned host tools via sync-toolchain before offline evidence gates")
 	}
 	if !strings.Contains(releaseWorkflow, ".source_git_commit") || !strings.Contains(releaseWorkflow, ".source_git_tag") {
 		t.Fatal("release workflow must resolve expected evidence source commit/tag from offline evidence metadata")

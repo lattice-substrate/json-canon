@@ -102,8 +102,6 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 }
 
 // LoadEvidence loads an evidence bundle from disk.
-//
-//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 evidence path is explicit operator input for release-gate validation.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
 	var e EvidenceBundle
 	if err := decodeStrictJSONFile(path, "evidence", &e); err != nil {
@@ -357,9 +355,7 @@ func validateEvidenceV2InfraFields(e *EvidenceBundle, opts EvidenceValidationOpt
 }
 
 func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, isV2 bool, requiresInfraBinding bool) error {
-	hasV2Fields := strings.TrimSpace(r.DiscoveredCPU) != "" ||
-		strings.TrimSpace(r.DiscoveredKernel) != "" ||
-		strings.TrimSpace(r.ImageDigest) != ""
+	hasV2Fields := nodeRunEvidenceHasV2Fields(r)
 	if !isV2 && hasV2Fields {
 		return fmt.Errorf("node %s replay %d contains v2-only node fields in schema %q", r.NodeID, r.ReplayIndex, EvidenceSchemaVersion)
 	}
@@ -369,6 +365,16 @@ func validateNodeRunEvidenceVersionFields(r NodeRunEvidence, node NodeSpec, isV2
 	if !requiresInfraBinding {
 		return nil
 	}
+	return validateInfraBindingNodeFields(r, node)
+}
+
+func nodeRunEvidenceHasV2Fields(r NodeRunEvidence) bool {
+	return strings.TrimSpace(r.DiscoveredCPU) != "" ||
+		strings.TrimSpace(r.DiscoveredKernel) != "" ||
+		strings.TrimSpace(r.ImageDigest) != ""
+}
+
+func validateInfraBindingNodeFields(r NodeRunEvidence, node NodeSpec) error {
 	if strings.TrimSpace(r.DiscoveredCPU) == "" {
 		return fmt.Errorf("node %s replay %d missing discovered_cpu for infra-substrate-binding profile", r.NodeID, r.ReplayIndex)
 	}
@@ -393,6 +399,7 @@ func profileRequiresInfraBinding(profile *Profile) bool {
 	return false
 }
 
+//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 strict JSON decoding reads explicit operator/runtime artifact paths.
 func decodeStrictJSONFile(path string, kind string, target any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

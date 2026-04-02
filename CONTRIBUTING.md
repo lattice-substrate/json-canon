@@ -28,6 +28,8 @@ go run ./cmd/jcs-gate
 ```
 
 Lint is a required gate and must pass before merge.
+Any `//nolint` change must also update `conformance/nolint_inventory.tsv` through
+the Go-native conformance inventory flow.
 
 ## Pre-Push Hook (Optional)
 
@@ -54,6 +56,7 @@ The conformance suite includes traceability gates that verify:
 - Registry/matrix parity
 - Implementation and test symbol existence
 - Requirement ID format compliance
+- Complete `//nolint` inventory parity (`conformance/nolint_inventory.tsv`)
 - Vector schema validity
 - ABI manifest integrity
 - Citation index coverage
@@ -236,13 +239,27 @@ jcs-offline-replay cross-arch \
 
 Server-backed runs use real AWS EC2 instances (x86_64 + arm64 Graviton2) and produce
 `evidence.v2` with an infrastructure manifest binding. The infra manifest records the
-IaC repo commit, provider lock digest, AMI IDs, instance types, and discovered CPU/kernel.
+IaC repo commit, provider lock digest, AMI IDs, instance types, discovered CPU/kernel,
+and the exact pinned tool artifacts used for the run.
 
 **Requirements:**
-- OpenTofu CLI installed (`https://opentofu.org/`)
 - AWS credentials with EC2 permissions
 - SSH key pair (private + matching `.pub` file)
 - `SSH_INGRESS_CIDR` for SSH access restriction (for example `203.0.113.10/32`)
+- `.terraform.lock.hcl` committed under `infra/`
+
+Before the first billed AWS run, generate the Terraform/OpenTofu lockfile with the
+pinned binaries:
+
+```bash
+./scripts/init-infra-lock.sh
+git add infra/.terraform.lock.hcl
+```
+
+Do not install `tofu` on the host for this step. The script bootstraps the pinned
+Go artifact from `offline/toolchain.lock.tsv`, then hands off to
+`jcs-offline-replay init-infra-lock`, which executes the pinned OpenTofu binary
+directly.
 
 **Single command:**
 
@@ -256,9 +273,11 @@ SSH_INGRESS_CIDR=203.0.113.10/32 \
 ./scripts/release-server.sh
 ```
 
-The script provisions two EC2 instances, runs 5 cold replays on each via SSH,
-installs the remote container runtime, resolves digest-pinned container image
-references on each provisioned host, emits `evidence.v2`, runs
+The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
+then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
+provisions two EC2 instances, runs 5 cold replays on each over Go-managed SSH,
+installs the remote pinned container runtime, resolves digest-pinned container
+image references on each provisioned host, emits `evidence.v2`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
 then destroys the instances.
 
@@ -270,6 +289,7 @@ x86_64/offline-bundle.tgz
 arm64/offline-evidence.json    (evidence.v2, schema_version: evidence.v2)
 arm64/offline-bundle.tgz
 infra-manifest.v1.json         (shared across both arches)
+toolchain/                     (verified pinned tool artifacts used for the run)
 ```
 
 The `infra_manifest_sha256` in each evidence file must match the SHA-256 of
@@ -292,9 +312,7 @@ go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 **First-time IaC setup** (run once, commit the lockfile):
 
 ```bash
-cd infra
-tofu init
-# Commit the generated .terraform.lock.hcl
+./scripts/init-infra-lock.sh
 git add infra/.terraform.lock.hcl
 ```
 
@@ -303,13 +321,24 @@ git add infra/.terraform.lock.hcl
 Release evidence must be generated with three constraints that match the
 CI release workflow:
 
-1. **Go version.** The release workflow pins Go to the version in
-   `.github/workflows/release.yml` (currently `1.24.13`). The harness
-   builds the control binary internally, and the CI workflow rebuilds it
-   from the source commit using the pinned Go version. If the Go versions
-   differ, the `control_binary_sha256` in the evidence will not match the
-   CI-built binary and the release gate will fail. Use `GOTOOLCHAIN` or
-   `PATH` to select the matching Go version.
+1. **Pinned Go toolchain.** The release workflow installs Go from
+   `offline/toolchain.lock.tsv`. The harness builds the control binary
+   internally, and the CI workflow rebuilds it from the source commit using
+   the same pinned artifact. If the Go artifacts differ, the
+   `control_binary_sha256` in the evidence will not match the CI-built binary
+   and the release gate will fail.
+
+0. **Pinned binaries only.** Every required external binary is materialized from
+   `offline/toolchain.lock.tsv` and executed from that verified path. This
+   includes Go, OpenTofu, jq, and the remote Docker runtime bundles. The
+   supported shell entrypoints are `./scripts/bootstrap-pinned-toolchain.sh`,
+   `./scripts/init-infra-lock.sh`, and `./scripts/release-server.sh`.
+
+0. **Go-native release orchestration after bootstrap.** Once pinned Go has been
+   materialized, release-critical automation must execute through
+   `jcs-offline-replay init-infra-lock` and `jcs-offline-replay server-evidence`.
+   Shell wrappers are limited to pinned-Go bootstrap plus invoking those Go
+   subcommands.
 
 2. **Version ldflags.** Pass `--version <tag>` to `cross-arch`. The
    harness builds the control binary with `-X main.version=<value>`. The

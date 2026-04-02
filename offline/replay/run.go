@@ -190,8 +190,6 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 }
 
 // LoadNodeRunEvidence loads one node replay evidence artifact from disk.
-//
-//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 node evidence path is explicit operator/runtime input.
 func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	var run NodeRunEvidence
 	if err := decodeStrictJSONFile(path, "node evidence", &run); err != nil {

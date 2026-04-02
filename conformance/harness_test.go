@@ -56,13 +56,26 @@ type vectorCase struct {
 	WantExit           int      `json:"want_exit"`
 }
 
+type nolintDirectiveRecord struct {
+	Path           string
+	Line           int
+	Linters        string
+	RequirementIDs string
+	Rationale      string
+	Directive      string
+}
+
 var (
 	buildOnce sync.Once
 	binPath   string
 	errBuild  error
 )
 
-const canonicalObjectA1 = `{"a":1}`
+const (
+	canonicalObjectA1         = `{"a":1}`
+	nolintInventoryHeaderLine = "path\tline\tlinters\trequirement_ids\trationale\tdirective"
+	nolintInventoryPath       = "conformance/nolint_inventory.tsv"
+)
 
 // TestConformanceRequirements runs all requirement checks.
 func TestConformanceRequirements(t *testing.T) {
@@ -266,24 +279,27 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"CLI-IO-005":    checkVerifyOkEmission,
 		"CLI-CLASS-001": checkErrorDiagnosticsIncludeFailureClass,
 		// ABI/Supply/Governance/Traceability policy
-		"ABI-PARITY-001":       checkABIManifestBehaviorParity,
-		"SUPPLY-PIN-001":       checkGitHubActionsPinnedBySHA,
-		"SUPPLY-PROV-001":      checkReleaseWorkflowVerificationArtifacts,
-		"GOV-DUR-001":          checkGovernanceDurabilityClausesPresent,
-		"TRACE-LINK-001":       checkBehaviorTestsLinkedToRequirements,
-		"LINT-CI-001":          checkCILintGateEnforced,
-		"LINT-GATE-001":        checkLocalMandatoryLintGate,
-		"LINT-CONFIG-001":      checkGolangCILintConfigStrict,
-		"LINT-NOLINT-001":      checkNolintDirectiveDiscipline,
-		"OFFLINE-MATRIX-001":   checkOfflineMatrixManifestPresent,
-		"OFFLINE-COLD-001":     checkOfflineProfileColdReplayPolicy,
-		"OFFLINE-EVIDENCE-001": checkOfflineEvidenceSchemaAndVerifyCLI,
-		"OFFLINE-GATE-001":     checkOfflineReleaseGatePolicy,
-		"OFFLINE-ARCH-001":     checkOfflineArchScopeDualArch,
-		"OFFLINE-LOCAL-001":    checkOfflineLocalProofCLI,
-		"OFFLINE-EVIDENCE-002": checkOfflineEvidenceV2SchemaPresent,
-		"OFFLINE-INFRA-001":    checkOfflineInfraManifestSchemaPresent,
-		"OFFLINE-SERVER-001":   checkOfflineServerProfileContract,
+		"ABI-PARITY-001":        checkABIManifestBehaviorParity,
+		"SUPPLY-PIN-001":        checkGitHubActionsPinnedBySHA,
+		"SUPPLY-PROV-001":       checkReleaseWorkflowVerificationArtifacts,
+		"GOV-DUR-001":           checkGovernanceDurabilityClausesPresent,
+		"TRACE-LINK-001":        checkBehaviorTestsLinkedToRequirements,
+		"LINT-CI-001":           checkCILintGateEnforced,
+		"LINT-GATE-001":         checkLocalMandatoryLintGate,
+		"LINT-CONFIG-001":       checkGolangCILintConfigStrict,
+		"LINT-NOLINT-001":       checkNolintDirectiveDiscipline,
+		"LINT-NOLINT-002":       checkNolintInventoryArtifact,
+		"OFFLINE-MATRIX-001":    checkOfflineMatrixManifestPresent,
+		"OFFLINE-COLD-001":      checkOfflineProfileColdReplayPolicy,
+		"OFFLINE-EVIDENCE-001":  checkOfflineEvidenceSchemaAndVerifyCLI,
+		"OFFLINE-GATE-001":      checkOfflineReleaseGatePolicy,
+		"OFFLINE-ARCH-001":      checkOfflineArchScopeDualArch,
+		"OFFLINE-LOCAL-001":     checkOfflineLocalProofCLI,
+		"OFFLINE-EVIDENCE-002":  checkOfflineEvidenceV2SchemaPresent,
+		"OFFLINE-INFRA-001":     checkOfflineInfraManifestSchemaPresent,
+		"OFFLINE-TOOLCHAIN-001": checkOfflineToolchainLockPresent,
+		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
+		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -2163,84 +2179,192 @@ func TestNolintDirectiveDiscipline(t *testing.T) {
 	checkNolintDirectiveDiscipline(t, h)
 }
 
-//nolint:gocognit,gosec // REQ:LINT-NOLINT-001 suppression governance scanner intentionally walks repository sources.
 func checkNolintDirectiveDiscipline(t *testing.T, h *harness) {
 	t.Helper()
-	nolintRe := regexp.MustCompile(`^//\s*nolint:([a-z0-9]+(?:,[a-z0-9]+)*)\s+//`)
-	reqIDRe := regexp.MustCompile(`[A-Z]+-[A-Z0-9]+-[0-9]+`)
-	total := 0
+	records, err := collectNolintInventory(h.root)
+	if err != nil {
+		t.Fatalf("collect nolint inventory: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("expected at least one nolint directive to validate")
+	}
+}
 
-	err := filepath.WalkDir(h.root, func(path string, d fs.DirEntry, walkErr error) error {
+// TestNolintInventoryArtifact verifies the checked-in nolint inventory matches the live source tree.
+func TestNolintInventoryArtifact(t *testing.T) {
+	h := testHarness(t)
+	checkNolintInventoryArtifact(t, h)
+}
+
+func checkNolintInventoryArtifact(t *testing.T, h *harness) {
+	t.Helper()
+	records, err := collectNolintInventory(h.root)
+	if err != nil {
+		t.Fatalf("collect nolint inventory: %v", err)
+	}
+	actual, err := renderNolintInventory(records)
+	if err != nil {
+		t.Fatalf("render nolint inventory: %v", err)
+	}
+	artifactPath := filepath.Join(h.root, nolintInventoryPath)
+	if shouldWriteNolintInventory() {
+		if writeErr := os.WriteFile(artifactPath, actual, 0o600); writeErr != nil {
+			t.Fatalf("write nolint inventory: %v", writeErr)
+		}
+	}
+	expected := mustReadText(t, artifactPath)
+	if expected != string(actual) {
+		t.Fatalf("nolint inventory drift: regenerate via JCS_WRITE_NOLINT_INVENTORY=true go test ./conformance -run TestNolintInventoryArtifact -count=1")
+	}
+}
+
+func collectNolintInventory(root string) ([]nolintDirectiveRecord, error) {
+	nolintRe := regexp.MustCompile(`^//\s*nolint:([a-z0-9]+(?:,[a-z0-9]+)*)\s+//\s*(.+)$`)
+	reqIDRe := regexp.MustCompile(`[A-Z]+-[A-Z0-9]+-[0-9]+`)
+	records := make([]nolintDirectiveRecord, 0, 32)
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
 		if d.IsDir() {
-			base := filepath.Base(path)
-			switch base {
-			case ".git", "vendor", ".tmp":
-				return filepath.SkipDir
-			}
-			return nil
+			return skipInventoryDir(path)
 		}
 		if filepath.Ext(path) != ".go" {
 			return nil
 		}
-		rel, err := filepath.Rel(h.root, path)
+		fileRecords, err := collectNolintInventoryFromFile(root, path, nolintRe, reqIDRe)
 		if err != nil {
-			return fmt.Errorf("resolve relative path %q: %w", path, err)
+			return err
 		}
-		f, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open %s: %w", rel, err)
-		}
-		defer func() {
-			if closeErr := f.Close(); closeErr != nil {
-				t.Errorf("close %s: %v", rel, closeErr)
-			}
-		}()
-
-		sc := bufio.NewScanner(f)
-		lineNo := 0
-		for sc.Scan() {
-			lineNo++
-			line := sc.Text()
-			trimmed := strings.TrimSpace(line)
-			if !strings.HasPrefix(trimmed, "//nolint") {
-				continue
-			}
-			total++
-			if strings.Contains(trimmed, "nolint:all") {
-				t.Errorf("%s:%d uses forbidden blanket suppression: %s", rel, lineNo, trimmed)
-				continue
-			}
-
-			match := nolintRe.FindStringSubmatch(trimmed)
-			if match == nil {
-				t.Errorf("%s:%d must use //nolint:<linter>[,<linter>...] with inline rationale", rel, lineNo)
-				continue
-			}
-			if strings.Contains(match[1], "all") {
-				t.Errorf("%s:%d must not suppress linter 'all'", rel, lineNo)
-			}
-			if !strings.Contains(trimmed, "REQ:") {
-				t.Errorf("%s:%d nolint rationale must include REQ:<ID>", rel, lineNo)
-				continue
-			}
-			if !reqIDRe.MatchString(trimmed) {
-				t.Errorf("%s:%d nolint rationale must include at least one requirement ID", rel, lineNo)
-			}
-		}
-		if err := sc.Err(); err != nil {
-			return fmt.Errorf("scan %s: %w", rel, err)
-		}
+		records = append(records, fileRecords...)
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("walk source tree for nolint directives: %v", err)
+		return nil, fmt.Errorf("walk source tree for nolint inventory: %w", err)
 	}
-	if total == 0 {
-		t.Fatal("expected at least one nolint directive to validate")
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Path != records[j].Path {
+			return records[i].Path < records[j].Path
+		}
+		return records[i].Line < records[j].Line
+	})
+	return records, nil
+}
+
+func skipInventoryDir(path string) error {
+	switch filepath.Base(path) {
+	case ".git", "vendor", ".tmp":
+		return filepath.SkipDir
+	default:
+		return nil
 	}
+}
+
+func collectNolintInventoryFromFile(root, path string, nolintRe, reqIDRe *regexp.Regexp) (records []nolintDirectiveRecord, retErr error) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve relative path %q: %w", path, err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", rel, err)
+	}
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close %s: %w", rel, closeErr))
+		}
+	}()
+	sc := bufio.NewScanner(f)
+	records = make([]nolintDirectiveRecord, 0, 4)
+	lineNo := 0
+	for sc.Scan() {
+		lineNo++
+		record, ok, parseErr := parseNolintDirective(rel, lineNo, sc.Text(), nolintRe, reqIDRe)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if ok {
+			records = append(records, record)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", rel, err)
+	}
+	return records, nil
+}
+
+func shouldWriteNolintInventory() bool {
+	value, ok := os.LookupEnv("JCS_WRITE_NOLINT_INVENTORY")
+	return ok && strings.EqualFold(strings.TrimSpace(value), "true")
+}
+
+func parseNolintDirective(rel string, lineNo int, line string, nolintRe, reqIDRe *regexp.Regexp) (nolintDirectiveRecord, bool, error) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "//nolint") {
+		return nolintDirectiveRecord{}, false, nil
+	}
+	if strings.Contains(trimmed, "nolint:all") {
+		return nolintDirectiveRecord{}, false, fmt.Errorf("%s:%d uses forbidden blanket suppression: %s", rel, lineNo, trimmed)
+	}
+	match := nolintRe.FindStringSubmatch(trimmed)
+	if match == nil {
+		return nolintDirectiveRecord{}, false, fmt.Errorf("%s:%d must use //nolint:<linter>[,<linter>...] with inline rationale", rel, lineNo)
+	}
+	if strings.Contains(match[1], "all") {
+		return nolintDirectiveRecord{}, false, fmt.Errorf("%s:%d must not suppress linter 'all'", rel, lineNo)
+	}
+	reqIDs := reqIDRe.FindAllString(match[2], -1)
+	if len(reqIDs) == 0 {
+		return nolintDirectiveRecord{}, false, fmt.Errorf("%s:%d nolint rationale must include at least one requirement ID", rel, lineNo)
+	}
+	return nolintDirectiveRecord{
+		Path:           rel,
+		Line:           lineNo,
+		Linters:        match[1],
+		RequirementIDs: strings.Join(uniqueSortedStrings(reqIDs), ","),
+		Rationale:      match[2],
+		Directive:      trimmed,
+	}, true, nil
+}
+
+func renderNolintInventory(records []nolintDirectiveRecord) ([]byte, error) {
+	var b strings.Builder
+	b.WriteString("# schema_version=nolint-inventory.v1\n")
+	b.WriteString(nolintInventoryHeaderLine)
+	b.WriteByte('\n')
+	for _, record := range records {
+		fields := []string{
+			record.Path,
+			strconv.Itoa(record.Line),
+			record.Linters,
+			record.RequirementIDs,
+			record.Rationale,
+			record.Directive,
+		}
+		for _, field := range fields {
+			if strings.ContainsAny(field, "\n\r\t") {
+				return nil, fmt.Errorf("nolint inventory field contains invalid whitespace: %q", field)
+			}
+		}
+		b.WriteString(strings.Join(fields, "\t"))
+		b.WriteByte('\n')
+	}
+	return []byte(b.String()), nil
+}
+
+func uniqueSortedStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // TestGovernanceDurabilityClausesPresent verifies governance durability clauses are documented.
@@ -2420,10 +2544,35 @@ func checkOfflineInfraManifestSchemaPresent(t *testing.T, h *harness) {
 		"provider_engine",
 		"provider_lock_sha256",
 		"hosts",
+		"tools",
+		"artifact_relative_path",
 		"instance_type",
 		"image_id",
 	} {
 		assertContains(t, data, needle, "infra-manifest.v1 schema field")
+	}
+}
+
+func checkOfflineToolchainLockPresent(t *testing.T, h *harness) {
+	t.Helper()
+	lockPath := filepath.Join(h.root, "offline", "toolchain.lock.tsv")
+	lock, err := replay.LoadToolchainLock(lockPath)
+	if err != nil {
+		t.Fatalf("load toolchain lock %s: %v", lockPath, err)
+	}
+	if len(lock.Artifacts) < 5 {
+		t.Fatalf("toolchain lock %s must include the pinned host and remote artifacts, got %d", lockPath, len(lock.Artifacts))
+	}
+	lockRaw := mustReadText(t, lockPath)
+	for _, needle := range []string{
+		"toolchain-lock.v1",
+		"go-linux-amd64",
+		"tofu-linux-amd64",
+		"jq-linux-amd64",
+		"docker-static-linux-amd64",
+		"docker-static-linux-arm64",
+	} {
+		assertContains(t, lockRaw, needle, "toolchain lock artifact")
 	}
 }
 
@@ -2452,6 +2601,50 @@ func checkOfflineServerProfileContract(t *testing.T, h *harness) {
 			t.Fatalf("server profile %s must include infra-substrate-binding in required_suites", profilePath)
 		}
 	}
+}
+
+func checkOfflineGoNativeServerAutomation(t *testing.T, h *harness) {
+	t.Helper()
+
+	mainCLI := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
+	assertContains(t, mainCLI, "server-evidence", "offline replay cli server-evidence subcommand")
+	assertContains(t, mainCLI, "init-infra-lock", "offline replay cli init-infra-lock subcommand")
+
+	releaseScript := mustReadText(t, filepath.Join(h.root, "scripts", "release-server.sh"))
+	assertContains(t, releaseScript, "bootstrap-pinned-toolchain.sh", "release wrapper pinned bootstrap")
+	assertContains(t, releaseScript, "server-evidence", "release wrapper Go-native orchestration handoff")
+	for _, forbidden := range []string{
+		"tofu apply",
+		"tofu destroy",
+		"ssh ",
+		"scp ",
+		"docker run",
+	} {
+		if strings.Contains(releaseScript, forbidden) {
+			t.Fatalf("release-server.sh must remain a bootstrap-only wrapper; found %q", forbidden)
+		}
+	}
+
+	initScript := mustReadText(t, filepath.Join(h.root, "scripts", "init-infra-lock.sh"))
+	assertContains(t, initScript, "bootstrap-pinned-toolchain.sh", "infra lock wrapper pinned bootstrap")
+	assertContains(t, initScript, "init-infra-lock", "infra lock wrapper Go-native handoff")
+	for _, forbidden := range []string{
+		"tofu init",
+		"ssh ",
+		"scp ",
+	} {
+		if strings.Contains(initScript, forbidden) {
+			t.Fatalf("init-infra-lock.sh must remain a bootstrap-only wrapper; found %q", forbidden)
+		}
+	}
+
+	contrib := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, contrib, "jcs-offline-replay server-evidence", "contributing Go-native server evidence command")
+	assertContains(t, contrib, "jcs-offline-replay init-infra-lock", "contributing Go-native infra lock command")
+
+	runbook := mustReadText(t, filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"))
+	assertContains(t, runbook, "jcs-offline-replay server-evidence", "offline runbook Go-native server evidence command")
+	assertContains(t, runbook, "jcs-offline-replay init-infra-lock", "offline runbook Go-native infra lock command")
 }
 
 // TestCitationIndexCoversNormativeRequirements verifies every normative

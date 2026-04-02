@@ -173,6 +173,44 @@ func TestVerifyVectorSetChecksum(t *testing.T) {
 	}
 }
 
+func TestParseCPUInfoFields(t *testing.T) {
+	raw := strings.Join([]string{
+		"processor\t: 0",
+		"CPU architecture : 8",
+		"CPU implementer : 0x41",
+		"CPU part\t: 0xd0c",
+		"model name : should not override first",
+		"CPU architecture : 9",
+		"",
+	}, "\n")
+	fields := parseCPUInfoFields(raw)
+	if fields["CPU architecture"] != "8" {
+		t.Fatalf("unexpected CPU architecture: %q", fields["CPU architecture"])
+	}
+	if fields["CPU implementer"] != "0x41" {
+		t.Fatalf("unexpected CPU implementer: %q", fields["CPU implementer"])
+	}
+	if fields["CPU part"] != "0xd0c" {
+		t.Fatalf("unexpected CPU part: %q", fields["CPU part"])
+	}
+}
+
+func TestFormatARMCPUSummary(t *testing.T) {
+	got := formatARMCPUSummary(map[string]string{
+		"CPU architecture": "8",
+		"CPU implementer":  "0x41",
+		"CPU part":         "0xd0c",
+	})
+	want := "ARM arch 8 impl 0x41 part 0xd0c"
+	if got != want {
+		t.Fatalf("unexpected ARM summary: got=%q want=%q", got, want)
+	}
+
+	if got := formatARMCPUSummary(map[string]string{}); got != "" {
+		t.Fatalf("expected empty summary, got %q", got)
+	}
+}
+
 func computeVectorSetChecksum(files []string, checksums map[string]string) string {
 	items := make([]string, 0, len(files))
 	for _, rel := range files {

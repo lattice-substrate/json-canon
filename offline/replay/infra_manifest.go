@@ -24,6 +24,7 @@ type InfraManifest struct {
 	ProviderVersion    string              `json:"provider_version"`
 	ProviderLockSHA256 string              `json:"provider_lock_sha256"`
 	Hosts              []InfraManifestHost `json:"hosts"`
+	Tools              []InfraManifestTool `json:"tools"`
 }
 
 // InfraManifestHost describes one provisioned cloud host.
@@ -35,6 +36,22 @@ type InfraManifestHost struct {
 	ImageID          string `json:"image_id"`
 	DiscoveredCPU    string `json:"discovered_cpu,omitempty"`
 	DiscoveredKernel string `json:"discovered_kernel,omitempty"`
+}
+
+// InfraManifestTool records one pinned tool artifact used in the evidenced release flow.
+type InfraManifestTool struct {
+	ID                     string `json:"id"`
+	Scope                  string `json:"scope"`
+	Purpose                string `json:"purpose"`
+	Name                   string `json:"name"`
+	Version                string `json:"version"`
+	OS                     string `json:"os"`
+	Arch                   string `json:"arch"`
+	Format                 string `json:"format"`
+	SourceURL              string `json:"source_url"`
+	SHA256                 string `json:"sha256"`
+	ArtifactRelativePath   string `json:"artifact_relative_path"`
+	ExecutableRelativePath string `json:"executable_relative_path,omitempty"`
 }
 
 // LoadInfraManifest reads, decodes, and validates an infrastructure manifest document.
@@ -75,9 +92,18 @@ func ValidateInfraManifest(im *InfraManifest) error {
 	if len(im.Hosts) == 0 {
 		return fmt.Errorf("infra manifest must include at least one host")
 	}
+	if len(im.Tools) == 0 {
+		return fmt.Errorf("infra manifest must include at least one pinned tool artifact")
+	}
 	seenRoles := make(map[string]struct{}, len(im.Hosts))
 	for i, h := range im.Hosts {
 		if err := validateInfraManifestHost(i, h, seenRoles); err != nil {
+			return err
+		}
+	}
+	seenTools := make(map[string]struct{}, len(im.Tools))
+	for i, tool := range im.Tools {
+		if err := validateInfraManifestTool(i, tool, seenTools); err != nil {
 			return err
 		}
 	}
@@ -115,9 +141,9 @@ func validateInfraManifestScalars(im *InfraManifest) error {
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
 func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]struct{}) error {
 	switch h.Role {
-	case "x86_64", "arm64":
+	case architectureX8664, architectureARM64:
 	default:
-		return fmt.Errorf("infra manifest host[%d] role must be x86_64 or arm64, got %q", i, h.Role)
+		return fmt.Errorf("infra manifest host[%d] role must be %s or %s, got %q", i, architectureX8664, architectureARM64, h.Role)
 	}
 	if _, ok := seenRoles[h.Role]; ok {
 		return fmt.Errorf("infra manifest duplicate host role %q", h.Role)
@@ -131,6 +157,100 @@ func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]
 	} {
 		if strings.TrimSpace(field.value) == "" {
 			return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
+		}
+	}
+	return nil
+}
+
+func validateInfraManifestTool(i int, tool InfraManifestTool, seenTools map[string]struct{}) error {
+	if err := validateInfraManifestToolFields(i, tool); err != nil {
+		return err
+	}
+	if err := validateInfraManifestToolIdentity(i, tool); err != nil {
+		return err
+	}
+	return validateInfraManifestToolPaths(i, tool, seenTools)
+}
+
+func validateInfraManifestToolFields(i int, tool InfraManifestTool) error {
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"id", tool.ID},
+		{"scope", tool.Scope},
+		{"purpose", tool.Purpose},
+		{"name", tool.Name},
+		{"version", tool.Version},
+		{"os", tool.OS},
+		{"arch", tool.Arch},
+		{"format", tool.Format},
+		{"source_url", tool.SourceURL},
+		{"artifact_relative_path", tool.ArtifactRelativePath},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("infra manifest tool[%d] %s is required", i, field.name)
+		}
+	}
+	return nil
+}
+
+func validateInfraManifestToolIdentity(i int, tool InfraManifestTool) error {
+	switch tool.Scope {
+	case ToolchainScopeHost, ToolchainScopeRemote:
+	default:
+		return fmt.Errorf("infra manifest tool[%d] scope must be host or remote, got %q", i, tool.Scope)
+	}
+	switch tool.Arch {
+	case architectureAMD64, architectureARM64:
+	default:
+		return fmt.Errorf("infra manifest tool[%d] arch must be %s or %s, got %q", i, architectureAMD64, architectureARM64, tool.Arch)
+	}
+	switch tool.Format {
+	case toolchainFormatRaw, toolchainFormatTGZ, toolchainFormatZIP:
+	default:
+		return fmt.Errorf("infra manifest tool[%d] unsupported format %q", i, tool.Format)
+	}
+	if !strings.HasPrefix(tool.SourceURL, "https://") {
+		return fmt.Errorf("infra manifest tool[%d] source_url must use https", i)
+	}
+	if err := validateSHA256Token("sha256", tool.SHA256); err != nil {
+		return fmt.Errorf("infra manifest tool[%d] %w", i, err)
+	}
+	return nil
+}
+
+func validateInfraManifestToolPaths(i int, tool InfraManifestTool, seenTools map[string]struct{}) error {
+	if _, ok := seenTools[tool.ID]; ok {
+		return fmt.Errorf("infra manifest duplicate tool id %q", tool.ID)
+	}
+	seenTools[tool.ID] = struct{}{}
+	if err := validateManifestRelativePath("artifact_relative_path", tool.ArtifactRelativePath, true); err != nil {
+		return fmt.Errorf("infra manifest tool[%d] %w", i, err)
+	}
+	if tool.Scope == ToolchainScopeHost && strings.TrimSpace(tool.ExecutableRelativePath) == "" {
+		return fmt.Errorf("infra manifest tool[%d] executable_relative_path is required for host tools", i)
+	}
+	if err := validateManifestRelativePath("executable_relative_path", tool.ExecutableRelativePath, tool.Scope == ToolchainScopeHost); err != nil {
+		return fmt.Errorf("infra manifest tool[%d] %w", i, err)
+	}
+	return nil
+}
+
+func validateManifestRelativePath(name, path string, required bool) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		if required {
+			return fmt.Errorf("%s is required", name)
+		}
+		return nil
+	}
+	if strings.HasPrefix(path, "/") {
+		return fmt.Errorf("%s must be relative", name)
+	}
+	for _, segment := range strings.Split(path, "/") {
+		if segment == ".." {
+			return fmt.Errorf("%s must not contain '..'", name)
 		}
 	}
 	return nil

@@ -85,12 +85,18 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		writeErrorLine(stderr, err)
 		return 2
 	}
+	if err := runWorker(cfg, stdout); err != nil {
+		writeErrorLine(stderr, err)
+		return 2
+	}
+	return 0
+}
 
+func runWorker(cfg workerArgs, stdout io.Writer) error {
 	startedAt := wallClockNowUTC()
 	tmpDir, err := os.MkdirTemp("", "jcs-offline-worker-*")
 	if err != nil {
-		writeErrorLine(stderr, fmt.Errorf("create temp dir: %w", err))
-		return 2
+		return fmt.Errorf("create temp dir: %w", err)
 	}
 	defer func() {
 		if removeErr := os.RemoveAll(tmpDir); removeErr != nil {
@@ -100,13 +106,11 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	manifest, err := extractBundle(cfg.bundlePath, tmpDir)
 	if err != nil {
-		writeErrorLine(stderr, fmt.Errorf("extract bundle: %w", err))
-		return 2
+		return fmt.Errorf("extract bundle: %w", err)
 	}
 	verifyErr := verifyExtractedBundle(tmpDir, manifest)
 	if verifyErr != nil {
-		writeErrorLine(stderr, fmt.Errorf("verify bundle: %w", verifyErr))
-		return 2
+		return fmt.Errorf("verify bundle: %w", verifyErr)
 	}
 
 	binaryPath := filepath.Join(tmpDir, filepath.FromSlash(manifest.BinaryPath))
@@ -117,13 +121,11 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 
 	caseCount, err := runVectors(binaryPath, tmpDir, manifest, canonicalAcc, verifyAcc, classAcc, exitAcc)
 	if err != nil {
-		writeErrorLine(stderr, fmt.Errorf("replay vectors: %w", err))
-		return 2
+		return fmt.Errorf("replay vectors: %w", err)
 	}
 	independenceErr := checkEnvironmentIndependence(binaryPath)
 	if independenceErr != nil {
-		writeErrorLine(stderr, fmt.Errorf("environment-independence check: %w", independenceErr))
-		return 2
+		return fmt.Errorf("environment-independence check: %w", independenceErr)
 	}
 
 	completedAt := wallClockNowUTC()
@@ -150,13 +152,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	}
 
 	if err := writeEvidence(cfg.evidencePath, evidence); err != nil {
-		writeErrorLine(stderr, err)
-		return 2
+		return err
 	}
 	if err := writef(stdout, "ok node=%s replay=%d cases=%d\n", cfg.nodeID, cfg.replayIndex, caseCount); err != nil {
-		return 2
+		return err
 	}
-	return 0
+	return nil
 }
 
 func parseWorkerArgs(args []string) (workerArgs, error) {
@@ -196,8 +197,10 @@ func resolveWorkerSchemaVersion(flags map[string]string) string {
 	if schema := strings.TrimSpace(flags["--schema-version"]); schema != "" {
 		return schema
 	}
-	if schema := strings.TrimSpace(os.Getenv("JCS_EVIDENCE_SCHEMA_VERSION")); schema != "" {
-		return schema
+	if schema, ok := os.LookupEnv("JCS_EVIDENCE_SCHEMA_VERSION"); ok {
+		if trimmed := strings.TrimSpace(schema); trimmed != "" {
+			return trimmed
+		}
 	}
 	return replay.EvidenceSchemaVersion
 }
@@ -633,12 +636,15 @@ func discoverCPU() string {
 	if err != nil {
 		return ""
 	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "model name") {
-			if i := strings.IndexByte(line, ':'); i >= 0 {
-				return strings.TrimSpace(line[i+1:])
-			}
-		}
+	values := parseCPUInfoFields(string(data))
+	if model := values["model name"]; model != "" {
+		return model
+	}
+	if hardware := values["Hardware"]; hardware != "" {
+		return hardware
+	}
+	if armSummary := formatARMCPUSummary(values); armSummary != "" {
+		return armSummary
 	}
 	return ""
 }
@@ -656,4 +662,40 @@ func discoverKernel() string {
 		return fields[2]
 	}
 	return ""
+}
+
+func parseCPUInfoFields(raw string) map[string]string {
+	fields := make(map[string]string)
+	for _, line := range strings.Split(raw, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" || value == "" {
+			continue
+		}
+		if _, exists := fields[key]; !exists {
+			fields[key] = value
+		}
+	}
+	return fields
+}
+
+func formatARMCPUSummary(fields map[string]string) string {
+	parts := []string{"ARM"}
+	if arch := fields["CPU architecture"]; arch != "" {
+		parts = append(parts, "arch "+arch)
+	}
+	if impl := fields["CPU implementer"]; impl != "" {
+		parts = append(parts, "impl "+impl)
+	}
+	if part := fields["CPU part"]; part != "" {
+		parts = append(parts, "part "+part)
+	}
+	if len(parts) == 1 {
+		return ""
+	}
+	return strings.Join(parts, " ")
 }

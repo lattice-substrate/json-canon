@@ -40,19 +40,44 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   the provisioned server hosts over SSH.
 - Committed server matrices `offline/matrix.server-x86_64.yaml` and
   `offline/matrix.server-arm64.yaml` with both VM and container lanes.
-- `scripts/release-server.sh`: single-command server-backed evidence orchestrator.
-  Provisions EC2 instances via `tofu apply`, discovers substrate identity over SSH,
-  writes the infra manifest through the Go CLI, cross-builds per-architecture control
-  binaries, runs `jcs-offline-replay` for both architectures, validates both release
+- `offline/toolchain.lock.tsv`: normative pinned-tool lock for the server-backed
+  evidence path and release workflow. It records the exact Go, OpenTofu, jq, and
+  Docker static artifacts by URL and SHA-256.
+- `scripts/bootstrap-pinned-toolchain.sh`: shell bootstrap that materializes the
+  pinned binaries from `offline/toolchain.lock.tsv` without relying on ambient
+  host-installed Go/OpenTofu/jq.
+- `scripts/init-infra-lock.sh`: bootstrap-only wrapper that materializes pinned
+  Go and then delegates lock generation to `jcs-offline-replay init-infra-lock`.
+- `jcs-offline-replay sync-toolchain`: Go-native pinned artifact downloader and
+  verifier that stages host/remote tool artifacts under the release output tree and
+  emits a shell env file for the release workflow.
+- `jcs-offline-replay init-infra-lock`: Go-native post-bootstrap infra lock
+  generator that executes the pinned OpenTofu binary directly.
+- `jcs-offline-replay server-evidence`: Go-native post-bootstrap server evidence
+  orchestrator. It provisions EC2 instances via pinned OpenTofu, installs pinned
+  Docker static bundles on the remote hosts, manages replay execution over Go SSH
+  transport, writes the infra manifest through the Go CLI, validates both release
   gates with `JCS_OFFLINE_INFRA_MANIFEST`, and destroys instances on exit.
+- `conformance/nolint_inventory.tsv`: checked-in mechanical inventory of every
+  `//nolint` directive, including linter names, requirement IDs, rationale text,
+  and directive text. Conformance now fails on drift from the live source tree.
+- `scripts/release-server.sh`: bootstrap-only wrapper that materializes pinned Go
+  from `offline/toolchain.lock.tsv` and hands off billed orchestration to
+  `jcs-offline-replay server-evidence`.
 - `TestOfflineReplayEvidenceReleaseGate` accepts optional `JCS_OFFLINE_INFRA_MANIFEST`
   environment variable to bind infra-manifest SHA-256 during server-backed evidence
   gate validation. Semantic cross-check: evidence `infra_repo_url` and
   `infra_repo_commit` must match the loaded manifest. Server profiles with
   `infra-substrate-binding` require the manifest to be set.
-- Requirements OFFLINE-EVIDENCE-002, OFFLINE-INFRA-001, OFFLINE-SERVER-001 added
-  to `REQ_REGISTRY_POLICY.md` with full enforcement matrix coverage.
+- `infra-manifest.v1` now records the exact pinned tool artifacts used for the
+  evidenced run via the `tools` array.
+- Requirements OFFLINE-EVIDENCE-002, OFFLINE-INFRA-001, OFFLINE-TOOLCHAIN-001, and
+  OFFLINE-SERVER-001 added to `REQ_REGISTRY_POLICY.md` with full enforcement matrix coverage.
+- Requirement LINT-NOLINT-002 added to `REQ_REGISTRY_POLICY.md` to require
+  mechanically gathered suppression evidence in conformance.
 - ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
+- ADR-0006: Pinned toolchain evidence for server-backed conformance.
+- ADR-0007: Go-native post-bootstrap server evidence orchestration.
 
 ## [v0.3.2] - 2026-03-06
 

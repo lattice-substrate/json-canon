@@ -36,7 +36,11 @@ const (
 	NodeModeVM NodeMode = "vm"
 )
 
-const architectureARM64 = "arm64"
+const (
+	architectureX8664 = "x86_64"
+	architectureAMD64 = "amd64"
+	architectureARM64 = "arm64"
+)
 
 // RunnerConfig is an execution command contract for a node lane.
 type RunnerConfig struct {
@@ -207,10 +211,10 @@ func ValidateReleaseArchitecture(m *Matrix) error {
 		return fmt.Errorf("matrix is nil")
 	}
 	switch m.Architecture {
-	case "x86_64", architectureARM64:
+	case architectureX8664, architectureARM64:
 		return nil
 	default:
-		return fmt.Errorf("release architecture must be one of x86_64, %s, got %q", architectureARM64, m.Architecture)
+		return fmt.Errorf("release architecture must be one of %s, %s, got %q", architectureX8664, architectureARM64, m.Architecture)
 	}
 }
 

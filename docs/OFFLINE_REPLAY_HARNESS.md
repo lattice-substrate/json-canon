@@ -152,8 +152,8 @@ For release evidence, three additional constraints apply. See
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the full release evidence
 command. In summary:
 
-1. **Go version** must match the release workflow pin (currently
-   `1.24.13`). Use `GOTOOLCHAIN=go1.24.13` or equivalent.
+1. **Go toolchain** must come from the pinned artifact set in
+   `offline/toolchain.lock.tsv`, not an ambient host installation.
 2. **`--version <tag>`** must be passed so the control binary ldflags
    match the CI build (`-X main.version=${GITHUB_REF_NAME}`).
 3. **`JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`** must be set because the tag
@@ -162,8 +162,40 @@ command. In summary:
 ### Server-backed release evidence
 
 Use `./scripts/release-server.sh` when generating server-backed `evidence.v2`.
-That path requires `SSH_INGRESS_CIDR`, writes `infra-manifest.v1.json`, and
-the release gate must be invoked with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
+That wrapper requires `SSH_INGRESS_CIDR`, stages the pinned toolchain under
+`offline/runs/releases/<tag>/toolchain/`, then invokes
+`jcs-offline-replay server-evidence`, which writes `infra-manifest.v1.json` and
+executes the release gates with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
+
+Before the first billed AWS run, generate `infra/.terraform.lock.hcl` with the pinned
+OpenTofu binary via the Go-native `jcs-offline-replay init-infra-lock` path:
+
+```bash
+./scripts/init-infra-lock.sh
+git add infra/.terraform.lock.hcl
+```
+
+For ad hoc local materialization of the pinned binaries, use:
+
+```bash
+./scripts/bootstrap-pinned-toolchain.sh \
+  --output-dir ./.tmp/pinned-toolchain \
+  --env-file ./.tmp/pinned-toolchain/env.sh
+```
+
+After bootstrap, the release-critical entrypoints are:
+
+```bash
+source ./.tmp/pinned-toolchain/env.sh
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay init-infra-lock
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay server-evidence \
+  --tag <tag> \
+  --aws-region us-east-1 \
+  --ssh-key-path ~/.ssh/id_rsa \
+  --ssh-ingress-cidr 203.0.113.10/32 \
+  --toolchain-lock ./offline/toolchain.lock.tsv \
+  --toolchain-root ./offline/runs/releases/<tag>/toolchain
+```
 
 ## 7. Cross-Arch Proof Procedure
 
@@ -192,11 +224,8 @@ change control.
 
 For release gate validation:
 
-```bash
-GOTOOLCHAIN=go1.24.13 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
-  -ldflags="-s -w -buildid= -X main.version=<tag>" \
-  -o /abs/path/to/release-control/jcs-canon ./cmd/jcs-canon
-```
+Release control binaries must be built with the pinned Go artifact selected from
+`offline/toolchain.lock.tsv`.
 
 ```bash
 JCS_OFFLINE_EVIDENCE=$(pwd)/offline/runs/releases/<tag>/x86_64/offline-evidence.json \

@@ -20,7 +20,6 @@ for cmd in ssh scp tar; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: missing required command: $cmd" >&2; exit 2; }
 done
 
-: "${JCS_VM_SSH_TARGET:?JCS_VM_SSH_TARGET is required}"
 : "${JCS_BUNDLE_PATH:?JCS_BUNDLE_PATH is required}"
 : "${JCS_EVIDENCE_PATH:?JCS_EVIDENCE_PATH is required}"
 : "${JCS_REPLAY_INDEX:?JCS_REPLAY_INDEX is required}"
@@ -34,7 +33,7 @@ if [[ ! -f "$JCS_BUNDLE_PATH" ]]; then
   exit 2
 fi
 
-ssh_target="$JCS_VM_SSH_TARGET"
+ssh_target="${JCS_VM_SSH_TARGET:-}"
 if [[ -z "$ssh_target" && -n "${JCS_VM_SSH_TARGET_ENV:-}" ]]; then
   ssh_target="${!JCS_VM_SSH_TARGET_ENV:-}"
 fi
