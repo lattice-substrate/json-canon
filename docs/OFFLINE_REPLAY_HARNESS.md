@@ -18,8 +18,8 @@ Core artifacts:
 - Matrix contract: `offline/matrix.yaml` (x86_64), `offline/matrix.arm64.yaml` (arm64)
 - Profile contract: `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`
 - Offline evidence schema: `offline/schema/evidence.v1.json`
-- Official AWS release evidence schema: `offline/schema/evidence.v3.json`
-- Infra manifest schema: `offline/schema/infra-manifest.v2.json`
+- Official AWS release evidence schema: `offline/schema/evidence.v1.json`
+- Infra manifest schema: `offline/schema/infra-manifest.v1.json`
 - Orchestrator CLI: `cmd/jcs-offline-replay`
 - Worker CLI: `cmd/jcs-offline-worker`
 
@@ -161,10 +161,10 @@ command. In summary:
 
 ### Official AWS release evidence
 
-Use `./scripts/release-server.sh` when generating official AWS `evidence.v3`.
+Use `./scripts/release-server.sh` when generating official AWS `evidence.v1`.
 That wrapper stages the pinned toolchain under `offline/runs/releases/<tag>/toolchain/`, then invokes
 `jcs-offline-replay server-evidence`, which requires a clean git worktree, builds
-from a detached source worktree at the recorded commit, writes `infra-manifest.v2.json`, and
+from a detached source worktree at the recorded commit, writes `infra-manifest.v1.json`, and
 executes the release gates with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
 The committed official AWS matrices are vm-only and run natively on EC2 across 12
 lanes / 60 total replays per architecture.
@@ -257,8 +257,8 @@ JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
-For official AWS `evidence.v3`, use the committed server matrix/profile pair and
-set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v2.json`.
+For official AWS `evidence.v1`, use the committed server matrix/profile pair and
+set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json`.
 
 **Evidence source binding model:** Evidence records `source_git_commit` at
 generation time (commit A). Evidence files are then committed on top (commit B),

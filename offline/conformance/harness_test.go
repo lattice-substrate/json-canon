@@ -132,16 +132,16 @@ func TestOfflineEvidenceSchemaPresent(t *testing.T) {
 	}
 }
 
-func TestOfflineEvidenceV2SchemaPresent(t *testing.T) {
+func TestOfflineEvidenceV1SchemaIncludesInfraAndNativeHostFields(t *testing.T) {
 	root := repoRoot(t)
-	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v2.json")
+	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v1.json")
 	// #nosec G304 -- conformance test intentionally reads repository schema path.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatalf("read evidence.v2 schema: %v", err)
+		t.Fatalf("read evidence.v1 schema: %v", err)
 	}
 	for _, needle := range []string{
-		"evidence.v2",
+		"evidence.v1",
 		"infra_manifest_sha256",
 		"infra_repo_url",
 		"infra_repo_commit",
@@ -152,20 +152,20 @@ func TestOfflineEvidenceV2SchemaPresent(t *testing.T) {
 		"aggregate_canonical_sha256",
 	} {
 		if !strings.Contains(string(data), needle) {
-			t.Fatalf("evidence.v2 schema missing %q", needle)
+			t.Fatalf("evidence.v1 schema missing %q", needle)
 		}
 	}
 }
 
-func TestOfflineEvidenceV3SchemaPresent(t *testing.T) {
+func TestOfflineEvidenceV1SchemaIncludesNativeHostFields(t *testing.T) {
 	root := repoRoot(t)
-	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v3.json")
+	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v1.json")
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatalf("read evidence.v3 schema: %v", err)
+		t.Fatalf("read evidence.v1 schema: %v", err)
 	}
 	for _, needle := range []string{
-		"evidence.v3",
+		"evidence.v1",
 		"measured_architecture",
 		"measured_os_id",
 		"measured_os_version_id",
@@ -175,21 +175,21 @@ func TestOfflineEvidenceV3SchemaPresent(t *testing.T) {
 		"aws_image_id",
 	} {
 		if !strings.Contains(string(data), needle) {
-			t.Fatalf("evidence.v3 schema missing %q", needle)
+			t.Fatalf("evidence.v1 schema missing %q", needle)
 		}
 	}
 }
 
 func TestOfflineInfraManifestSchemaPresent(t *testing.T) {
 	root := repoRoot(t)
-	schemaPath := filepath.Join(root, "offline", "schema", "infra-manifest.v2.json")
+	schemaPath := filepath.Join(root, "offline", "schema", "infra-manifest.v1.json")
 	// #nosec G304 -- conformance test intentionally reads repository schema path.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatalf("read infra-manifest.v2 schema: %v", err)
+		t.Fatalf("read infra-manifest.v1 schema: %v", err)
 	}
 	for _, needle := range []string{
-		"infra-manifest.v2",
+		"infra-manifest.v1",
 		"infra_repo_url",
 		"infra_repo_commit",
 		"provider_engine",
@@ -287,14 +287,11 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_INFRA_MANIFEST") {
 		t.Fatal("release workflow missing JCS_OFFLINE_INFRA_MANIFEST for server-backed offline evidence gate")
 	}
-	if strings.Contains(releaseWorkflow, "evidence.v1)") {
-		t.Fatal("release workflow must not accept evidence.v1 for official aws release gating")
+	if !strings.Contains(releaseWorkflow, "evidence.v1") {
+		t.Fatal("release workflow must require evidence.v1 for official aws release gating")
 	}
-	if !strings.Contains(releaseWorkflow, "evidence.v3") {
-		t.Fatal("release workflow must require evidence.v3 for official aws release gating")
-	}
-	if !strings.Contains(releaseWorkflow, "infra-manifest.v2.json") {
-		t.Fatal("release workflow must bind official aws gates to infra-manifest.v2.json")
+	if !strings.Contains(releaseWorkflow, "infra-manifest.v1.json") {
+		t.Fatal("release workflow must bind official aws gates to infra-manifest.v1.json")
 	}
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")
@@ -419,7 +416,7 @@ func validateInfraManifestForGate(t *testing.T, infraManifestPath string, eviden
 	if err != nil {
 		t.Fatalf("load infra manifest: %v", err)
 	}
-	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 || evidence.SchemaVersion == replay.EvidenceSchemaVersionV3 {
+	if strings.TrimSpace(evidence.InfraRepoURL) != "" || strings.TrimSpace(evidence.InfraRepoCommit) != "" {
 		if evidence.InfraRepoURL != im.InfraRepoURL {
 			t.Fatalf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
 		}

@@ -411,7 +411,7 @@ func writeDiscoveredFactSummary(stdout io.Writer, hosts map[string]provisionedHo
 }
 
 func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
-	r.infraManifestPath = filepath.Join(r.opts.outputDir, "infra-manifest.v2.json")
+	r.infraManifestPath = filepath.Join(r.opts.outputDir, "infra-manifest.v1.json")
 	if err := writeLine(stdout, "==> writing infra manifest"); err != nil {
 		return err
 	}
@@ -425,7 +425,7 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		return err
 	}
 	return writeInfraManifestDocument(r.infraManifestPath, &replay.InfraManifest{
-		SchemaVersion:      replay.InfraManifestSchemaVersionV2,
+		SchemaVersion:      replay.InfraManifestSchemaVersion,
 		GeneratedAtUTC:     manifestNowUTC().Format(time.RFC3339Nano),
 		InfraRepoURL:       serverRepoURL,
 		InfraRepoCommit:    r.gitCommit,
@@ -625,7 +625,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 		SourceGitCommit:       cfg.sourceGitCommit,
 		SourceGitTag:          cfg.sourceGitTag,
 		Orchestrator:          "jcs-offline-replay server-evidence",
-		EvidenceSchemaVersion: replay.EvidenceSchemaVersionV3,
+		EvidenceSchemaVersion: replay.EvidenceSchemaVersion,
 		InfraManifestSHA256:   infraManifestSHA,
 		InfraRepoURL:          serverRepoURL,
 		InfraRepoCommit:       cfg.sourceGitCommit,

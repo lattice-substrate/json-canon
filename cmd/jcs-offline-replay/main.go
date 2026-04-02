@@ -376,7 +376,7 @@ func resolveExpectedInfraBinding(flags map[string]string, evidence *replay.Evide
 	if err != nil {
 		return "", "", "", nil, fmt.Errorf("sha256 infra manifest: %w", err)
 	}
-	if evidence.SchemaVersion == replay.EvidenceSchemaVersionV2 || evidence.SchemaVersion == replay.EvidenceSchemaVersionV3 {
+	if strings.TrimSpace(evidence.InfraRepoURL) != "" || strings.TrimSpace(evidence.InfraRepoCommit) != "" {
 		if evidence.InfraRepoURL != im.InfraRepoURL {
 			return "", "", "", nil, fmt.Errorf("evidence infra_repo_url %q does not match manifest infra_repo_url %q", evidence.InfraRepoURL, im.InfraRepoURL)
 		}

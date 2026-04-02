@@ -62,7 +62,9 @@ func TestBuildRemoteReplaySSMCommandNativeVM(t *testing.T) {
 		`--bundle "$tmp/bundle.tgz"`,
 		`--evidence "$tmp/evidence.json"`,
 		"--schema-version",
-		replay.EvidenceSchemaVersionV3,
+		replay.EvidenceSchemaVersion,
+		"--infra-binding-evidence",
+		"--native-host-evidence",
 		`curl -fsS -X PUT -T "$tmp/evidence.json" 'https://example.com/evidence'`,
 	} {
 		if !strings.Contains(cmd, needle) {

@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	// InfraManifestSchemaVersion is the legacy schema identifier for infrastructure manifests.
+	// InfraManifestSchemaVersion is the schema identifier for infrastructure manifests.
 	InfraManifestSchemaVersion = "infra-manifest.v1"
-	// InfraManifestSchemaVersionV2 is the official AWS schema identifier for attested infrastructure manifests.
-	InfraManifestSchemaVersionV2 = "infra-manifest.v2"
 )
 
 // InfraManifest records the IaC-provisioned substrate identity for a conformance run.
@@ -114,7 +112,7 @@ func ValidateInfraManifest(im *InfraManifest) error {
 	seenRoles := make(map[string]struct{}, len(im.Hosts))
 	seenNodeIDs := make(map[string]string, len(im.Hosts))
 	for i, h := range im.Hosts {
-		if err := validateInfraManifestHost(i, h, seenRoles, seenNodeIDs, im.SchemaVersion); err != nil {
+		if err := validateInfraManifestHost(i, h, seenRoles, seenNodeIDs); err != nil {
 			return err
 		}
 	}
@@ -130,9 +128,7 @@ func ValidateInfraManifest(im *InfraManifest) error {
 // validateInfraManifestScalars checks all required scalar fields in an InfraManifest.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
 func validateInfraManifestScalars(im *InfraManifest) error {
-	switch im.SchemaVersion {
-	case InfraManifestSchemaVersion, InfraManifestSchemaVersionV2:
-	default:
+	if im.SchemaVersion != InfraManifestSchemaVersion {
 		return fmt.Errorf("unsupported infra manifest schema_version %q", im.SchemaVersion)
 	}
 	if strings.TrimSpace(im.GeneratedAtUTC) == "" {
@@ -166,7 +162,6 @@ func validateInfraManifestHost(
 	h InfraManifestHost,
 	seenRoles map[string]struct{},
 	seenNodeIDs map[string]string,
-	schemaVersion string,
 ) error {
 	if err := validateInfraManifestHostIdentity(i, h, seenRoles); err != nil {
 		return err
@@ -184,35 +179,26 @@ func validateInfraManifestHost(
 			return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
 		}
 	}
-	if schemaVersion == InfraManifestSchemaVersionV2 {
-		for _, field := range []struct{ name, value string }{
-			{"availability_zone", h.AvailabilityZone},
-			{"instance_id", h.InstanceID},
-			{"os_id", h.OSID},
-			{"os_version_id", h.OSVersionID},
-			{"cpu", h.CPU},
-			{"kernel", h.Kernel},
-			{"transport", h.Transport},
-			{"subnet_visibility", h.SubnetVisibility},
-		} {
-			if strings.TrimSpace(field.value) == "" {
-				return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
-			}
+	for _, field := range []struct{ name, value string }{
+		{"iid_document_sha256", h.IIDDocumentSHA256},
+		{"iid_signature_sha256", h.IIDSignatureSHA256},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			continue
 		}
-		for _, field := range []struct{ name, value string }{
-			{"iid_document_sha256", h.IIDDocumentSHA256},
-			{"iid_signature_sha256", h.IIDSignatureSHA256},
-		} {
-			if err := validateSHA256Token(field.name, field.value); err != nil {
-				return fmt.Errorf("infra manifest host[%d] %w", i, err)
-			}
+		if err := validateSHA256Token(field.name, field.value); err != nil {
+			return fmt.Errorf("infra manifest host[%d] %w", i, err)
 		}
-		switch h.Transport {
+	}
+	if transport := strings.TrimSpace(h.Transport); transport != "" {
+		switch transport {
 		case "ssh", "ssm":
 		default:
 			return fmt.Errorf("infra manifest host[%d] transport must be ssh or ssm, got %q", i, h.Transport)
 		}
-		switch h.SubnetVisibility {
+	}
+	if visibility := strings.TrimSpace(h.SubnetVisibility); visibility != "" {
+		switch visibility {
 		case "public", "private":
 		default:
 			return fmt.Errorf("infra manifest host[%d] subnet_visibility must be public or private, got %q", i, h.SubnetVisibility)

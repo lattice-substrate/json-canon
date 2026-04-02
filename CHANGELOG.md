@@ -7,33 +7,27 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- `evidence.v3` schema (`offline/schema/evidence.v3.json`) for official AWS release
-  evidence. It binds per-replay measured host identity (`measured_architecture`,
-  `measured_os_id`, `measured_os_version_id`, `measured_kernel`, `measured_cpu`,
-  `aws_instance_id`, `aws_image_id`) to the infrastructure manifest.
-- `infra-manifest.v2` schema (`offline/schema/infra-manifest.v2.json`) for attested
-  official AWS host identity, including instance IDs, availability zones, measured
-  OS/CPU/kernel identity, and IMDS instance-identity digests.
-- `evidence.v2` schema (`offline/schema/evidence.v2.json`) extending evidence.v1
-  with three required infrastructure binding fields: `infra_manifest_sha256`,
-  `infra_repo_url`, `infra_repo_commit`. Node replay items gain three optional
-  discovered substrate fields: `discovered_cpu`, `discovered_kernel`, `image_digest`.
+- `evidence.v1` finalized as the only evidence schema. It now carries the full
+  conformance DAG binding surface in one contract: source binding, infra binding,
+  discovered substrate identity, and native-host measurement when the selected
+  profile/matrix requires them.
 - `infra-manifest.v1` schema (`offline/schema/infra-manifest.v1.json`) recording
   IaC repo identity, provider engine and lock digest, and per-host substrate records
-  (role, cloud provider, region, instance type, AMI/image ID).
+  (role, cloud provider, region, instance type, AMI/image ID), plus the attested
+  native-host fields used by the official AWS gate.
 - `InfraManifest` and `InfraManifestHost` Go structs in `offline/replay` package
   with `LoadInfraManifest` and `ValidateInfraManifest` functions.
-- `ValidateEvidenceBundle` now accepts both `evidence.v1` and `evidence.v2`.
-  V2 validation enforces infra binding fields. Suite-driven policy:
-  profiles with `infra-substrate-binding` in `required_suites` reject v1 evidence.
-  Downgrade prevention: v2 infra fields present in a v1-schema bundle are rejected.
+- `ValidateEvidenceBundle` now treats `evidence.v1` as a profile-scoped superset
+  contract. Profiles that require `infra-substrate-binding` or native-host
+  attestation fail closed unless the corresponding v1 fields and manifest bindings
+  are present and match.
 - `discoverCPU` and `discoverKernel` in `cmd/jcs-offline-worker` read substrate
   identity from `/proc/cpuinfo` and `/proc/version` at replay runtime (pure file
   reads, no subprocess). Results written to `discovered_cpu` / `discovered_kernel`
   in each node replay record.
 - `--infra-manifest <path>` flag on `jcs-offline-replay run`, `run-suite`, and
   `cross-arch`. When set the manifest is loaded, validated, and its SHA-256 and
-  identity fields are bound into the emitted evidence.v2.
+  identity fields are bound into the emitted evidence.v1.
 - OpenTofu IaC in `infra/` now provisions the committed official AWS native-host fleet
   declared in `infra/aws_release_hosts.json`, covering 12 vm-only lanes / 60 total replays
   per architecture across x86_64 and arm64.
@@ -83,12 +77,12 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   mechanically gathered suppression evidence in conformance.
 - Requirements AWS-RELEASE-001, AWS-TOOLCHAIN-001, and AWS-GATE-001 added to
   `REQ_REGISTRY_POLICY.md` to lock official AWS release breadth, host-only pinned
-  toolchain scope, and v2-only release gating.
+  toolchain scope, and fail-closed v1 release gating.
 - Requirement AWS-AMI-001 added to `REQ_REGISTRY_POLICY.md` to lock stable official AWS
   image selector policy and forbid the unsupported Ubuntu 20.04 minimal arm64 lane.
 - Requirement AWS-OUTPUT-001 added to `REQ_REGISTRY_POLICY.md` to lock the sensitive
   `provisioned_hosts` output contract used by the Go-native AWS release orchestration.
-- ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
+- ADR-0005: Evidence v1 and Infrastructure Manifest finalization decision.
 - ADR-0006: Pinned toolchain evidence for server-backed conformance.
 - ADR-0007: Go-native post-bootstrap server evidence orchestration.
 

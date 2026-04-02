@@ -33,7 +33,7 @@ type RunOptions struct {
 	EvidenceSchemaVersion string
 	GlobalEnv             map[string]string
 	Now                   func() time.Time
-	// v2 fields: when InfraManifestSHA256 is non-empty, evidence.v2 is emitted.
+	// Optional infra-manifest binding recorded in evidence.v1 when the profile requires it.
 	InfraManifestSHA256 string
 	InfraRepoURL        string
 	InfraRepoCommit     string
@@ -83,10 +83,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	}
 
 	schemaVersion := EvidenceSchemaVersion
-	if requested := strings.TrimSpace(opts.EvidenceSchemaVersion); requested != "" {
-		schemaVersion = requested
-	} else if strings.TrimSpace(opts.InfraManifestSHA256) != "" {
-		schemaVersion = EvidenceSchemaVersionV2
+	if requested := strings.TrimSpace(opts.EvidenceSchemaVersion); requested != "" && requested != EvidenceSchemaVersion {
+		return nil, fmt.Errorf("unsupported evidence schema_version %q", requested)
 	}
 	if opts.GlobalEnv == nil {
 		opts.GlobalEnv = make(map[string]string, 1)

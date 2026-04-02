@@ -74,9 +74,8 @@ func validInfraManifestFixture() *replay.InfraManifest {
 	}
 }
 
-func validInfraManifestV2Fixture() *replay.InfraManifest {
+func validAttestedInfraManifestFixture() *replay.InfraManifest {
 	im := validInfraManifestFixture()
-	im.SchemaVersion = replay.InfraManifestSchemaVersionV2
 	im.Hosts[0].AvailabilityZone = "us-east-1a"
 	im.Hosts[0].InstanceID = "i-0123456789abcdef0"
 	im.Hosts[0].OSID = "debian"
@@ -85,8 +84,8 @@ func validInfraManifestV2Fixture() *replay.InfraManifest {
 	im.Hosts[0].Kernel = "6.1.0-28-cloud-amd64"
 	im.Hosts[0].IIDDocumentSHA256 = strings.Repeat("1", 64)
 	im.Hosts[0].IIDSignatureSHA256 = strings.Repeat("2", 64)
-	im.Hosts[0].Transport = "ssh"
-	im.Hosts[0].SubnetVisibility = "public"
+	im.Hosts[0].Transport = "ssm"
+	im.Hosts[0].SubnetVisibility = "private"
 	im.Hosts[1].AvailabilityZone = "us-east-1b"
 	im.Hosts[1].InstanceID = "i-abcdef01234567890"
 	im.Hosts[1].OSID = "debian"
@@ -95,8 +94,8 @@ func validInfraManifestV2Fixture() *replay.InfraManifest {
 	im.Hosts[1].Kernel = "6.1.0-28-cloud-arm64"
 	im.Hosts[1].IIDDocumentSHA256 = strings.Repeat("3", 64)
 	im.Hosts[1].IIDSignatureSHA256 = strings.Repeat("4", 64)
-	im.Hosts[1].Transport = "ssh"
-	im.Hosts[1].SubnetVisibility = "public"
+	im.Hosts[1].Transport = "ssm"
+	im.Hosts[1].SubnetVisibility = "private"
 	return im
 }
 
@@ -107,10 +106,10 @@ func TestValidateInfraManifest(t *testing.T) {
 	}
 }
 
-func TestValidateInfraManifestV2(t *testing.T) {
-	im := validInfraManifestV2Fixture()
+func TestValidateInfraManifestAttestedV1(t *testing.T) {
+	im := validAttestedInfraManifestFixture()
 	if err := replay.ValidateInfraManifest(im); err != nil {
-		t.Fatalf("valid v2 manifest failed: %v", err)
+		t.Fatalf("valid attested manifest failed: %v", err)
 	}
 }
 
@@ -131,137 +130,28 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 		mutate func(*replay.InfraManifest)
 		want   string
 	}{
-		{
-			name:   "nil",
-			mutate: nil,
-			want:   "is nil",
-		},
-		{
-			name: "wrong schema version",
-			mutate: func(im *replay.InfraManifest) {
-				im.SchemaVersion = "infra-manifest.v99"
-			},
-			want: "unsupported infra manifest schema_version",
-		},
-		{
-			name: "missing generated_at_utc",
-			mutate: func(im *replay.InfraManifest) {
-				im.GeneratedAtUTC = ""
-			},
-			want: "generated_at_utc is required",
-		},
-		{
-			name: "missing infra_repo_url",
-			mutate: func(im *replay.InfraManifest) {
-				im.InfraRepoURL = ""
-			},
-			want: "infra_repo_url is required",
-		},
-		{
-			name: "non-https infra_repo_url",
-			mutate: func(im *replay.InfraManifest) {
-				im.InfraRepoURL = "http://example.com/repo"
-			},
-			want: "infra_repo_url must use https",
-		},
-		{
-			name: "bad infra_repo_commit",
-			mutate: func(im *replay.InfraManifest) {
-				im.InfraRepoCommit = "notahex"
-			},
-			want: "infra_repo_commit",
-		},
-		{
-			name: "missing provider_engine",
-			mutate: func(im *replay.InfraManifest) {
-				im.ProviderEngine = ""
-			},
-			want: "provider_engine is required",
-		},
-		{
-			name: "missing provider_version",
-			mutate: func(im *replay.InfraManifest) {
-				im.ProviderVersion = ""
-			},
-			want: "provider_version is required",
-		},
-		{
-			name: "bad provider_lock_sha256",
-			mutate: func(im *replay.InfraManifest) {
-				im.ProviderLockSHA256 = "short"
-			},
-			want: "provider_lock_sha256",
-		},
-		{
-			name: "no hosts",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts = nil
-			},
-			want: "at least one host",
-		},
-		{
-			name: "no tools",
-			mutate: func(im *replay.InfraManifest) {
-				im.Tools = nil
-			},
-			want: "at least one pinned tool artifact",
-		},
-		{
-			name: "invalid architecture",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].Architecture = "mips64"
-			},
-			want: "architecture must be x86_64 or arm64",
-		},
-		{
-			name: "duplicate role",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[1].Role = testArchX8664
-			},
-			want: "duplicate host role",
-		},
-		{
-			name: "missing cloud_provider",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].CloudProvider = ""
-			},
-			want: "cloud_provider is required",
-		},
-		{
-			name: "missing region",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].Region = ""
-			},
-			want: "region is required",
-		},
-		{
-			name: "missing instance_type",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].InstanceType = ""
-			},
-			want: "instance_type is required",
-		},
-		{
-			name: "missing image_id",
-			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].ImageID = ""
-			},
-			want: "image_id is required",
-		},
-		{
-			name: "host tool missing executable path",
-			mutate: func(im *replay.InfraManifest) {
-				im.Tools[0].ExecutableRelativePath = ""
-			},
-			want: "executable_relative_path is required",
-		},
-		{
-			name: "tool artifact path must be relative",
-			mutate: func(im *replay.InfraManifest) {
-				im.Tools[0].ArtifactRelativePath = "/tmp/go.tar.gz"
-			},
-			want: "artifact_relative_path must be relative",
-		},
+		{name: "nil", mutate: nil, want: "is nil"},
+		{name: "wrong schema version", mutate: func(im *replay.InfraManifest) { im.SchemaVersion = "infra-manifest.v99" }, want: "unsupported infra manifest schema_version"},
+		{name: "missing generated_at_utc", mutate: func(im *replay.InfraManifest) { im.GeneratedAtUTC = "" }, want: "generated_at_utc is required"},
+		{name: "missing infra_repo_url", mutate: func(im *replay.InfraManifest) { im.InfraRepoURL = "" }, want: "infra_repo_url is required"},
+		{name: "non-https infra_repo_url", mutate: func(im *replay.InfraManifest) { im.InfraRepoURL = "http://example.com/repo" }, want: "infra_repo_url must use https"},
+		{name: "bad infra_repo_commit", mutate: func(im *replay.InfraManifest) { im.InfraRepoCommit = "notahex" }, want: "infra_repo_commit"},
+		{name: "missing provider_engine", mutate: func(im *replay.InfraManifest) { im.ProviderEngine = "" }, want: "provider_engine is required"},
+		{name: "missing provider_version", mutate: func(im *replay.InfraManifest) { im.ProviderVersion = "" }, want: "provider_version is required"},
+		{name: "bad provider_lock_sha256", mutate: func(im *replay.InfraManifest) { im.ProviderLockSHA256 = "short" }, want: "provider_lock_sha256"},
+		{name: "no hosts", mutate: func(im *replay.InfraManifest) { im.Hosts = nil }, want: "at least one host"},
+		{name: "no tools", mutate: func(im *replay.InfraManifest) { im.Tools = nil }, want: "at least one pinned tool artifact"},
+		{name: "invalid architecture", mutate: func(im *replay.InfraManifest) { im.Hosts[0].Architecture = "mips64" }, want: "architecture must be x86_64 or arm64"},
+		{name: "duplicate role", mutate: func(im *replay.InfraManifest) { im.Hosts[1].Role = testArchX8664 }, want: "duplicate host role"},
+		{name: "missing cloud_provider", mutate: func(im *replay.InfraManifest) { im.Hosts[0].CloudProvider = "" }, want: "cloud_provider is required"},
+		{name: "missing region", mutate: func(im *replay.InfraManifest) { im.Hosts[0].Region = "" }, want: "region is required"},
+		{name: "missing instance_type", mutate: func(im *replay.InfraManifest) { im.Hosts[0].InstanceType = "" }, want: "instance_type is required"},
+		{name: "missing image_id", mutate: func(im *replay.InfraManifest) { im.Hosts[0].ImageID = "" }, want: "image_id is required"},
+		{name: "invalid iid hash", mutate: func(im *replay.InfraManifest) { im.Hosts[0].IIDDocumentSHA256 = "short" }, want: "iid_document_sha256"},
+		{name: "invalid transport", mutate: func(im *replay.InfraManifest) { im.Hosts[0].Transport = "rdp" }, want: "transport must be ssh or ssm"},
+		{name: "invalid subnet_visibility", mutate: func(im *replay.InfraManifest) { im.Hosts[0].SubnetVisibility = "dmz" }, want: "subnet_visibility must be public or private"},
+		{name: "host tool missing executable path", mutate: func(im *replay.InfraManifest) { im.Tools[0].ExecutableRelativePath = "" }, want: "executable_relative_path is required"},
+		{name: "tool artifact path must be relative", mutate: func(im *replay.InfraManifest) { im.Tools[0].ArtifactRelativePath = "/tmp/go.tar.gz" }, want: "artifact_relative_path must be relative"},
 	}
 
 	for _, tc := range tests {
@@ -289,20 +179,8 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 	}
 }
 
-func TestValidateInfraManifestV2RejectsMissingAttestationFields(t *testing.T) {
-	im := validInfraManifestV2Fixture()
-	im.Hosts[0].IIDDocumentSHA256 = ""
-	err := replay.ValidateInfraManifest(im)
-	if err == nil {
-		t.Fatal("expected v2 attestation validation error")
-	}
-	if !strings.Contains(err.Error(), "iid_document_sha256") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestLoadInfraManifest(t *testing.T) {
-	im := validInfraManifestFixture()
+	im := validAttestedInfraManifestFixture()
 	data, err := json.MarshalIndent(im, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal manifest: %v", err)
@@ -328,8 +206,8 @@ func TestLoadInfraManifest(t *testing.T) {
 	if loaded.Hosts[0].Role != testArchX8664 {
 		t.Fatalf("expected host[0].role=x86_64, got %q", loaded.Hosts[0].Role)
 	}
-	if loaded.Hosts[0].Architecture != testArchX8664 {
-		t.Fatalf("expected host[0].architecture=x86_64, got %q", loaded.Hosts[0].Architecture)
+	if loaded.Hosts[0].AvailabilityZone != "us-east-1a" {
+		t.Fatalf("expected host[0].availability_zone=us-east-1a, got %q", loaded.Hosts[0].AvailabilityZone)
 	}
 	if loaded.Hosts[1].Role != "arm64" {
 		t.Fatalf("expected host[1].role=arm64, got %q", loaded.Hosts[1].Role)

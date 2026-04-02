@@ -57,15 +57,17 @@ type digestAccumulator struct {
 }
 
 type workerArgs struct {
-	bundlePath    string
-	evidencePath  string
-	nodeID        string
-	mode          string
-	distro        string
-	kernelFamily  string
-	replayIndex   int
-	imageDigest   string
-	schemaVersion string
+	bundlePath           string
+	evidencePath         string
+	nodeID               string
+	mode                 string
+	distro               string
+	kernelFamily         string
+	replayIndex          int
+	imageDigest          string
+	schemaVersion        string
+	infraBindingEvidence bool
+	nativeHostEvidence   bool
 }
 
 type hostInspection struct {
@@ -181,12 +183,12 @@ func runWorker(cfg workerArgs, stdout io.Writer) error {
 		FailureClassSHA256: classAcc.Hex(),
 		ExitCodeSHA256:     exitAcc.Hex(),
 	}
-	if cfg.schemaVersion == replay.EvidenceSchemaVersionV2 {
+	if cfg.infraBindingEvidence || cfg.nativeHostEvidence {
 		evidence.DiscoveredCPU = discoverCPU()
 		evidence.DiscoveredKernel = discoverKernel()
 		evidence.ImageDigest = cfg.imageDigest
 	}
-	if cfg.schemaVersion == replay.EvidenceSchemaVersionV3 {
+	if cfg.nativeHostEvidence {
 		inspection, err := inspectHost()
 		if err != nil {
 			return fmt.Errorf("inspect host: %w", err)
@@ -226,6 +228,17 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 		imageDigest:   strings.TrimSpace(flags["--image-digest"]),
 		schemaVersion: resolveWorkerSchemaVersion(flags),
 	}
+	cfg.infraBindingEvidence, err = parseBoolFlag(flags, "--infra-binding-evidence")
+	if err != nil {
+		return workerArgs{}, err
+	}
+	cfg.nativeHostEvidence, err = parseBoolFlag(flags, "--native-host-evidence")
+	if err != nil {
+		return workerArgs{}, err
+	}
+	if cfg.nativeHostEvidence {
+		cfg.infraBindingEvidence = true
+	}
 	replayIndexRaw := strings.TrimSpace(flags["--replay-index"])
 
 	if validateErr := validateRequiredWorkerFlags(cfg, replayIndexRaw); validateErr != nil {
@@ -235,9 +248,7 @@ func parseWorkerArgs(args []string) (workerArgs, error) {
 	if err != nil || cfg.replayIndex < 1 {
 		return workerArgs{}, fmt.Errorf("invalid --replay-index %q", replayIndexRaw)
 	}
-	switch cfg.schemaVersion {
-	case replay.EvidenceSchemaVersion, replay.EvidenceSchemaVersionV2, replay.EvidenceSchemaVersionV3:
-	default:
+	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
 		return workerArgs{}, fmt.Errorf("invalid --schema-version %q", cfg.schemaVersion)
 	}
 	return cfg, nil
@@ -274,6 +285,18 @@ func validateRequiredWorkerFlags(cfg workerArgs, replayIndexRaw string) error {
 		}
 	}
 	return nil
+}
+
+func parseBoolFlag(flags map[string]string, name string) (bool, error) {
+	value := strings.TrimSpace(flags[name])
+	if value == "" {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s %q", name, value)
+	}
+	return parsed, nil
 }
 
 func writeEvidence(path string, evidence replay.NodeRunEvidence) error {

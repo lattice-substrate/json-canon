@@ -170,7 +170,9 @@ func buildRemoteReplaySSMCommand(node replay.NodeSpec, replayIndex int, bundleUR
 		"--distro", shellQuote(node.Distro),
 		"--kernel-family", shellQuote(node.KernelFamily),
 		"--replay-index", shellQuote(fmt.Sprintf("%d", replayIndex)),
-		"--schema-version", shellQuote(replay.EvidenceSchemaVersionV3),
+		"--schema-version", shellQuote(replay.EvidenceSchemaVersion),
+		"--infra-binding-evidence", "true",
+		"--native-host-evidence", "true",
 	}
 	return strings.Join([]string{
 		"set -euo pipefail",

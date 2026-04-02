@@ -48,8 +48,18 @@
           "role": { "type": "string", "minLength": 1 },
           "cloud_provider": { "type": "string", "minLength": 1 },
           "region": { "type": "string", "minLength": 1 },
+          "availability_zone": { "type": "string", "minLength": 1 },
           "instance_type": { "type": "string", "minLength": 1 },
+          "instance_id": { "type": "string", "minLength": 1 },
           "image_id": { "type": "string", "minLength": 1 },
+          "os_id": { "type": "string", "minLength": 1 },
+          "os_version_id": { "type": "string", "minLength": 1 },
+          "cpu": { "type": "string", "minLength": 1 },
+          "kernel": { "type": "string", "minLength": 1 },
+          "iid_document_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "iid_signature_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "transport": { "type": "string", "enum": ["ssh", "ssm"] },
+          "subnet_visibility": { "type": "string", "enum": ["public", "private"] },
           "discovered_cpu": { "type": "string", "minLength": 1 },
           "discovered_kernel": { "type": "string", "minLength": 1 }
         }

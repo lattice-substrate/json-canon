@@ -235,13 +235,18 @@ jcs-offline-replay cross-arch \
   --run-official-es6-100m
 ```
 
-### Server-Backed Evidence (evidence.v3)
+### Server-Backed Evidence (`evidence.v1`)
 
 Official AWS release runs use real AWS EC2 instances (x86_64 + arm64) and produce
-`evidence.v3` with an infrastructure manifest binding. The infra manifest records the
+`evidence.v1` with an infrastructure manifest binding. The infra manifest records the
 IaC repo commit, provider lock digest, AMI IDs, instance IDs, availability zones,
 measured OS/CPU/kernel identity, IMDS-derived instance-identity digests, the native
 lane-to-host binding, and the exact pinned tool artifacts used for the run.
+
+This does not replace the offline harness. Following the Lattice Substrate / ProveMark
+methodology, the full deterministic conformance DAG remains the product: pinned toolchain,
+lint/vet/tests, offline replay proof, infra binding, native-host measurement, and the
+release gate must all compose into one fail-closed evidence trail.
 
 **Requirements:**
 - AWS credentials with EC2 permissions
@@ -292,7 +297,7 @@ The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
 then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
 requires a clean git worktree, creates a detached worktree at the recorded source
 commit, provisions the committed official AWS host fleet, runs the native vm-only
-release matrices over private SSM/S3 transport, emits `evidence.v3`, runs
+release matrices over private SSM/S3 transport, emits `evidence.v1`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
 then destroys the instances. The official AWS matrices are vm-only and schedule
 12 native lanes / 60 total replays per architecture.
@@ -300,16 +305,16 @@ then destroys the instances. The official AWS matrices are vm-only and schedule
 **Output:** `offline/runs/releases/<tag>/`
 
 ```
- x86_64/offline-evidence.json   (evidence.v3, schema_version: evidence.v3)
+x86_64/offline-evidence.json   (evidence.v1, schema_version: evidence.v1)
 x86_64/offline-bundle.tgz
-arm64/offline-evidence.json    (evidence.v3, schema_version: evidence.v3)
+arm64/offline-evidence.json    (evidence.v1, schema_version: evidence.v1)
 arm64/offline-bundle.tgz
-infra-manifest.v2.json         (shared across both arches)
+infra-manifest.v1.json         (shared across both arches)
 toolchain/                     (verified pinned tool artifacts used for the run)
 ```
 
 The `infra_manifest_sha256` in each evidence file must match the SHA-256 of
-`infra-manifest.v2.json`.
+`infra-manifest.v1.json`.
 
 **Release gate with server profiles:**
 
@@ -321,7 +326,7 @@ JCS_OFFLINE_MATRIX=/path/to/matrix.server-x86_64.yaml \
 JCS_OFFLINE_PROFILE=offline/profiles/server-linux-x86_64.yaml \
 JCS_OFFLINE_EXPECTED_GIT_COMMIT=<sha> \
 JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
-JCS_OFFLINE_INFRA_MANIFEST=offline/runs/releases/<tag>/infra-manifest.v2.json \
+JCS_OFFLINE_INFRA_MANIFEST=offline/runs/releases/<tag>/infra-manifest.v1.json \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 

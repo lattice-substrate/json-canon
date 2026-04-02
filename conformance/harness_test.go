@@ -295,7 +295,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-GATE-001":      checkOfflineReleaseGatePolicy,
 		"OFFLINE-ARCH-001":      checkOfflineArchScopeDualArch,
 		"OFFLINE-LOCAL-001":     checkOfflineLocalProofCLI,
-		"OFFLINE-EVIDENCE-002":  checkOfflineEvidenceV2SchemaPresent,
+		"OFFLINE-EVIDENCE-002":  checkOfflineEvidenceV1InfraSchemaPresent,
 		"OFFLINE-INFRA-001":     checkOfflineInfraManifestSchemaPresent,
 		"OFFLINE-TOOLCHAIN-001": checkOfflineToolchainLockPresent,
 		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
@@ -2506,7 +2506,7 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT", "release workflow expected git commit env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG", "release workflow expected git tag env")
-	assertContains(t, releaseWorkflow, "release evidence must be evidence.v3", "release workflow v3-only gate")
+	assertContains(t, releaseWorkflow, "release evidence must be evidence.v1", "release workflow v1-only gate")
 }
 
 // TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.
@@ -2562,20 +2562,22 @@ func checkOfflineLocalProofCLI(t *testing.T, h *harness) {
 	assertContains(t, cli, "run-suite", "offline replay cli run-suite subcommand")
 }
 
-func checkOfflineEvidenceV2SchemaPresent(t *testing.T, h *harness) {
+func checkOfflineEvidenceV1InfraSchemaPresent(t *testing.T, h *harness) {
 	t.Helper()
-	schemaPath := filepath.Join(h.root, "offline", "schema", "evidence.v2.json")
+	schemaPath := filepath.Join(h.root, "offline", "schema", "evidence.v1.json")
 	data := mustReadText(t, schemaPath)
 	for _, needle := range []string{
-		"evidence.v2",
+		"evidence.v1",
 		"infra_manifest_sha256",
 		"infra_repo_url",
 		"infra_repo_commit",
 		"discovered_cpu",
 		"discovered_kernel",
 		"image_digest",
+		"measured_architecture",
+		"aws_instance_id",
 	} {
-		assertContains(t, data, needle, "evidence.v2 schema field")
+		assertContains(t, data, needle, "evidence.v1 schema field")
 	}
 }
 

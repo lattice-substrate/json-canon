@@ -62,13 +62,17 @@ func TestParseWorkerArgs(t *testing.T) {
 		"--distro", "debian",
 		"--kernel-family", "host",
 		"--replay-index", "3",
-		"--schema-version", replay.EvidenceSchemaVersionV2,
+		"--schema-version", replay.EvidenceSchemaVersion,
+		"--infra-binding-evidence", "true",
 	})
 	if err != nil {
-		t.Fatalf("parseWorkerArgs v2: %v", err)
+		t.Fatalf("parseWorkerArgs infra-binding: %v", err)
 	}
-	if cfg.schemaVersion != replay.EvidenceSchemaVersionV2 {
+	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
 		t.Fatalf("unexpected explicit schema version: %q", cfg.schemaVersion)
+	}
+	if !cfg.infraBindingEvidence || cfg.nativeHostEvidence {
+		t.Fatalf("unexpected infra/native evidence flags: %#v", cfg)
 	}
 
 	cfg, err = parseWorkerArgs([]string{
@@ -79,13 +83,17 @@ func TestParseWorkerArgs(t *testing.T) {
 		"--distro", "debian",
 		"--kernel-family", "host",
 		"--replay-index", "3",
-		"--schema-version", replay.EvidenceSchemaVersionV3,
+		"--schema-version", replay.EvidenceSchemaVersion,
+		"--native-host-evidence", "true",
 	})
 	if err != nil {
-		t.Fatalf("parseWorkerArgs v3: %v", err)
+		t.Fatalf("parseWorkerArgs native-host: %v", err)
 	}
-	if cfg.schemaVersion != replay.EvidenceSchemaVersionV3 {
+	if cfg.schemaVersion != replay.EvidenceSchemaVersion {
 		t.Fatalf("unexpected explicit schema version: %q", cfg.schemaVersion)
+	}
+	if !cfg.nativeHostEvidence || !cfg.infraBindingEvidence {
+		t.Fatalf("unexpected native evidence flags: %#v", cfg)
 	}
 
 	_, err = parseWorkerArgs([]string{"--bundle", "b.tgz", "--evidence", "e.json"})

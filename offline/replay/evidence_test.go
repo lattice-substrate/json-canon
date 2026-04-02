@@ -11,6 +11,7 @@ import (
 
 const (
 	testCPUIntel  = "Intel"
+	testCPUArm    = "Neoverse"
 	testKernel610 = "6.1.0"
 )
 
@@ -36,55 +37,13 @@ func TestValidateEvidenceBundleRejectsTamperedMetadata(t *testing.T) {
 		tamper func(*replay.EvidenceBundle)
 		want   string
 	}{
-		{
-			name: "bundle_sha256",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.BundleSHA256 = strings.Repeat("b", 64)
-			},
-			want: "bundle_sha256 mismatch",
-		},
-		{
-			name: "control_binary_sha256",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.ControlBinarySHA = strings.Repeat("b", 64)
-			},
-			want: "control_binary_sha256 mismatch",
-		},
-		{
-			name: "matrix_sha256",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.MatrixSHA256 = strings.Repeat("b", 64)
-			},
-			want: "matrix_sha256 mismatch",
-		},
-		{
-			name: "profile_sha256",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.ProfileSHA256 = strings.Repeat("b", 64)
-			},
-			want: "profile_sha256 mismatch",
-		},
-		{
-			name: "architecture",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.Architecture = "arm64"
-			},
-			want: "architecture mismatch",
-		},
-		{
-			name: "source_git_commit",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.SourceGitCommit = strings.Repeat("b", 40)
-			},
-			want: "source_git_commit mismatch",
-		},
-		{
-			name: "source_git_tag",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.SourceGitTag = "v0.0.0-wrong"
-			},
-			want: "source_git_tag mismatch",
-		},
+		{name: "bundle_sha256", tamper: func(e *replay.EvidenceBundle) { e.BundleSHA256 = strings.Repeat("b", 64) }, want: "bundle_sha256 mismatch"},
+		{name: "control_binary_sha256", tamper: func(e *replay.EvidenceBundle) { e.ControlBinarySHA = strings.Repeat("b", 64) }, want: "control_binary_sha256 mismatch"},
+		{name: "matrix_sha256", tamper: func(e *replay.EvidenceBundle) { e.MatrixSHA256 = strings.Repeat("b", 64) }, want: "matrix_sha256 mismatch"},
+		{name: "profile_sha256", tamper: func(e *replay.EvidenceBundle) { e.ProfileSHA256 = strings.Repeat("b", 64) }, want: "profile_sha256 mismatch"},
+		{name: "architecture", tamper: func(e *replay.EvidenceBundle) { e.Architecture = "arm64" }, want: "architecture mismatch"},
+		{name: "source_git_commit", tamper: func(e *replay.EvidenceBundle) { e.SourceGitCommit = strings.Repeat("b", 40) }, want: "source_git_commit mismatch"},
+		{name: "source_git_tag", tamper: func(e *replay.EvidenceBundle) { e.SourceGitTag = "v0.0.0-wrong" }, want: "source_git_tag mismatch"},
 	}
 
 	for _, tc := range tests {
@@ -128,6 +87,112 @@ func TestValidateEvidenceBundleRejectsMalformedAggregateDigestTokens(t *testing.
 	}
 }
 
+func TestValidateEvidenceBundleInfraBoundV1Parity(t *testing.T) {
+	m, p, e, opts := validInfraBoundEvidenceFixture()
+	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
+		t.Fatalf("validate infra-bound v1 evidence: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleNativeHostV1Parity(t *testing.T) {
+	m, p, e, opts := validNativeHostEvidenceFixture()
+	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
+		t.Fatalf("validate native-host v1 evidence: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleInfraBindingRejectsPartialTopLevelBinding(t *testing.T) {
+	m, p, e, opts := validInfraBoundEvidenceFixture()
+	e.InfraRepoCommit = ""
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected infra binding validation error")
+	}
+	if !strings.Contains(err.Error(), "infra_repo_commit") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleInfraBindingRequiresManifest(t *testing.T) {
+	m, p, e, opts := validInfraBoundEvidenceFixture()
+	opts.ExpectedInfraManifest = nil
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected missing infra manifest error")
+	}
+	if !strings.Contains(err.Error(), "requires expected infra manifest") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleInfraBindingRequiresDiscoveredFields(t *testing.T) {
+	m, p, e, opts := validInfraBoundEvidenceFixture()
+	e.NodeReplays[0].DiscoveredCPU = ""
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected discovered field validation error")
+	}
+	if !strings.Contains(err.Error(), "discovered_cpu") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleRejectsImageDigestOnVMLane(t *testing.T) {
+	m, p, e, opts := validInfraBoundEvidenceFixture()
+	e.NodeReplays[2].ImageDigest = "debian@sha256:" + strings.Repeat("2", 64)
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected vm image_digest validation error")
+	}
+	if !strings.Contains(err.Error(), "image_digest is only allowed for container lanes") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleNativeHostRequiresMeasuredFields(t *testing.T) {
+	m, p, e, opts := validNativeHostEvidenceFixture()
+	e.NodeReplays[0].MeasuredCPU = ""
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected measured field validation error")
+	}
+	if !strings.Contains(err.Error(), "measured_cpu") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateEvidenceBundleNativeHostManifestMismatch(t *testing.T) {
+	m, p, e, opts := validNativeHostEvidenceFixture()
+	e.NodeReplays[0].AWSInstanceID = "i-wrong"
+	err := replay.ValidateEvidenceBundle(e, m, p, opts)
+	if err == nil {
+		t.Fatal("expected manifest-bound mismatch")
+	}
+	if !strings.Contains(err.Error(), "aws_instance_id mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadEvidenceRejectsUnknownFieldsAndTrailingJSON(t *testing.T) {
+	dir := t.TempDir()
+	unknownPath := filepath.Join(dir, "unknown.json")
+	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_name":"max","architecture":"x86_64","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
+	if err := os.WriteFile(unknownPath, []byte(unknownDoc), 0o600); err != nil {
+		t.Fatalf("write unknown fixture: %v", err)
+	}
+	if _, err := replay.LoadEvidence(unknownPath); err == nil {
+		t.Fatal("expected unknown field error")
+	}
+
+	trailingPath := filepath.Join(dir, "trailing.json")
+	if err := os.WriteFile(trailingPath, []byte(unknownDoc[:len(unknownDoc)-17]+`}`+`{"trailing":true}`), 0o600); err != nil {
+		t.Fatalf("write trailing fixture: %v", err)
+	}
+	if _, err := replay.LoadEvidence(trailingPath); err == nil {
+		t.Fatal("expected trailing json error")
+	}
+}
+
 func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
 	m := &replay.Matrix{
 		Version:      "v1",
@@ -156,6 +221,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		ProfileSHA256:      digest,
 		SourceGitCommit:    sourceCommit,
 		SourceGitTag:       sourceTag,
+		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
+		Orchestrator:       "jcs-offline-replay",
 		ProfileName:        "max",
 		Architecture:       "x86_64",
 		HardReleaseGate:    true,
@@ -181,6 +248,192 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		ExpectedSourceGitTag:        sourceTag,
 	}
 	return m, p, e, opts
+}
+
+func validInfraBoundEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
+	m, _, e, opts := validEvidenceFixture()
+	p := &replay.Profile{
+		Version:          "v1",
+		Name:             "infra-bound",
+		RequiredSuites:   []string{"canonical-byte-stability", "infra-substrate-binding"},
+		MinColdReplays:   2,
+		HardReleaseGate:  true,
+		EvidenceRequired: true,
+	}
+	e.ProfileName = p.Name
+	e.RequiredSuites = append([]string(nil), p.RequiredSuites...)
+	e.InfraManifestSHA256 = strings.Repeat("c", 64)
+	e.InfraRepoURL = "https://github.com/example/json-canon-conformance-infra"
+	e.InfraRepoCommit = strings.Repeat("d", 40)
+	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
+	e.NodeReplays[0].DiscoveredKernel = testKernel610
+	e.NodeReplays[0].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
+	e.NodeReplays[1].DiscoveredCPU = testCPUIntel
+	e.NodeReplays[1].DiscoveredKernel = testKernel610
+	e.NodeReplays[1].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
+	e.NodeReplays[2].DiscoveredCPU = testCPUArm
+	e.NodeReplays[2].DiscoveredKernel = testKernel610
+	e.NodeReplays[3].DiscoveredCPU = testCPUArm
+	e.NodeReplays[3].DiscoveredKernel = testKernel610
+	opts.ExpectedInfraManifestSHA256 = e.InfraManifestSHA256
+	opts.ExpectedInfraRepoURL = e.InfraRepoURL
+	opts.ExpectedInfraRepoCommit = e.InfraRepoCommit
+	opts.ExpectedInfraManifest = infraBoundManifestFixture(e.InfraRepoCommit)
+	return m, p, e, opts
+}
+
+func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
+	digest := strings.Repeat("a", 64)
+	sourceCommit := strings.Repeat("f", 40)
+	sourceTag := "v0.0.0-dev"
+	matrix := &replay.Matrix{
+		Version:      "v1",
+		Architecture: "x86_64",
+		Nodes: []replay.NodeSpec{
+			{ID: "aws-native-ubuntu", Mode: replay.NodeModeVM, Distro: "ubuntu", KernelFamily: "ga", Replays: 2, Runner: replay.RunnerConfig{Kind: "vm_ssm", Replay: []string{"true"}}},
+		},
+	}
+	profile := &replay.Profile{
+		Version:          "v1",
+		Name:             "aws-native-release-linux-x86_64",
+		RequiredSuites:   []string{"canonical-byte-stability", "infra-substrate-binding"},
+		MinColdReplays:   2,
+		HardReleaseGate:  true,
+		EvidenceRequired: true,
+	}
+	manifest := nativeHostManifestFixture(strings.Repeat("d", 40))
+	e := &replay.EvidenceBundle{
+		SchemaVersion:       replay.EvidenceSchemaVersion,
+		BundleSHA256:        digest,
+		ControlBinarySHA:    digest,
+		MatrixSHA256:        digest,
+		ProfileSHA256:       digest,
+		SourceGitCommit:     sourceCommit,
+		SourceGitTag:        sourceTag,
+		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
+		Orchestrator:        "jcs-offline-replay server-evidence",
+		ProfileName:         profile.Name,
+		Architecture:        "x86_64",
+		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
+		HardReleaseGate:     true,
+		InfraManifestSHA256: strings.Repeat("c", 64),
+		InfraRepoURL:        manifest.InfraRepoURL,
+		InfraRepoCommit:     manifest.InfraRepoCommit,
+		AggregateCanonical:  digest,
+		AggregateVerify:     digest,
+		AggregateClass:      digest,
+		AggregateExitCode:   digest,
+		NodeReplays: []replay.NodeRunEvidence{
+			nativeRun("aws-native-ubuntu", 1, digest),
+			nativeRun("aws-native-ubuntu", 2, digest),
+		},
+	}
+	opts := replay.EvidenceValidationOptions{
+		ExpectedBundleSHA256:        digest,
+		ExpectedControlBinarySHA256: digest,
+		ExpectedMatrixSHA256:        digest,
+		ExpectedProfileSHA256:       digest,
+		ExpectedArchitecture:        "x86_64",
+		ExpectedSourceGitCommit:     sourceCommit,
+		ExpectedSourceGitTag:        sourceTag,
+		ExpectedInfraManifestSHA256: e.InfraManifestSHA256,
+		ExpectedInfraRepoURL:        manifest.InfraRepoURL,
+		ExpectedInfraRepoCommit:     manifest.InfraRepoCommit,
+		ExpectedInfraManifest:       manifest,
+	}
+	return matrix, profile, e, opts
+}
+
+func infraBoundManifestFixture(commit string) *replay.InfraManifest {
+	return &replay.InfraManifest{
+		SchemaVersion:      replay.InfraManifestSchemaVersion,
+		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
+		InfraRepoURL:       "https://github.com/example/json-canon-conformance-infra",
+		InfraRepoCommit:    commit,
+		ProviderEngine:     "opentofu",
+		ProviderVersion:    "1.8.0",
+		ProviderLockSHA256: strings.Repeat("b", 64),
+		Hosts: []replay.InfraManifestHost{
+			{
+				Architecture:     "x86_64",
+				NodeIDs:          []string{"c1"},
+				Role:             "container",
+				CloudProvider:    "aws",
+				Region:           "us-east-1",
+				InstanceType:     "c6i.large",
+				ImageID:          "debian@sha256:" + strings.Repeat("1", 64),
+				DiscoveredCPU:    testCPUIntel,
+				DiscoveredKernel: testKernel610,
+			},
+			{
+				Architecture:     "x86_64",
+				NodeIDs:          []string{"v1"},
+				Role:             "vm",
+				CloudProvider:    "aws",
+				Region:           "us-east-1",
+				InstanceType:     "c6i.large",
+				ImageID:          "ami-0abc1234",
+				DiscoveredCPU:    testCPUArm,
+				DiscoveredKernel: testKernel610,
+			},
+		},
+		Tools: manifestToolsFixture(),
+	}
+}
+
+func nativeHostManifestFixture(commit string) *replay.InfraManifest {
+	return &replay.InfraManifest{
+		SchemaVersion:      replay.InfraManifestSchemaVersion,
+		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
+		InfraRepoURL:       "https://github.com/example/json-canon-conformance-infra",
+		InfraRepoCommit:    commit,
+		ProviderEngine:     "opentofu",
+		ProviderVersion:    "1.8.0",
+		ProviderLockSHA256: strings.Repeat("b", 64),
+		Hosts: []replay.InfraManifestHost{
+			{
+				Architecture:       "x86_64",
+				NodeIDs:            []string{"aws-native-ubuntu"},
+				Role:               "x86_64",
+				CloudProvider:      "aws",
+				Region:             "us-east-1",
+				AvailabilityZone:   "us-east-1a",
+				InstanceType:       "c6i.large",
+				InstanceID:         "i-0123456789abcdef0",
+				ImageID:            "ami-0abc1234",
+				OSID:               "ubuntu",
+				OSVersionID:        "22.04",
+				CPU:                testCPUArm,
+				Kernel:             testKernel610,
+				IIDDocumentSHA256:  strings.Repeat("1", 64),
+				IIDSignatureSHA256: strings.Repeat("2", 64),
+				Transport:          "ssm",
+				SubnetVisibility:   "private",
+				DiscoveredCPU:      testCPUArm,
+				DiscoveredKernel:   testKernel610,
+			},
+		},
+		Tools: manifestToolsFixture(),
+	}
+}
+
+func manifestToolsFixture() []replay.InfraManifestTool {
+	return []replay.InfraManifestTool{
+		{
+			ID:                     "go-linux-amd64",
+			Scope:                  replay.ToolchainScopeHost,
+			Purpose:                "build",
+			Name:                   "go",
+			Version:                "1.24.13",
+			OS:                     "linux",
+			Arch:                   "amd64",
+			Format:                 "tar.gz",
+			SourceURL:              "https://go.dev/dl/go1.24.13.linux-amd64.tar.gz",
+			SHA256:                 strings.Repeat("c", 64),
+			ArtifactRelativePath:   "toolchain/downloads/go-linux-amd64/go1.24.13.linux-amd64.tar.gz",
+			ExecutableRelativePath: "toolchain/.extracted/go-linux-amd64/go/bin/go",
+		},
+	}
 }
 
 func cloneEvidence(in *replay.EvidenceBundle) *replay.EvidenceBundle {
@@ -209,314 +462,16 @@ func mkRun(nodeID, mode, distro, kernel string, replayIndex int, digest string) 
 	}
 }
 
-// validEvidenceV2Fixture returns a valid evidence.v2 fixture with infra-manifest binding.
-func validEvidenceV2Fixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
-	m, p, e, opts := validEvidenceFixture()
-	infraDigest := strings.Repeat("c", 64)
-	infraCommit := strings.Repeat("d", 40)
-	e.SchemaVersion = replay.EvidenceSchemaVersionV2
-	e.InfraManifestSHA256 = infraDigest
-	e.InfraRepoURL = "https://github.com/example/json-canon-conformance-infra"
-	e.InfraRepoCommit = infraCommit
-	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
-	e.NodeReplays[0].DiscoveredKernel = testKernel610
-	e.NodeReplays[0].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
-	e.NodeReplays[1].DiscoveredCPU = testCPUIntel
-	e.NodeReplays[1].DiscoveredKernel = testKernel610
-	e.NodeReplays[1].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
-	e.NodeReplays[2].DiscoveredCPU = "Neoverse"
-	e.NodeReplays[2].DiscoveredKernel = testKernel610
-	e.NodeReplays[3].DiscoveredCPU = "Neoverse"
-	e.NodeReplays[3].DiscoveredKernel = testKernel610
-	opts.ExpectedInfraManifestSHA256 = infraDigest
-	opts.ExpectedInfraRepoURL = e.InfraRepoURL
-	opts.ExpectedInfraRepoCommit = infraCommit
-	return m, p, e, opts
-}
-
-func validEvidenceV3Fixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
-	m, p, e, opts := validEvidenceFixture()
-	m.Nodes = []replay.NodeSpec{
-		{ID: "v1", Mode: replay.NodeModeVM, Distro: "ubuntu", KernelFamily: "ga", Replays: 2, Runner: replay.RunnerConfig{Kind: "libvirt_command", Replay: []string{"true"}}},
-	}
-	infraDigest := strings.Repeat("c", 64)
-	infraCommit := strings.Repeat("d", 40)
-	manifest := validInfraManifestV2Fixture()
-	manifest.InfraRepoCommit = infraCommit
-	manifest.Hosts = []replay.InfraManifestHost{
-		manifest.Hosts[0],
-	}
-	manifest.Hosts[0].NodeIDs = []string{"v1"}
-	manifest.Hosts[0].Architecture = "x86_64"
-	manifest.Hosts[0].ImageID = "ami-0abc1234"
-	manifest.Hosts[0].InstanceID = "i-0123456789abcdef0"
-	manifest.Hosts[0].OSID = "ubuntu"
-	manifest.Hosts[0].OSVersionID = "22.04"
-	manifest.Hosts[0].CPU = "Neoverse"
-	manifest.Hosts[0].Kernel = testKernel610
-
-	e.SchemaVersion = replay.EvidenceSchemaVersionV3
-	e.InfraManifestSHA256 = infraDigest
-	e.InfraRepoURL = manifest.InfraRepoURL
-	e.InfraRepoCommit = infraCommit
-	e.NodeReplays = []replay.NodeRunEvidence{
-		{
-			NodeID:               "v1",
-			Mode:                 "vm",
-			Distro:               "ubuntu",
-			KernelFamily:         "ga",
-			ReplayIndex:          1,
-			SessionID:            "sess-v3-1",
-			StartedAtUTC:         "2026-01-01T00:00:00Z",
-			CompletedAtUTC:       "2026-01-01T00:00:01Z",
-			CaseCount:            10,
-			Passed:               true,
-			CanonicalSHA256:      strings.Repeat("a", 64),
-			VerifySHA256:         strings.Repeat("a", 64),
-			FailureClassSHA256:   strings.Repeat("a", 64),
-			ExitCodeSHA256:       strings.Repeat("a", 64),
-			MeasuredArchitecture: "x86_64",
-			MeasuredOSID:         "ubuntu",
-			MeasuredOSVersionID:  "22.04",
-			MeasuredKernel:       testKernel610,
-			MeasuredCPU:          "Neoverse",
-			AWSInstanceID:        "i-0123456789abcdef0",
-			AWSImageID:           "ami-0abc1234",
-		},
-		{
-			NodeID:               "v1",
-			Mode:                 "vm",
-			Distro:               "ubuntu",
-			KernelFamily:         "ga",
-			ReplayIndex:          2,
-			SessionID:            "sess-v3-2",
-			StartedAtUTC:         "2026-01-01T00:00:02Z",
-			CompletedAtUTC:       "2026-01-01T00:00:03Z",
-			CaseCount:            10,
-			Passed:               true,
-			CanonicalSHA256:      strings.Repeat("a", 64),
-			VerifySHA256:         strings.Repeat("a", 64),
-			FailureClassSHA256:   strings.Repeat("a", 64),
-			ExitCodeSHA256:       strings.Repeat("a", 64),
-			MeasuredArchitecture: "x86_64",
-			MeasuredOSID:         "ubuntu",
-			MeasuredOSVersionID:  "22.04",
-			MeasuredKernel:       testKernel610,
-			MeasuredCPU:          "Neoverse",
-			AWSInstanceID:        "i-0123456789abcdef0",
-			AWSImageID:           "ami-0abc1234",
-		},
-	}
-	e.AggregateCanonical = strings.Repeat("a", 64)
-	e.AggregateVerify = strings.Repeat("a", 64)
-	e.AggregateClass = strings.Repeat("a", 64)
-	e.AggregateExitCode = strings.Repeat("a", 64)
-
-	opts.ExpectedInfraManifestSHA256 = infraDigest
-	opts.ExpectedInfraRepoURL = manifest.InfraRepoURL
-	opts.ExpectedInfraRepoCommit = infraCommit
-	opts.ExpectedInfraManifest = manifest
-	return m, p, e, opts
-}
-
-func TestValidateEvidenceBundleV1StillValid(t *testing.T) {
-	m, p, e, opts := validEvidenceFixture()
-	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
-		t.Fatalf("v1 evidence must still be valid: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleV2Parity(t *testing.T) {
-	m, p, e, opts := validEvidenceV2Fixture()
-	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
-		t.Fatalf("validate v2 evidence: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleV3Parity(t *testing.T) {
-	m, p, e, opts := validEvidenceV3Fixture()
-	if err := replay.ValidateEvidenceBundle(e, m, p, opts); err != nil {
-		t.Fatalf("validate v3 evidence: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleV2RejectsEmptyInfraFields(t *testing.T) {
-	tests := []struct {
-		name   string
-		tamper func(*replay.EvidenceBundle)
-		want   string
-	}{
-		{
-			name: "missing infra_manifest_sha256",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.InfraManifestSHA256 = ""
-			},
-			want: "infra_manifest_sha256",
-		},
-		{
-			name: "missing infra_repo_url",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.InfraRepoURL = ""
-			},
-			want: "infra_repo_url",
-		},
-		{
-			name: "missing infra_repo_commit",
-			tamper: func(e *replay.EvidenceBundle) {
-				e.InfraRepoCommit = ""
-			},
-			want: "infra_repo_commit",
-		},
-	}
-	m, p, base, opts := validEvidenceV2Fixture()
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			e := cloneEvidence(base)
-			tc.tamper(e)
-			err := replay.ValidateEvidenceBundle(e, m, p, opts)
-			if err == nil {
-				t.Fatalf("expected error for %s", tc.name)
-			}
-			if !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("expected error containing %q, got %v", tc.want, err)
-			}
-		})
-	}
-}
-
-func TestValidateEvidenceBundleV2InfraManifestMismatch(t *testing.T) {
-	m, p, e, opts := validEvidenceV2Fixture()
-	opts.ExpectedInfraManifestSHA256 = strings.Repeat("e", 64)
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected infra_manifest_sha256 mismatch error")
-	}
-	if !strings.Contains(err.Error(), "infra_manifest_sha256 mismatch") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleDowngradePrevented(t *testing.T) {
-	// A v1-schema bundle that accidentally includes v2 infra fields must be rejected.
-	m, p, e, opts := validEvidenceFixture()
-	e.InfraManifestSHA256 = strings.Repeat("a", 64)
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected error: v1 schema must not carry v2 infra fields")
-	}
-	if !strings.Contains(err.Error(), "v2/v3 infra fields") {
-		t.Fatalf("unexpected error message: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleRejectsNodeLevelV2FieldsInV1(t *testing.T) {
-	m, p, e, opts := validEvidenceFixture()
-	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected error for v1 node-level v2 fields")
-	}
-	if !strings.Contains(err.Error(), "v2/v3-only node fields") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleInfraSubstrateBindingRequiresV2(t *testing.T) {
-	m, _, e, opts := validEvidenceFixture()
-	// profile with infra-substrate-binding suite
-	p := &replay.Profile{
-		Version:          "v1",
-		Name:             "max",
-		RequiredSuites:   []string{"canonical-byte-stability", "infra-substrate-binding"},
-		MinColdReplays:   2,
-		HardReleaseGate:  true,
-		EvidenceRequired: true,
-	}
-	// evidence is v1 and has required_suites matching the profile
-	e.RequiredSuites = []string{"canonical-byte-stability", "infra-substrate-binding"}
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected error: v1 evidence cannot satisfy infra-substrate-binding profile")
-	}
-	if !strings.Contains(err.Error(), "infra-substrate-binding") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleInfraSubstrateBindingRequiresDiscoveredFields(t *testing.T) {
-	m, _, e, opts := validEvidenceV2Fixture()
-	p := &replay.Profile{
-		Version:          "v1",
-		Name:             "max",
-		RequiredSuites:   []string{"canonical-byte-stability", "infra-substrate-binding"},
-		MinColdReplays:   2,
-		HardReleaseGate:  true,
-		EvidenceRequired: true,
-	}
-	e.RequiredSuites = []string{"canonical-byte-stability", "infra-substrate-binding"}
-	e.NodeReplays[0].DiscoveredCPU = ""
-	e.NodeReplays[0].DiscoveredKernel = ""
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected discovered field validation error")
-	}
-	if !strings.Contains(err.Error(), "discovered_cpu") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleRejectsImageDigestOnVMLane(t *testing.T) {
-	m, p, e, opts := validEvidenceV2Fixture()
-	e.NodeReplays[2].ImageDigest = "debian@sha256:" + strings.Repeat("2", 64)
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected vm image_digest validation error")
-	}
-	if !strings.Contains(err.Error(), "image_digest is only allowed for container lanes") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleV2InfraRepoBindingMismatch(t *testing.T) {
-	m, p, e, opts := validEvidenceV2Fixture()
-	opts.ExpectedInfraRepoURL = "https://github.com/example/other"
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected infra_repo_url mismatch error")
-	}
-	if !strings.Contains(err.Error(), "infra_repo_url mismatch") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestValidateEvidenceBundleV3ManifestMismatch(t *testing.T) {
-	m, p, e, opts := validEvidenceV3Fixture()
-	e.NodeReplays[0].AWSInstanceID = "i-wrong"
-	err := replay.ValidateEvidenceBundle(e, m, p, opts)
-	if err == nil {
-		t.Fatal("expected manifest-bound v3 mismatch")
-	}
-	if !strings.Contains(err.Error(), "aws_instance_id mismatch") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestLoadEvidenceRejectsUnknownFieldsAndTrailingJSON(t *testing.T) {
-	dir := t.TempDir()
-	unknownPath := filepath.Join(dir, "unknown.json")
-	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_name":"max","architecture":"x86_64","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
-	if err := os.WriteFile(unknownPath, []byte(unknownDoc), 0o600); err != nil {
-		t.Fatalf("write unknown fixture: %v", err)
-	}
-	if _, err := replay.LoadEvidence(unknownPath); err == nil {
-		t.Fatal("expected unknown field error")
-	}
-
-	trailingPath := filepath.Join(dir, "trailing.json")
-	if err := os.WriteFile(trailingPath, []byte(unknownDoc[:len(unknownDoc)-17]+`}`+`{"trailing":true}`), 0o600); err != nil {
-		t.Fatalf("write trailing fixture: %v", err)
-	}
-	if _, err := replay.LoadEvidence(trailingPath); err == nil {
-		t.Fatal("expected trailing json error")
-	}
+func nativeRun(nodeID string, replayIndex int, digest string) replay.NodeRunEvidence {
+	run := mkRun(nodeID, "vm", "ubuntu", "ga", replayIndex, digest)
+	run.DiscoveredCPU = testCPUArm
+	run.DiscoveredKernel = testKernel610
+	run.MeasuredArchitecture = "x86_64"
+	run.MeasuredOSID = "ubuntu"
+	run.MeasuredOSVersionID = "22.04"
+	run.MeasuredKernel = testKernel610
+	run.MeasuredCPU = testCPUArm
+	run.AWSInstanceID = "i-0123456789abcdef0"
+	run.AWSImageID = "ami-0abc1234"
+	return run
 }

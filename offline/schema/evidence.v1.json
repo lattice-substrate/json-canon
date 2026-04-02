@@ -36,6 +36,9 @@
     "orchestrator": { "type": "string", "minLength": 1 },
     "profile_name": { "type": "string", "minLength": 1 },
     "architecture": { "type": "string", "enum": ["x86_64", "arm64"] },
+    "infra_manifest_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "infra_repo_url": { "type": "string", "pattern": "^https://.+" },
+    "infra_repo_commit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
     "required_suites": {
       "type": "array",
       "minItems": 1,
@@ -78,7 +81,17 @@
           "canonical_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
           "verify_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
           "failure_class_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
-          "exit_code_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+          "exit_code_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+          "discovered_cpu": { "type": "string", "minLength": 1 },
+          "discovered_kernel": { "type": "string", "minLength": 1 },
+          "image_digest": { "type": "string", "minLength": 1 },
+          "measured_architecture": { "type": "string", "enum": ["x86_64", "arm64"] },
+          "measured_os_id": { "type": "string", "minLength": 1 },
+          "measured_os_version_id": { "type": "string", "minLength": 1 },
+          "measured_kernel": { "type": "string", "minLength": 1 },
+          "measured_cpu": { "type": "string", "minLength": 1 },
+          "aws_instance_id": { "type": "string", "minLength": 1 },
+          "aws_image_id": { "type": "string", "minLength": 1 }
         }
       }
     },

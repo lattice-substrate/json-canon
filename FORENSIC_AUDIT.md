@@ -234,7 +234,7 @@ Forensic Audit: AWS Native Conformance Gating Infrastructure
                                                                                               
   4.2 MAJOR — No End-to-End Integration Test for Evidence Chain                               
   
-  No test validates the complete flow: evidence.v2 + infra-manifest.v1 +                      
+  No test validates the complete flow: evidence.v1 + infra-manifest.v1 +                      
   infra-substrate-binding profile + actual validation. Components are tested independently but
    never together.                                                                            
                   
@@ -415,7 +415,7 @@ Forensic Audit: AWS Native Conformance Gating Infrastructure
   4. Install SIGTERM/SIGINT handler with infrastructure cleanup                               
   5. Add comprehensive unit tests for the orchestration layer (target: 60%+ coverage on
   server_evidence.go)                                                                         
-  6. Add at least one end-to-end integration test that validates the complete evidence.v2 +
+  6. Add at least one end-to-end integration test that validates the complete evidence.v1 +
   infra-manifest + profile binding chain                                                      
                   
   Phase 2 — Security Hardening                                                                
