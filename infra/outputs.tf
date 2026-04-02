@@ -1,29 +1,15 @@
-output "x86_64_public_ip" {
-  description = "Public IP of the x86_64 replay instance."
-  value       = aws_instance.x86_replay.public_ip
-}
-
-output "arm64_public_ip" {
-  description = "Public IP of the arm64 (Graviton2) replay instance."
-  value       = aws_instance.arm64_replay.public_ip
-}
-
-output "x86_64_ami" {
-  description = "AMI ID used for the x86_64 instance."
-  value       = aws_instance.x86_replay.ami
-}
-
-output "arm64_ami" {
-  description = "AMI ID used for the arm64 instance."
-  value       = aws_instance.arm64_replay.ami
-}
-
-output "x86_64_instance_type" {
-  description = "EC2 instance type of the x86_64 instance."
-  value       = aws_instance.x86_replay.instance_type
-}
-
-output "arm64_instance_type" {
-  description = "EC2 instance type of the arm64 instance."
-  value       = aws_instance.arm64_replay.instance_type
+output "provisioned_hosts" {
+  description = "Provisioned official AWS release hosts keyed by host_id."
+  value = {
+    for host_id, inst in aws_instance.release_host : host_id => {
+      host_id       = host_id
+      node_id       = local.aws_release_hosts[host_id].node_id
+      architecture  = local.aws_release_hosts[host_id].architecture
+      public_ip     = inst.public_ip
+      image_id      = inst.ami
+      instance_type = inst.instance_type
+      distro        = local.aws_release_hosts[host_id].distro
+      kernel_family = local.aws_release_hosts[host_id].kernel_family
+    }
+  }
 }

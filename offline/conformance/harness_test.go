@@ -3,6 +3,7 @@ package conformance_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,53 +28,90 @@ func TestOfflineMatrixAndProfileContracts(t *testing.T) {
 		matrixPath   string
 		profilePath  string
 		architecture string
+		wantNodes    int
+		wantVMOnly   bool
 	}{
 		{
 			matrixPath:   filepath.Join(root, "offline", "matrix.yaml"),
 			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.yaml"),
 			architecture: "x86_64",
+			wantNodes:    12,
 		},
 		{
 			matrixPath:   filepath.Join(root, "offline", "matrix.arm64.yaml"),
 			profilePath:  filepath.Join(root, "offline", "profiles", "maximal.arm64.yaml"),
 			architecture: "arm64",
+			wantNodes:    12,
 		},
 		{
 			matrixPath:   filepath.Join(root, "offline", "matrix.server-x86_64.yaml"),
 			profilePath:  filepath.Join(root, "offline", "profiles", "server-linux-x86_64.yaml"),
 			architecture: "x86_64",
+			wantNodes:    12,
+			wantVMOnly:   true,
 		},
 		{
 			matrixPath:   filepath.Join(root, "offline", "matrix.server-arm64.yaml"),
 			profilePath:  filepath.Join(root, "offline", "profiles", "server-linux-arm64.yaml"),
 			architecture: "arm64",
+			wantNodes:    12,
+			wantVMOnly:   true,
 		},
 	}
 
 	for _, tc := range tests {
-		m, err := replay.LoadMatrix(tc.matrixPath)
-		if err != nil {
-			t.Fatalf("load matrix %s: %v", tc.matrixPath, err)
-		}
-		if m.Architecture != tc.architecture {
-			t.Fatalf("expected architecture %q for %s, got %q", tc.architecture, tc.matrixPath, m.Architecture)
-		}
-		archErr := replay.ValidateReleaseArchitecture(m)
-		if archErr != nil {
-			t.Fatalf("validate release architecture for %s: %v", tc.matrixPath, archErr)
-		}
+		assertMatrixAndProfileContract(t, tc)
+	}
+}
 
-		p, err := replay.LoadProfile(tc.profilePath)
-		if err != nil {
-			t.Fatalf("load profile %s: %v", tc.profilePath, err)
-		}
-		if p.MinColdReplays < 5 {
-			t.Fatalf("expected min cold replays >= 5 for %s, got %d", tc.profilePath, p.MinColdReplays)
-		}
-		if !p.HardReleaseGate {
-			t.Fatalf("expected hard_release_gate=true for %s", tc.profilePath)
+func assertMatrixAndProfileContract(t *testing.T, tc struct {
+	matrixPath   string
+	profilePath  string
+	architecture string
+	wantNodes    int
+	wantVMOnly   bool
+}) {
+	t.Helper()
+	m, err := replay.LoadMatrix(tc.matrixPath)
+	if err != nil {
+		t.Fatalf("load matrix %s: %v", tc.matrixPath, err)
+	}
+	if m.Architecture != tc.architecture {
+		t.Fatalf("expected architecture %q for %s, got %q", tc.architecture, tc.matrixPath, m.Architecture)
+	}
+	if len(m.Nodes) != tc.wantNodes {
+		t.Fatalf("expected %d nodes for %s, got %d", tc.wantNodes, tc.matrixPath, len(m.Nodes))
+	}
+	if breadthErr := assertMatrixReplayBreadth(tc.matrixPath, m.Nodes, tc.wantVMOnly); breadthErr != nil {
+		t.Fatal(breadthErr)
+	}
+	if archErr := replay.ValidateReleaseArchitecture(m); archErr != nil {
+		t.Fatalf("validate release architecture for %s: %v", tc.matrixPath, archErr)
+	}
+	p, err := replay.LoadProfile(tc.profilePath)
+	if err != nil {
+		t.Fatalf("load profile %s: %v", tc.profilePath, err)
+	}
+	if p.MinColdReplays < 5 {
+		t.Fatalf("expected min cold replays >= 5 for %s, got %d", tc.profilePath, p.MinColdReplays)
+	}
+	if !p.HardReleaseGate {
+		t.Fatalf("expected hard_release_gate=true for %s", tc.profilePath)
+	}
+}
+
+func assertMatrixReplayBreadth(matrixPath string, nodes []replay.NodeSpec, wantVMOnly bool) error {
+	totalRuns := 0
+	for _, node := range nodes {
+		totalRuns += node.Replays
+		if wantVMOnly && node.Mode != replay.NodeModeVM {
+			return fmt.Errorf("official aws matrix %s must be vm-only, found %s for node %s", matrixPath, node.Mode, node.ID)
 		}
 	}
+	if totalRuns != 60 {
+		return fmt.Errorf("expected 60 total replays for %s, got %d", matrixPath, totalRuns)
+	}
+	return nil
 }
 
 func TestOfflineEvidenceSchemaPresent(t *testing.T) {
@@ -148,11 +186,11 @@ func TestOfflineServerProfileContract(t *testing.T) {
 	}{
 		{
 			profilePath: filepath.Join(root, "offline", "profiles", "server-linux-x86_64.yaml"),
-			wantName:    "server-offline-linux-x86_64",
+			wantName:    "aws-native-release-linux-x86_64",
 		},
 		{
 			profilePath: filepath.Join(root, "offline", "profiles", "server-linux-arm64.yaml"),
-			wantName:    "server-offline-linux-arm64",
+			wantName:    "aws-native-release-linux-arm64",
 		},
 	}
 	for _, tc := range tests {
@@ -218,6 +256,9 @@ func TestOfflineReleaseGateDocumentation(t *testing.T) {
 	}
 	if !strings.Contains(releaseWorkflow, "JCS_OFFLINE_INFRA_MANIFEST") {
 		t.Fatal("release workflow missing JCS_OFFLINE_INFRA_MANIFEST for server-backed offline evidence gate")
+	}
+	if strings.Contains(releaseWorkflow, "evidence.v1)") {
+		t.Fatal("release workflow must not accept evidence.v1 for official aws release gating")
 	}
 	if !strings.Contains(releaseWorkflow, "fetch-depth: 2") {
 		t.Fatal("release workflow must fetch at least two commits for release tag context and evidence binding checks")

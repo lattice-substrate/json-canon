@@ -43,8 +43,8 @@ func TestCmdSyncToolchainAndCollectEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("collectToolchainEvidence: %v", err)
 	}
-	if len(tools) != 5 {
-		t.Fatalf("expected 5 tools, got %d", len(tools))
+	if len(tools) != 3 {
+		t.Fatalf("expected 3 tools, got %d", len(tools))
 	}
 	if tools[0].ArtifactRelativePath == "" {
 		t.Fatal("expected relative artifact path")
@@ -115,12 +115,6 @@ func buildToolchainFixtures(t *testing.T) map[string][]byte {
 			"tofu": "#!/bin/sh\n",
 		}),
 		"/jq-linux-amd64": []byte("#!/bin/sh\n"),
-		"/docker-linux-amd64.tgz": buildTarGZFixture(t, map[string]string{
-			"docker/docker": "#!/bin/sh\n",
-		}),
-		"/docker-linux-arm64.tgz": buildTarGZFixture(t, map[string]string{
-			"docker/docker": "#!/bin/sh\n",
-		}),
 	}
 }
 
@@ -145,8 +139,6 @@ func toolchainLockFixture(serverURL string, fixtures map[string][]byte) string {
 		"go-linux-amd64\thost\tbuild\tgo\t1.24.13\tlinux\tamd64\ttar.gz\t" + serverURL + "/go-linux-amd64.tar.gz\t" + sha256Hex(fixtures["/go-linux-amd64.tar.gz"]) + "\tgo/bin/go",
 		"tofu-linux-amd64\thost\tprovision\topentofu\t1.10.6\tlinux\tamd64\tzip\t" + serverURL + "/tofu-linux-amd64.zip\t" + sha256Hex(fixtures["/tofu-linux-amd64.zip"]) + "\ttofu",
 		"jq-linux-amd64\thost\tworkflow-json-query\tjq\t1.8.1\tlinux\tamd64\traw\t" + serverURL + "/jq-linux-amd64\t" + sha256Hex(fixtures["/jq-linux-amd64"]) + "\tjq-linux-amd64",
-		"docker-static-linux-amd64\tremote\tcontainer-runtime\tdocker\t29.3.1\tlinux\tamd64\ttar.gz\t" + serverURL + "/docker-linux-amd64.tgz\t" + sha256Hex(fixtures["/docker-linux-amd64.tgz"]) + "\t",
-		"docker-static-linux-arm64\tremote\tcontainer-runtime\tdocker\t29.3.1\tlinux\tarm64\ttar.gz\t" + serverURL + "/docker-linux-arm64.tgz\t" + sha256Hex(fixtures["/docker-linux-arm64.tgz"]) + "\t",
 		"",
 	}, "\n")
 }
@@ -170,7 +162,7 @@ func runToolchainSync(t *testing.T, lockPath, toolchainRoot, envPath string) {
 	if err != nil {
 		t.Fatalf("read env file: %v", err)
 	}
-	for _, needle := range []string{"JCS_TOOL_GO", "JCS_TOOL_TOFU", "JCS_TOOL_JQ", "JCS_TOOL_DOCKER_STATIC_AMD64", "JCS_TOOL_DOCKER_STATIC_ARM64"} {
+	for _, needle := range []string{"JCS_TOOL_GO", "JCS_TOOL_TOFU", "JCS_TOOL_JQ"} {
 		if !strings.Contains(string(envData), needle) {
 			t.Fatalf("env file missing %s: %s", needle, string(envData))
 		}

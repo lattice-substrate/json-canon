@@ -24,25 +24,15 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   identity from `/proc/cpuinfo` and `/proc/version` at replay runtime (pure file
   reads, no subprocess). Results written to `discovered_cpu` / `discovered_kernel`
   in each node replay record.
-- `--image-digest` flag on `jcs-offline-worker`; `offline/scripts/replay-container.sh`
-  pre-resolves the image tag to a content digest via `engine image inspect` and passes
-  it as `--image-digest` to the worker, binding `image_digest` in evidence.
 - `--infra-manifest <path>` flag on `jcs-offline-replay run`, `run-suite`, and
   `cross-arch`. When set the manifest is loaded, validated, and its SHA-256 and
   identity fields are bound into the emitted evidence.v2.
-- OpenTofu IaC in `infra/` provisions two AWS EC2 instances (`t3a.small` x86_64,
-  `t4g.small` arm64 Graviton2) with Debian 13. The IaC now requires an explicit
-  `ssh_ingress_cidr` and sets `associate_public_ip_address = true` on both hosts.
-- `offline/scripts/replay-ssh.sh`: SSH-based replay runner (no virsh/libvirt).
-  Polls SSH readiness (90 × 2 s), copies bundle and worker binary to the remote
-  host, runs the worker via SSH, and retrieves the evidence file.
-- `offline/scripts/replay-container-ssh.sh` for container-mode replays executed on
-  the provisioned server hosts over SSH.
-- Committed server matrices `offline/matrix.server-x86_64.yaml` and
-  `offline/matrix.server-arm64.yaml` with both VM and container lanes.
+- OpenTofu IaC in `infra/` now provisions the committed official AWS native-host fleet
+  declared in `infra/aws_release_hosts.json`, covering 12 vm-only lanes / 60 total replays
+  per architecture across x86_64 and arm64.
 - `offline/toolchain.lock.tsv`: normative pinned-tool lock for the server-backed
-  evidence path and release workflow. It records the exact Go, OpenTofu, jq, and
-  Docker static artifacts by URL and SHA-256.
+  evidence path and release workflow. It records the exact Go, OpenTofu, and jq
+  artifacts by URL and SHA-256.
 - `scripts/bootstrap-pinned-toolchain.sh`: shell bootstrap that materializes the
   pinned binaries from `offline/toolchain.lock.tsv` without relying on ambient
   host-installed Go/OpenTofu/jq.
@@ -54,10 +44,10 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - `jcs-offline-replay init-infra-lock`: Go-native post-bootstrap infra lock
   generator that executes the pinned OpenTofu binary directly.
 - `jcs-offline-replay server-evidence`: Go-native post-bootstrap server evidence
-  orchestrator. It provisions EC2 instances via pinned OpenTofu, installs pinned
-  Docker static bundles on the remote hosts, manages replay execution over Go SSH
-  transport, writes the infra manifest through the Go CLI, validates both release
-  gates with `JCS_OFFLINE_INFRA_MANIFEST`, and destroys instances on exit.
+  orchestrator. It provisions the official AWS host fleet via pinned OpenTofu,
+  manages native replay execution over Go SSH transport, writes the infra manifest
+  through the Go CLI, validates both release gates with `JCS_OFFLINE_INFRA_MANIFEST`,
+  and destroys instances on exit.
 - `conformance/nolint_inventory.tsv`: checked-in mechanical inventory of every
   `//nolint` directive, including linter names, requirement IDs, rationale text,
   and directive text. Conformance now fails on drift from the live source tree.
@@ -75,6 +65,9 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   OFFLINE-SERVER-001 added to `REQ_REGISTRY_POLICY.md` with full enforcement matrix coverage.
 - Requirement LINT-NOLINT-002 added to `REQ_REGISTRY_POLICY.md` to require
   mechanically gathered suppression evidence in conformance.
+- Requirements AWS-RELEASE-001, AWS-TOOLCHAIN-001, and AWS-GATE-001 added to
+  `REQ_REGISTRY_POLICY.md` to lock official AWS release breadth, host-only pinned
+  toolchain scope, and v2-only release gating.
 - ADR-0005: Evidence v2 and Infrastructure Manifest design decision.
 - ADR-0006: Pinned toolchain evidence for server-backed conformance.
 - ADR-0007: Go-native post-bootstrap server evidence orchestration.

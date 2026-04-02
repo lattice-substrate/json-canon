@@ -3,16 +3,15 @@
   "version": "v1",
   "nodes": [
     {
-      "id": "aws-debian13-vm-x86_64",
+      "id": "aws-native-debian13-amd-x86_64",
       "mode": "vm",
       "distro": "debian-13",
-      "kernel_family": "cloud",
+      "kernel_family": "cloud-amd",
       "replays": 5,
       "runner": {
         "kind": "vm_ssh",
         "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_X86_SSH_TARGET",
-          "JCS_VM_SSH_OPTIONS_ENV": "JCS_SERVER_X86_SSH_OPTIONS"
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN13_AMD_X86_64"
         },
         "replay": [
           "./offline/scripts/replay-ssh.sh"
@@ -20,20 +19,178 @@
       }
     },
     {
-      "id": "aws-debian13-container-x86_64",
-      "mode": "container",
+      "id": "aws-native-debian13-intel-x86_64",
+      "mode": "vm",
       "distro": "debian-13",
-      "kernel_family": "cloud",
+      "kernel_family": "cloud-intel",
       "replays": 5,
       "runner": {
-        "kind": "container_ssh",
+        "kind": "vm_ssh",
         "env": {
-          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_X86_SSH_TARGET",
-          "JCS_VM_SSH_OPTIONS_ENV": "JCS_SERVER_X86_SSH_OPTIONS",
-          "JCS_CONTAINER_IMAGE_ENV": "JCS_SERVER_X86_CONTAINER_IMAGE"
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN13_INTEL_X86_64"
         },
         "replay": [
-          "./offline/scripts/replay-container-ssh.sh"
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-debian12-x86_64",
+      "mode": "vm",
+      "distro": "debian-12",
+      "kernel_family": "oldstable",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN12_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-debian11-x86_64",
+      "mode": "vm",
+      "distro": "debian-11",
+      "kernel_family": "previous-oldstable",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_DEBIAN11_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2004-server-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "server",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2004_SERVER_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2004-minimal-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "minimal",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2004_MINIMAL_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2204-server-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "server",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2204_SERVER_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2204-minimal-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "minimal",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2204_MINIMAL_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2404-server-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "server",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_SERVER_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-ubuntu2404-minimal-x86_64",
+      "mode": "vm",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "minimal",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_MINIMAL_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-amzn2-x86_64",
+      "mode": "vm",
+      "distro": "amazon-linux-2",
+      "kernel_family": "amzn2",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_AMZN2_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
+        ]
+      }
+    },
+    {
+      "id": "aws-native-al2023-x86_64",
+      "mode": "vm",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023",
+      "replays": 5,
+      "runner": {
+        "kind": "vm_ssh",
+        "env": {
+          "JCS_VM_SSH_TARGET_ENV": "JCS_SERVER_SSH_TARGET_AWS_NATIVE_AL2023_X86_64"
+        },
+        "replay": [
+          "./offline/scripts/replay-ssh.sh"
         ]
       }
     }

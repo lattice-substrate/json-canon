@@ -43,7 +43,7 @@ func cmdSyncToolchain(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	selected, err := selectedToolchainArtifacts(lockPath, hostArch)
+	selected, err := selectedToolchainArtifacts(lockPath, hostArch, parsePurposeFlags(flags["--purposes"]))
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func collectToolchainEvidence(flags map[string]string, manifestOutputPath string
 	if err != nil {
 		return nil, err
 	}
-	selected, err := selectedToolchainArtifacts(lockPath, hostArch)
+	selected, err := selectedToolchainArtifacts(lockPath, hostArch, parsePurposeFlags(flags["--purposes"]))
 	if err != nil {
 		return nil, err
 	}
@@ -137,16 +137,37 @@ func syncSelectedToolchainArtifacts(selected []replay.ToolchainArtifact, outputD
 	return synced, nil
 }
 
-func selectedToolchainArtifacts(lockPath, hostArch string) ([]replay.ToolchainArtifact, error) {
+func selectedToolchainArtifacts(lockPath, hostArch string, purposes []string) ([]replay.ToolchainArtifact, error) {
 	lock, err := replay.LoadToolchainLock(lockPath)
 	if err != nil {
 		return nil, fmt.Errorf("load toolchain lock: %w", err)
 	}
-	selected, err := replay.SelectToolchainArtifacts(lock, hostArch)
+	selected, err := replay.SelectToolchainArtifactsForPurposes(lock, hostArch, purposes)
 	if err != nil {
 		return nil, fmt.Errorf("select toolchain artifacts: %w", err)
 	}
 	return selected, nil
+}
+
+func parsePurposeFlags(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	purposes := make([]string, 0, 4)
+	for _, part := range strings.Split(raw, ",") {
+		purpose := strings.TrimSpace(part)
+		if purpose == "" {
+			continue
+		}
+		if _, ok := seen[purpose]; ok {
+			continue
+		}
+		seen[purpose] = struct{}{}
+		purposes = append(purposes, purpose)
+	}
+	sort.Strings(purposes)
+	return purposes
 }
 
 func collectToolEvidence(manifestDir, toolchainRoot string, artifact replay.ToolchainArtifact) (replay.InfraManifestTool, error) {

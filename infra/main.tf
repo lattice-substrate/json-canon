@@ -12,48 +12,6 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Latest Debian 13 x86_64 AMI from the official Debian AWS account.
-data "aws_ami" "debian13_x86" {
-  most_recent = true
-  owners      = ["679593333241"]
-
-  filter {
-    name   = "name"
-    values = ["debian-13-amd64-*"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# Latest Debian 13 arm64 AMI from the official Debian AWS account.
-data "aws_ami" "debian13_arm64" {
-  most_recent = true
-  owners      = ["679593333241"]
-
-  filter {
-    name   = "name"
-    values = ["debian-13-arm64-*"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["arm64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
 resource "aws_key_pair" "replay" {
   key_name   = "jcs-replay-key"
   public_key = var.ssh_public_key

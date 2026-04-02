@@ -8,10 +8,11 @@ TOOL_LOCK="$ROOT/offline/toolchain.lock.tsv"
 OUTPUT_DIR=""
 ENV_FILE=""
 HOST_ARCH=""
+PURPOSES=""
 
 usage() {
   cat <<'EOF'
-usage: ./scripts/bootstrap-pinned-toolchain.sh --output-dir <path> --env-file <path> [--host-arch <amd64|arm64>] [--lock <path>]
+usage: ./scripts/bootstrap-pinned-toolchain.sh --output-dir <path> --env-file <path> [--host-arch <amd64|arm64>] [--lock <path>] [--purposes <csv>]
 EOF
 }
 
@@ -31,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --lock)
       TOOL_LOCK="$2"
+      shift 2
+      ;;
+    --purposes)
+      PURPOSES="$2"
       shift 2
       ;;
     --help|-h)
@@ -141,11 +146,17 @@ bootstrap_go() {
 }
 
 GO_BIN="$(bootstrap_go)"
-"$GO_BIN" run -mod=readonly "$ROOT/cmd/jcs-offline-replay" sync-toolchain \
-  --lock "$TOOL_LOCK" \
-  --output-dir "$OUTPUT_DIR" \
-  --env-file "$ENV_FILE" \
-  --host-arch "$HOST_ARCH" >/dev/null
+sync_args=(
+  run -mod=readonly "$ROOT/cmd/jcs-offline-replay" sync-toolchain
+  --lock "$TOOL_LOCK"
+  --output-dir "$OUTPUT_DIR"
+  --env-file "$ENV_FILE"
+  --host-arch "$HOST_ARCH"
+)
+if [[ -n "$PURPOSES" ]]; then
+  sync_args+=(--purposes "$PURPOSES")
+fi
+"$GO_BIN" "${sync_args[@]}" >/dev/null
 
 echo "pinned toolchain ready"
 echo "  lock:      $TOOL_LOCK"

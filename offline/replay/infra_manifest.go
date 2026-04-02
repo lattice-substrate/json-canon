@@ -29,13 +29,15 @@ type InfraManifest struct {
 
 // InfraManifestHost describes one provisioned cloud host.
 type InfraManifestHost struct {
-	Role             string `json:"role"`
-	CloudProvider    string `json:"cloud_provider"`
-	Region           string `json:"region"`
-	InstanceType     string `json:"instance_type"`
-	ImageID          string `json:"image_id"`
-	DiscoveredCPU    string `json:"discovered_cpu,omitempty"`
-	DiscoveredKernel string `json:"discovered_kernel,omitempty"`
+	Architecture     string   `json:"architecture"`
+	NodeIDs          []string `json:"node_ids"`
+	Role             string   `json:"role"`
+	CloudProvider    string   `json:"cloud_provider"`
+	Region           string   `json:"region"`
+	InstanceType     string   `json:"instance_type"`
+	ImageID          string   `json:"image_id"`
+	DiscoveredCPU    string   `json:"discovered_cpu,omitempty"`
+	DiscoveredKernel string   `json:"discovered_kernel,omitempty"`
 }
 
 // InfraManifestTool records one pinned tool artifact used in the evidenced release flow.
@@ -140,15 +142,12 @@ func validateInfraManifestScalars(im *InfraManifest) error {
 // validateInfraManifestHost checks one host entry and records its role in seenRoles.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
 func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]struct{}) error {
-	switch h.Role {
-	case architectureX8664, architectureARM64:
-	default:
-		return fmt.Errorf("infra manifest host[%d] role must be %s or %s, got %q", i, architectureX8664, architectureARM64, h.Role)
+	if err := validateInfraManifestHostIdentity(i, h, seenRoles); err != nil {
+		return err
 	}
-	if _, ok := seenRoles[h.Role]; ok {
-		return fmt.Errorf("infra manifest duplicate host role %q", h.Role)
+	if err := validateInfraManifestHostNodeIDs(i, h.NodeIDs); err != nil {
+		return err
 	}
-	seenRoles[h.Role] = struct{}{}
 	for _, field := range []struct{ name, value string }{
 		{"cloud_provider", h.CloudProvider},
 		{"region", h.Region},
@@ -158,6 +157,40 @@ func validateInfraManifestHost(i int, h InfraManifestHost, seenRoles map[string]
 		if strings.TrimSpace(field.value) == "" {
 			return fmt.Errorf("infra manifest host[%d] %s is required", i, field.name)
 		}
+	}
+	return nil
+}
+
+func validateInfraManifestHostIdentity(i int, h InfraManifestHost, seenRoles map[string]struct{}) error {
+	if strings.TrimSpace(h.Role) == "" {
+		return fmt.Errorf("infra manifest host[%d] role is required", i)
+	}
+	if _, ok := seenRoles[h.Role]; ok {
+		return fmt.Errorf("infra manifest duplicate host role %q", h.Role)
+	}
+	seenRoles[h.Role] = struct{}{}
+	switch h.Architecture {
+	case architectureX8664, architectureARM64:
+		return nil
+	default:
+		return fmt.Errorf("infra manifest host[%d] architecture must be %s or %s, got %q", i, architectureX8664, architectureARM64, h.Architecture)
+	}
+}
+
+func validateInfraManifestHostNodeIDs(i int, nodeIDs []string) error {
+	if len(nodeIDs) == 0 {
+		return fmt.Errorf("infra manifest host[%d] node_ids is required", i)
+	}
+	seenNodeIDs := make(map[string]struct{}, len(nodeIDs))
+	for _, nodeID := range nodeIDs {
+		nodeID = strings.TrimSpace(nodeID)
+		if nodeID == "" {
+			return fmt.Errorf("infra manifest host[%d] node_ids must not contain empty values", i)
+		}
+		if _, ok := seenNodeIDs[nodeID]; ok {
+			return fmt.Errorf("infra manifest host[%d] duplicate node_id %q", i, nodeID)
+		}
+		seenNodeIDs[nodeID] = struct{}{}
 	}
 	return nil
 }

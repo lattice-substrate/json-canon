@@ -14,7 +14,8 @@ fi
 
 "$ROOT/scripts/bootstrap-pinned-toolchain.sh" \
   --output-dir "$TOOLCHAIN_ROOT" \
-  --env-file "$TOOLCHAIN_ENV"
+  --env-file "$TOOLCHAIN_ENV" \
+  --purposes build,provision
 
 # shellcheck disable=SC1090
 source "$TOOLCHAIN_ENV"

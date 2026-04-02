@@ -2,12 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-04-01
-- Related Requirements: OFFLINE-AUTO-001, OFFLINE-TOOLCHAIN-001, OFFLINE-SERVER-001
+- Related Requirements: OFFLINE-AUTO-001, AWS-RELEASE-001, AWS-GATE-001
 
 ## Context
 
 The pinned-toolchain model established by ADR-0006 removed ambient `go`, `tofu`,
-and `jq` from the server-backed evidence path, but the billed orchestration still
+and `jq` from the official AWS evidence path, but the billed orchestration still
 lived in shell. That left release-critical automation split across:
 
 - `scripts/init-infra-lock.sh`
@@ -19,7 +19,7 @@ release-critical automation be Go-native once the trusted toolchain existed.
 
 ## Decision
 
-After pinned Go has been bootstrapped, all release-critical server-backed
+After pinned Go has been bootstrapped, all release-critical official AWS
 automation MUST run through Go subcommands in `jcs-offline-replay`.
 
 The supported model is:
@@ -30,8 +30,7 @@ The supported model is:
    `infra/.terraform.lock.hcl`.
 3. `jcs-offline-replay server-evidence` performs the full billed AWS workflow:
    - pinned OpenTofu init/apply/output/destroy
-   - remote Docker static installation
-   - remote image digest / CPU / kernel discovery
+   - remote CPU / kernel discovery on each native lane
    - infra-manifest emission
    - per-architecture control/worker builds
    - replay execution
@@ -46,9 +45,9 @@ The supported model is:
 Positive:
 
 - Post-bootstrap release automation now matches the project’s Go-native policy.
-- Ambient host SSH/SCP binaries are removed from the billed server evidence path.
+- Ambient host SSH/SCP binaries are removed from the billed official AWS path.
 - The requirement/enforcement chain can point to one auditable CLI surface for
-  both lockfile generation and server-backed evidence generation.
+  both lockfile generation and official AWS evidence generation.
 
 Costs:
 

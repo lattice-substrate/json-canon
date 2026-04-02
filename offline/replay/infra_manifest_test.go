@@ -10,6 +10,8 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+const testArchX8664 = "x86_64"
+
 func validInfraManifestFixture() *replay.InfraManifest {
 	return &replay.InfraManifest{
 		SchemaVersion:      replay.InfraManifestSchemaVersion,
@@ -21,13 +23,17 @@ func validInfraManifestFixture() *replay.InfraManifest {
 		ProviderLockSHA256: strings.Repeat("b", 64),
 		Hosts: []replay.InfraManifestHost{
 			{
-				Role:          "x86_64",
+				Architecture:  testArchX8664,
+				NodeIDs:       []string{"aws-native-debian13-amd-x86_64"},
+				Role:          testArchX8664,
 				CloudProvider: "aws",
 				Region:        "us-east-1",
 				InstanceType:  "c6i.large",
 				ImageID:       "ami-0abc1234",
 			},
 			{
+				Architecture:  "arm64",
+				NodeIDs:       []string{"aws-native-debian13-g2-arm64"},
 				Role:          "arm64",
 				CloudProvider: "aws",
 				Region:        "us-east-1",
@@ -51,17 +57,18 @@ func validInfraManifestFixture() *replay.InfraManifest {
 				ExecutableRelativePath: "toolchain/.extracted/go-linux-amd64/go/bin/go",
 			},
 			{
-				ID:                   "docker-static-linux-arm64",
-				Scope:                replay.ToolchainScopeRemote,
-				Purpose:              "container-runtime",
-				Name:                 "docker",
-				Version:              "29.3.1",
-				OS:                   "linux",
-				Arch:                 "arm64",
-				Format:               "tar.gz",
-				SourceURL:            "https://download.docker.com/linux/static/stable/aarch64/docker-29.3.1.tgz",
-				SHA256:               strings.Repeat("d", 64),
-				ArtifactRelativePath: "toolchain/downloads/docker-static-linux-arm64/docker-29.3.1.tgz",
+				ID:                     "tofu-linux-amd64",
+				Scope:                  replay.ToolchainScopeHost,
+				Purpose:                "provision",
+				Name:                   "opentofu",
+				Version:                "1.10.6",
+				OS:                     "linux",
+				Arch:                   "amd64",
+				Format:                 "zip",
+				SourceURL:              "https://github.com/opentofu/opentofu/releases/download/v1.10.6/tofu_1.10.6_linux_amd64.zip",
+				SHA256:                 strings.Repeat("d", 64),
+				ArtifactRelativePath:   "toolchain/downloads/tofu-linux-amd64/tofu_1.10.6_linux_amd64.zip",
+				ExecutableRelativePath: "toolchain/.extracted/tofu-linux-amd64/tofu",
 			},
 		},
 	}
@@ -160,16 +167,16 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 			want: "at least one pinned tool artifact",
 		},
 		{
-			name: "invalid role",
+			name: "invalid architecture",
 			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[0].Role = "mips64"
+				im.Hosts[0].Architecture = "mips64"
 			},
-			want: "role must be x86_64 or arm64",
+			want: "architecture must be x86_64 or arm64",
 		},
 		{
 			name: "duplicate role",
 			mutate: func(im *replay.InfraManifest) {
-				im.Hosts[1].Role = "x86_64"
+				im.Hosts[1].Role = testArchX8664
 			},
 			want: "duplicate host role",
 		},
@@ -266,8 +273,11 @@ func TestLoadInfraManifest(t *testing.T) {
 	if len(loaded.Tools) != 2 {
 		t.Fatalf("expected 2 tools, got %d", len(loaded.Tools))
 	}
-	if loaded.Hosts[0].Role != "x86_64" {
+	if loaded.Hosts[0].Role != testArchX8664 {
 		t.Fatalf("expected host[0].role=x86_64, got %q", loaded.Hosts[0].Role)
+	}
+	if loaded.Hosts[0].Architecture != testArchX8664 {
+		t.Fatalf("expected host[0].architecture=x86_64, got %q", loaded.Hosts[0].Architecture)
 	}
 	if loaded.Hosts[1].Role != "arm64" {
 		t.Fatalf("expected host[1].role=arm64, got %q", loaded.Hosts[1].Role)
@@ -285,7 +295,7 @@ func TestLoadInfraManifestRejectsUnknownFields(t *testing.T) {
   "provider_engine": "opentofu",
   "provider_version": "1.8.0",
   "provider_lock_sha256": "` + strings.Repeat("b", 64) + `",
-  "hosts": [{"role":"x86_64","cloud_provider":"aws","region":"us-east-1","instance_type":"c6i.large","image_id":"ami-0abc"}],
+  "hosts": [{"architecture":"x86_64","node_ids":["aws-native-debian13-amd-x86_64"],"role":"x86_64","cloud_provider":"aws","region":"us-east-1","instance_type":"c6i.large","image_id":"ami-0abc"}],
   "tools": [{"id":"go-linux-amd64","scope":"host","purpose":"build","name":"go","version":"1.24.13","os":"linux","arch":"amd64","format":"tar.gz","source_url":"https://go.dev/dl/go1.24.13.linux-amd64.tar.gz","sha256":"` + strings.Repeat("c", 64) + `","artifact_relative_path":"toolchain/downloads/go/go.tar.gz","executable_relative_path":"toolchain/.extracted/go/bin/go"}],
   "unknown_field": "should_fail"
 }`

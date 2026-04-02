@@ -237,10 +237,10 @@ jcs-offline-replay cross-arch \
 
 ### Server-Backed Evidence (evidence.v2)
 
-Server-backed runs use real AWS EC2 instances (x86_64 + arm64 Graviton2) and produce
+Official AWS release runs use real AWS EC2 instances (x86_64 + arm64) and produce
 `evidence.v2` with an infrastructure manifest binding. The infra manifest records the
 IaC repo commit, provider lock digest, AMI IDs, instance types, discovered CPU/kernel,
-and the exact pinned tool artifacts used for the run.
+the native lane-to-host binding, and the exact pinned tool artifacts used for the run.
 
 **Requirements:**
 - AWS credentials with EC2 permissions
@@ -278,11 +278,11 @@ long-lived access keys into the shell environment.
 
 The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
 then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
-provisions two EC2 instances, runs 5 cold replays on each over Go-managed SSH,
-installs the remote pinned container runtime, resolves digest-pinned container
-image references on each provisioned host, emits `evidence.v2`, runs
+provisions the committed official AWS host fleet, runs the native vm-only release
+matrices over Go-managed SSH, emits `evidence.v2`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
-then destroys the instances.
+then destroys the instances. The official AWS matrices are vm-only and schedule
+12 native lanes / 60 total replays per architecture.
 
 **Output:** `offline/runs/releases/<tag>/`
 
@@ -333,7 +333,7 @@ CI release workflow:
 
 0. **Pinned binaries only.** Every required external binary is materialized from
    `offline/toolchain.lock.tsv` and executed from that verified path. This
-   includes Go, OpenTofu, jq, and the remote Docker runtime bundles. The
+   includes Go and OpenTofu for the official AWS release path. The
    supported shell entrypoints are `./scripts/bootstrap-pinned-toolchain.sh`,
    `./scripts/init-infra-lock.sh`, and `./scripts/release-server.sh`.
 

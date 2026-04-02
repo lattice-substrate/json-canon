@@ -137,8 +137,6 @@ func ValidateMatrix(m *Matrix) error {
 	}
 
 	seen := make(map[string]struct{}, len(m.Nodes))
-	hasContainer := false
-	hasVM := false
 	for i := range m.Nodes {
 		n := &m.Nodes[i]
 		if n.ID == "" {
@@ -150,10 +148,7 @@ func ValidateMatrix(m *Matrix) error {
 		seen[n.ID] = struct{}{}
 
 		switch n.Mode {
-		case NodeModeContainer:
-			hasContainer = true
-		case NodeModeVM:
-			hasVM = true
+		case NodeModeContainer, NodeModeVM:
 		default:
 			return fmt.Errorf("node %s: invalid mode %q", n.ID, n.Mode)
 		}
@@ -172,12 +167,6 @@ func ValidateMatrix(m *Matrix) error {
 		if n.Runner.Kind == "" {
 			return fmt.Errorf("node %s: runner.kind is required", n.ID)
 		}
-	}
-	if !hasContainer {
-		return fmt.Errorf("matrix must include at least one container node")
-	}
-	if !hasVM {
-		return fmt.Errorf("matrix must include at least one vm node")
 	}
 	return nil
 }

@@ -462,6 +462,8 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 		Hosts: []replay.InfraManifestHost{
 			{
 				Role:             "x86_64",
+				Architecture:     "x86_64",
+				NodeIDs:          []string{"x86_64"},
 				CloudProvider:    requireFlag(flags, "--cloud-provider"),
 				Region:           requireFlag(flags, "--region"),
 				InstanceType:     requireFlag(flags, "--x86-instance-type"),
@@ -471,6 +473,8 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 			},
 			{
 				Role:             "arm64",
+				Architecture:     "arm64",
+				NodeIDs:          []string{"arm64"},
 				CloudProvider:    requireFlag(flags, "--cloud-provider"),
 				Region:           requireFlag(flags, "--region"),
 				InstanceType:     requireFlag(flags, "--arm64-instance-type"),
@@ -485,6 +489,13 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 		return err
 	}
 	manifest.Tools = tools
+	if err := writeInfraManifestDocument(outputPath, manifest); err != nil {
+		return err
+	}
+	return writef(stdout, "infra-manifest: %s\n", outputPath)
+}
+
+func writeInfraManifestDocument(outputPath string, manifest *replay.InfraManifest) error {
 	if validateErr := replay.ValidateInfraManifest(manifest); validateErr != nil {
 		return fmt.Errorf("validate infra manifest: %w", validateErr)
 	}
@@ -496,7 +507,7 @@ func cmdWriteInfraManifest(flags map[string]string, stdout io.Writer) error {
 	if err := os.WriteFile(outputPath, data, 0o600); err != nil {
 		return fmt.Errorf("write infra manifest: %w", err)
 	}
-	return writef(stdout, "infra-manifest: %s\n", outputPath)
+	return nil
 }
 
 func writeReportHeader(stdout io.Writer, evidence *replay.EvidenceBundle) error {
@@ -786,9 +797,9 @@ func usageLines() []string {
 		"  cross-arch [--x86-matrix <path>] [--x86-profile <path>] [--arm64-matrix <path>] [--arm64-profile <path>] [--infra-manifest <path>] [--local-no-rocky] [--output-dir <path>] [--timeout 12h] [--run-official-vectors] [--run-official-es6-100m]",
 		"  verify-evidence --matrix <path> --profile <path> --evidence <path> [--bundle <path>] [--control-binary <path>] [--infra-manifest <path>] [--source-git-commit <sha>] [--source-git-tag <tag>]",
 		"  report --evidence <path>",
-		"  sync-toolchain --lock <path> --output-dir <path> [--env-file <path>] [--host-arch <amd64|arm64>]",
+		"  sync-toolchain --lock <path> --output-dir <path> [--env-file <path>] [--host-arch <amd64|arm64>] [--purposes <csv>]",
 		"  init-infra-lock [--infra-dir <path>]",
-		"  server-evidence --tag <tag> --ssh-key-path <path> --ssh-ingress-cidr <cidr> [--aws-region <region>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>] [--server-container-image-tag <image>]",
+		"  server-evidence --tag <tag> --ssh-key-path <path> --ssh-ingress-cidr <cidr> [--aws-region <region>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>]",
 		"  write-infra-manifest --output <path> --toolchain-lock <path> --toolchain-root <path> [--host-arch <amd64|arm64>] --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>",
 		"  inspect-matrix --matrix <path>",
 	}

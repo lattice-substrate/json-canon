@@ -2,7 +2,6 @@ package replay_test
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/lattice-substrate/json-canon/offline/replay"
@@ -77,17 +76,16 @@ func TestLoadProfile_OFFLINE_COLD_001(t *testing.T) {
 	}
 }
 
-func TestValidateMatrixRequiresContainerAndVM(t *testing.T) {
+func TestValidateMatrixAllowsSingleModeOfficialHarness(t *testing.T) {
 	m := &replay.Matrix{
 		Version:      "v1",
 		Architecture: archX86_64,
 		Nodes: []replay.NodeSpec{
-			{ID: "a", Mode: replay.NodeModeContainer, Distro: "debian", KernelFamily: "host", Runner: replay.RunnerConfig{Kind: "container_command", Replay: []string{"true"}}},
+			{ID: "a", Mode: replay.NodeModeVM, Distro: "debian", KernelFamily: "native", Runner: replay.RunnerConfig{Kind: "vm_ssh", Replay: []string{"true"}}},
 		},
 	}
-	err := replay.ValidateMatrix(m)
-	if err == nil || !strings.Contains(err.Error(), "vm") {
-		t.Fatalf("expected vm validation error, got %v", err)
+	if err := replay.ValidateMatrix(m); err != nil {
+		t.Fatalf("expected single-mode matrix to validate, got %v", err)
 	}
 }
 

@@ -17,8 +17,8 @@ Core artifacts:
 
 - Matrix contract: `offline/matrix.yaml` (x86_64), `offline/matrix.arm64.yaml` (arm64)
 - Profile contract: `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`
-- Evidence schema: `offline/schema/evidence.v1.json`
-- Server evidence schema: `offline/schema/evidence.v2.json`
+- Offline evidence schema: `offline/schema/evidence.v1.json`
+- Official AWS release evidence schema: `offline/schema/evidence.v2.json`
 - Infra manifest schema: `offline/schema/infra-manifest.v1.json`
 - Orchestrator CLI: `cmd/jcs-offline-replay`
 - Worker CLI: `cmd/jcs-offline-worker`
@@ -60,13 +60,13 @@ aggregate digests across architectures.
 jcs-offline-replay preflight --matrix offline/matrix.yaml
 ```
 
-### Required commands
+### Required commands for local offline harness
 
 - `go`, `tar`
 - container lanes: `docker` or `podman`
 - VM lanes: `virsh`, `ssh`, `scp`
 
-### Offline prerequisites
+### Offline prerequisites for local harness
 
 1. Container images in matrix are preloaded locally (no pull during run).
 2. Libvirt domains and snapshots in matrix exist.
@@ -159,13 +159,18 @@ command. In summary:
 3. **`JCS_OFFLINE_SOURCE_GIT_TAG=<tag>`** must be set because the tag
    does not exist yet at evidence generation time.
 
-### Server-backed release evidence
+### Official AWS release evidence
 
-Use `./scripts/release-server.sh` when generating server-backed `evidence.v2`.
+Use `./scripts/release-server.sh` when generating official AWS `evidence.v2`.
 That wrapper requires `SSH_INGRESS_CIDR`, stages the pinned toolchain under
 `offline/runs/releases/<tag>/toolchain/`, then invokes
 `jcs-offline-replay server-evidence`, which writes `infra-manifest.v1.json` and
 executes the release gates with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
+The committed official AWS matrices are vm-only and run natively on EC2 across 12
+lanes / 60 total replays per architecture.
+
+Official AWS release evidence does not use Docker lanes. Each lane is a native EC2 host
+selected from the committed AWS release host catalog and executed directly over Go-managed SSH.
 
 Before the first billed AWS run, generate `infra/.terraform.lock.hcl` with the pinned
 OpenTofu binary via the Go-native `jcs-offline-replay init-infra-lock` path:
@@ -243,7 +248,7 @@ JCS_OFFLINE_EXPECTED_GIT_TAG=<tag> \
 go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 ```
 
-For server-backed `evidence.v2`, use the committed server matrix/profile pair and
+For official AWS `evidence.v2`, use the committed server matrix/profile pair and
 set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json`.
 
 **Evidence source binding model:** Evidence records `source_git_commit` at

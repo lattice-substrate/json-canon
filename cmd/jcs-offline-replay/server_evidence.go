@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,59 +24,57 @@ import (
 )
 
 const (
-	defaultAWSRegion               = "us-east-1"
-	defaultServerContainerImageTag = "debian:13-slim"
-	defaultSSHUser                 = "admin"
-	defaultSSHPort                 = "22"
-	serverRepoURL                  = "https://github.com/lattice-substrate/json-canon"
-	serverSSHReadyTimeout          = 3 * time.Minute
-	serverSSHConnectTimeout        = 15 * time.Second
-	serverProvisionTimeout         = 20 * time.Minute
-	serverReleaseGateTimeout       = 10 * time.Minute
-	serverRuntimeTimeout           = 12 * time.Hour
+	defaultAWSRegion         = "us-east-1"
+	defaultSSHUser           = "admin"
+	defaultSSHPort           = "22"
+	serverRepoURL            = "https://github.com/lattice-substrate/json-canon"
+	serverSSHReadyTimeout    = 3 * time.Minute
+	serverSSHConnectTimeout  = 15 * time.Second
+	serverProvisionTimeout   = 20 * time.Minute
+	serverReleaseGateTimeout = 10 * time.Minute
+	serverRuntimeTimeout     = 12 * time.Hour
 )
 
 var fullSHAPattern = regexp.MustCompile("^[0-9a-f]{40}$")
 
 type serverEvidenceOptions struct {
-	tag                     string
-	awsRegion               string
-	sshIngressCIDR          string
-	sshKeyPath              string
-	sshPublicKeyPath        string
-	toolchainLockPath       string
-	toolchainRoot           string
-	hostArch                string
-	outputDir               string
-	serverContainerImageTag string
-	lockFilePath            string
-	infraDir                string
-	root                    string
+	tag               string
+	awsRegion         string
+	sshIngressCIDR    string
+	sshKeyPath        string
+	sshPublicKeyPath  string
+	toolchainLockPath string
+	toolchainRoot     string
+	hostArch          string
+	outputDir         string
+	lockFilePath      string
+	infraDir          string
+	root              string
 }
 
 type provisionedHost struct {
-	Architecture string
-	PublicIP     string
-	ImageID      string
-	InstanceType string
+	HostID       string `json:"host_id"`
+	NodeID       string `json:"node_id"`
+	Architecture string `json:"architecture"`
+	PublicIP     string `json:"public_ip"`
+	ImageID      string `json:"image_id"`
+	InstanceType string `json:"instance_type"`
+	Distro       string `json:"distro"`
+	KernelFamily string `json:"kernel_family"`
 }
 
 type provisionedInfra struct {
-	X86   provisionedHost
-	Arm64 provisionedHost
+	Hosts map[string]provisionedHost
 }
 
 type discoveredRemoteFacts struct {
-	CPU            string
-	Kernel         string
-	ContainerImage string
+	CPU    string
+	Kernel string
 }
 
 type serverToolchain struct {
-	goBinary          string
-	tofuBinary        string
-	dockerStaticAMD64 string
-	dockerStaticARM64 string
+	goBinary   string
+	tofuBinary string
 }
 
 type serverSSHRunner struct {
@@ -98,10 +98,7 @@ type serverEvidenceRuntime struct {
 	sshPublicKey      string
 	infra             provisionedInfra
 	sshRunner         *serverSSHRunner
-	x86Target         string
-	armTarget         string
-	x86Facts          discoveredRemoteFacts
-	armFacts          discoveredRemoteFacts
+	hostFacts         map[string]discoveredRemoteFacts
 	infraManifestPath string
 	x86Artifacts      serverBuildArtifacts
 	armArtifacts      serverBuildArtifacts
@@ -153,19 +150,18 @@ func parseServerEvidenceOptions(flags map[string]string) (serverEvidenceOptions,
 	toolchainRoot := resolveServerEvidencePath(root, flags["--toolchain-root"], filepath.Join(outputDir, "toolchain"))
 	toolchainLockPath := resolveServerEvidencePath(root, flags["--toolchain-lock"], filepath.Join("offline", "toolchain.lock.tsv"))
 	return serverEvidenceOptions{
-		tag:                     required.tag,
-		awsRegion:               defaultString(flags, "--aws-region", defaultAWSRegion),
-		sshIngressCIDR:          required.sshIngressCIDR,
-		sshKeyPath:              absKeyPath,
-		sshPublicKeyPath:        sshPubPath,
-		toolchainLockPath:       toolchainLockPath,
-		toolchainRoot:           toolchainRoot,
-		hostArch:                hostArch,
-		outputDir:               outputDir,
-		serverContainerImageTag: defaultString(flags, "--server-container-image-tag", defaultServerContainerImageTag),
-		lockFilePath:            filepath.Join(root, "infra", ".terraform.lock.hcl"),
-		infraDir:                filepath.Join(root, "infra"),
-		root:                    root,
+		tag:               required.tag,
+		awsRegion:         defaultString(flags, "--aws-region", defaultAWSRegion),
+		sshIngressCIDR:    required.sshIngressCIDR,
+		sshKeyPath:        absKeyPath,
+		sshPublicKeyPath:  sshPubPath,
+		toolchainLockPath: toolchainLockPath,
+		toolchainRoot:     toolchainRoot,
+		hostArch:          hostArch,
+		outputDir:         outputDir,
+		lockFilePath:      filepath.Join(root, "infra", ".terraform.lock.hcl"),
+		infraDir:          filepath.Join(root, "infra"),
+		root:              root,
 	}, nil
 }
 
@@ -257,6 +253,7 @@ func newServerEvidenceRuntime(opts serverEvidenceOptions) (*serverEvidenceRuntim
 		lockSHA:      lockSHA,
 		tofuVersion:  tofuVersion,
 		sshPublicKey: sshPublicKey,
+		hostFacts:    make(map[string]discoveredRemoteFacts),
 	}, nil
 }
 
@@ -285,8 +282,7 @@ type serverMatrixRun struct {
 	infraManifestPath string
 	sourceGitCommit   string
 	sourceGitTag      string
-	target            string
-	containerImage    string
+	globalEnv         map[string]string
 	sshRunner         *serverSSHRunner
 }
 
@@ -315,27 +311,22 @@ func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
 	}
 	r.infra = infra
 	r.sshRunner = sshRunner
-	r.x86Target = defaultSSHUser + "@" + infra.X86.PublicIP
-	r.armTarget = defaultSSHUser + "@" + infra.Arm64.PublicIP
-	if err := writef(stdout, "==> instances ready: x86_64=%s  arm64=%s\n", infra.X86.PublicIP, infra.Arm64.PublicIP); err != nil {
+	if err := writef(stdout, "==> instances ready: %d official AWS hosts\n", len(infra.Hosts)); err != nil {
 		return err
 	}
-	if err := writeLine(stdout, "==> waiting for SSH on both instances"); err != nil {
+	if err := writeLine(stdout, "==> waiting for SSH on all provisioned hosts"); err != nil {
 		return err
 	}
-	if err := r.sshRunner.Wait(context.Background(), r.x86Target, serverSSHReadyTimeout); err != nil {
-		return fmt.Errorf("wait for x86_64 ssh: %w", err)
-	}
-	if err := r.sshRunner.Wait(context.Background(), r.armTarget, serverSSHReadyTimeout); err != nil {
-		return fmt.Errorf("wait for arm64 ssh: %w", err)
+	for _, hostID := range sortedProvisionedHostIDs(infra.Hosts) {
+		target := hostTarget(infra.Hosts[hostID])
+		if err := r.sshRunner.Wait(context.Background(), target, serverSSHReadyTimeout); err != nil {
+			return fmt.Errorf("wait for %s ssh: %w", hostID, err)
+		}
 	}
 	return nil
 }
 
 func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
-	if err := r.prepareRemoteRuntime(stdout); err != nil {
-		return err
-	}
 	if err := r.discoverRemoteFacts(stdout); err != nil {
 		return err
 	}
@@ -357,67 +348,38 @@ func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
 	return r.writeSuccess(stdout)
 }
 
-func (r *serverEvidenceRuntime) prepareRemoteRuntime(stdout io.Writer) error {
-	if err := writeLine(stdout, "==> preparing remote container runtime"); err != nil {
-		return err
-	}
-	if err := installRemoteContainerRuntime(context.Background(), r.sshRunner, r.x86Target, r.toolchain.dockerStaticAMD64); err != nil {
-		return err
-	}
-	return installRemoteContainerRuntime(context.Background(), r.sshRunner, r.armTarget, r.toolchain.dockerStaticARM64)
-}
-
 func (r *serverEvidenceRuntime) discoverRemoteFacts(stdout io.Writer) error {
-	if err := writeLine(stdout, "==> resolving digest-pinned container images on provisioned hosts"); err != nil {
+	if err := writeLine(stdout, "==> discovering native substrate identity on provisioned hosts"); err != nil {
 		return err
 	}
-	x86Facts, err := discoverRemoteFacts(context.Background(), r.sshRunner, r.x86Target, r.opts.serverContainerImageTag)
-	if err != nil {
-		return err
+	for _, hostID := range sortedProvisionedHostIDs(r.infra.Hosts) {
+		host := r.infra.Hosts[hostID]
+		facts, err := discoverRemoteFacts(context.Background(), r.sshRunner, hostTarget(host))
+		if err != nil {
+			return err
+		}
+		if err := validateDiscoveredRemoteFacts(hostID, facts); err != nil {
+			return err
+		}
+		r.hostFacts[hostID] = facts
 	}
-	armFacts, err := discoverRemoteFacts(context.Background(), r.sshRunner, r.armTarget, r.opts.serverContainerImageTag)
-	if err != nil {
-		return err
-	}
-	if err := validateDiscoveredRemoteFacts(x86Facts, armFacts); err != nil {
-		return err
-	}
-	r.x86Facts = x86Facts
-	r.armFacts = armFacts
-	if err := writeLine(stdout, "==> discovering substrate identity"); err != nil {
-		return err
-	}
-	return writeDiscoveredFactSummary(stdout, x86Facts, armFacts)
+	return writeDiscoveredFactSummary(stdout, r.infra.Hosts, r.hostFacts)
 }
 
-func validateDiscoveredRemoteFacts(x86Facts, armFacts discoveredRemoteFacts) error {
-	for _, item := range []struct {
-		label string
-		value string
-	}{
-		{"x86_64 container image digest", x86Facts.ContainerImage},
-		{"arm64 container image digest", armFacts.ContainerImage},
-		{"x86_64 cpu", x86Facts.CPU},
-		{"x86_64 kernel", x86Facts.Kernel},
-		{"arm64 cpu", armFacts.CPU},
-		{"arm64 kernel", armFacts.Kernel},
-	} {
-		if strings.TrimSpace(item.value) == "" {
-			return fmt.Errorf("failed to discover required remote fact: %s", item.label)
-		}
+func validateDiscoveredRemoteFacts(hostID string, facts discoveredRemoteFacts) error {
+	if strings.TrimSpace(facts.CPU) == "" {
+		return fmt.Errorf("failed to discover required remote fact: %s cpu", hostID)
+	}
+	if strings.TrimSpace(facts.Kernel) == "" {
+		return fmt.Errorf("failed to discover required remote fact: %s kernel", hostID)
 	}
 	return nil
 }
 
-func writeDiscoveredFactSummary(stdout io.Writer, x86Facts, armFacts discoveredRemoteFacts) error {
-	for _, line := range []string{
-		"    x86_64 cpu: " + x86Facts.CPU,
-		"    x86_64 kernel: " + x86Facts.Kernel,
-		"    x86_64 image: " + x86Facts.ContainerImage,
-		"    arm64 cpu: " + armFacts.CPU,
-		"    arm64 kernel: " + armFacts.Kernel,
-		"    arm64 image: " + armFacts.ContainerImage,
-	} {
+func writeDiscoveredFactSummary(stdout io.Writer, hosts map[string]provisionedHost, facts map[string]discoveredRemoteFacts) error {
+	for _, hostID := range sortedProvisionedHostIDs(hosts) {
+		hostFacts := facts[hostID]
+		line := fmt.Sprintf("    %s (%s): cpu=%s kernel=%s", hostID, hosts[hostID].Architecture, hostFacts.CPU, hostFacts.Kernel)
 		if err := writeLine(stdout, line); err != nil {
 			return err
 		}
@@ -430,27 +392,26 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 	if err := writeLine(stdout, "==> writing infra manifest"); err != nil {
 		return err
 	}
-	return cmdWriteInfraManifest(map[string]string{
-		"--output":                  r.infraManifestPath,
-		"--toolchain-lock":          r.opts.toolchainLockPath,
-		"--toolchain-root":          r.opts.toolchainRoot,
-		"--host-arch":               r.opts.hostArch,
-		"--infra-repo-url":          serverRepoURL,
-		"--infra-repo-commit":       r.gitCommit,
-		"--provider-engine":         "opentofu",
-		"--provider-version":        r.tofuVersion,
-		"--provider-lock-sha256":    r.lockSHA,
-		"--cloud-provider":          "aws",
-		"--region":                  r.opts.awsRegion,
-		"--x86-instance-type":       r.infra.X86.InstanceType,
-		"--x86-image-id":            r.infra.X86.ImageID,
-		"--x86-discovered-cpu":      r.x86Facts.CPU,
-		"--x86-discovered-kernel":   r.x86Facts.Kernel,
-		"--arm64-instance-type":     r.infra.Arm64.InstanceType,
-		"--arm64-image-id":          r.infra.Arm64.ImageID,
-		"--arm64-discovered-cpu":    r.armFacts.CPU,
-		"--arm64-discovered-kernel": r.armFacts.Kernel,
-	}, stdout)
+	tools, err := collectToolchainEvidence(map[string]string{
+		"--toolchain-lock": r.opts.toolchainLockPath,
+		"--toolchain-root": r.opts.toolchainRoot,
+		"--host-arch":      r.opts.hostArch,
+		"--purposes":       "build,provision",
+	}, r.infraManifestPath)
+	if err != nil {
+		return err
+	}
+	return writeInfraManifestDocument(r.infraManifestPath, &replay.InfraManifest{
+		SchemaVersion:      replay.InfraManifestSchemaVersion,
+		GeneratedAtUTC:     manifestNowUTC().Format(time.RFC3339Nano),
+		InfraRepoURL:       serverRepoURL,
+		InfraRepoCommit:    r.gitCommit,
+		ProviderEngine:     "opentofu",
+		ProviderVersion:    r.tofuVersion,
+		ProviderLockSHA256: r.lockSHA,
+		Hosts:              buildProvisionedInfraManifestHosts(r.infra.Hosts, r.hostFacts, r.opts.awsRegion),
+		Tools:              tools,
+	})
 }
 
 func (r *serverEvidenceRuntime) buildArtifacts(stdout io.Writer) error {
@@ -539,8 +500,7 @@ func (r *serverEvidenceRuntime) serverMatrixRunForArch(arch string) serverMatrix
 		infraManifestPath: r.infraManifestPath,
 		sourceGitCommit:   r.gitCommit,
 		sourceGitTag:      r.opts.tag,
-		target:            r.targetForArch(arch),
-		containerImage:    r.factsForArch(arch).ContainerImage,
+		globalEnv:         serverGlobalEnvForArch(r.infra.Hosts, arch),
 		sshRunner:         r.sshRunner,
 	}
 }
@@ -564,20 +524,6 @@ func (r *serverEvidenceRuntime) artifactsForArch(arch string) serverBuildArtifac
 		return r.armArtifacts
 	}
 	return r.x86Artifacts
-}
-
-func (r *serverEvidenceRuntime) factsForArch(arch string) discoveredRemoteFacts {
-	if arch == matrixArchitectureARM64 {
-		return r.armFacts
-	}
-	return r.x86Facts
-}
-
-func (r *serverEvidenceRuntime) targetForArch(arch string) string {
-	if arch == matrixArchitectureARM64 {
-		return r.armTarget
-	}
-	return r.x86Target
 }
 
 func buildServerRunArtifacts(opts serverEvidenceOptions, toolchain serverToolchain, matrixArch string) (serverBuildArtifacts, error) {
@@ -639,10 +585,6 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, serverRuntimeTimeout)
 	defer cancel()
-	globalEnv := map[string]string{
-		"JCS_SERVER_SSH_TARGET":      cfg.target,
-		"JCS_SERVER_CONTAINER_IMAGE": cfg.containerImage,
-	}
 	evidence, err := replay.RunMatrix(runCtx, matrix, profile, newServerAdapterFactory(cfg.sshRunner, cfg.workerPath), replay.RunOptions{
 		BundlePath:          cfg.bundlePath,
 		BundleSHA256:        bundleSHA,
@@ -652,7 +594,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 		SourceGitCommit:     cfg.sourceGitCommit,
 		SourceGitTag:        cfg.sourceGitTag,
 		Orchestrator:        "jcs-offline-replay server-evidence",
-		GlobalEnv:           globalEnv,
+		GlobalEnv:           cfg.globalEnv,
 		InfraManifestSHA256: infraManifestSHA,
 		InfraRepoURL:        serverRepoURL,
 		InfraRepoCommit:     cfg.sourceGitCommit,
@@ -696,44 +638,11 @@ func provisionServerInfrastructure(opts serverEvidenceOptions, toolchain serverT
 	if _, err := runCommandInDir(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...); err != nil {
 		return provisionedInfra{}, err
 	}
-	x86IP, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "x86_64_public_ip")
+	hosts, err := tofuOutputHosts(toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")
 	if err != nil {
 		return provisionedInfra{}, err
 	}
-	armIP, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "arm64_public_ip")
-	if err != nil {
-		return provisionedInfra{}, err
-	}
-	x86AMI, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "x86_64_ami")
-	if err != nil {
-		return provisionedInfra{}, err
-	}
-	armAMI, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "arm64_ami")
-	if err != nil {
-		return provisionedInfra{}, err
-	}
-	x86Type, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "x86_64_instance_type")
-	if err != nil {
-		return provisionedInfra{}, err
-	}
-	armType, err := tofuOutputRaw(toolchain.tofuBinary, opts.infraDir, "arm64_instance_type")
-	if err != nil {
-		return provisionedInfra{}, err
-	}
-	return provisionedInfra{
-		X86: provisionedHost{
-			Architecture: "x86_64",
-			PublicIP:     x86IP,
-			ImageID:      x86AMI,
-			InstanceType: x86Type,
-		},
-		Arm64: provisionedHost{
-			Architecture: "arm64",
-			PublicIP:     armIP,
-			ImageID:      armAMI,
-			InstanceType: armType,
-		},
-	}, nil
+	return provisionedInfra{Hosts: hosts}, nil
 }
 
 func destroyServerInfrastructure(opts serverEvidenceOptions, toolchain serverToolchain, gitCommit, lockSHA, sshPublicKey string) error {
@@ -755,24 +664,85 @@ func tofuVarArgs(gitCommit, lockSHA, awsRegion, sshIngressCIDR, sshPublicKey str
 	}
 }
 
-func tofuOutputRaw(tofuBinary, infraDir, name string) (string, error) {
-	out, err := runCommandInDir(context.Background(), infraDir, nil, tofuBinary, "output", "-raw", name)
+func tofuOutputHosts(tofuBinary, infraDir, name string) (map[string]provisionedHost, error) {
+	out, err := runCommandInDir(context.Background(), infraDir, nil, tofuBinary, "output", "-json", name)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	value := strings.TrimSpace(out)
-	if value == "" {
-		return "", fmt.Errorf("tofu output %s is empty", name)
+	var hosts map[string]provisionedHost
+	if err := json.Unmarshal([]byte(out), &hosts); err != nil {
+		return nil, fmt.Errorf("decode tofu output %s: %w", name, err)
 	}
-	return value, nil
+	if len(hosts) == 0 {
+		return nil, fmt.Errorf("tofu output %s is empty", name)
+	}
+	for _, hostID := range sortedProvisionedHostIDs(hosts) {
+		host := hosts[hostID]
+		if strings.TrimSpace(host.HostID) == "" {
+			host.HostID = hostID
+		}
+		if host.HostID != hostID {
+			return nil, fmt.Errorf("tofu output %s host id mismatch: map key=%s payload=%s", name, hostID, host.HostID)
+		}
+		hosts[hostID] = host
+	}
+	return hosts, nil
+}
+
+func sortedProvisionedHostIDs(hosts map[string]provisionedHost) []string {
+	ids := make([]string, 0, len(hosts))
+	for hostID := range hosts {
+		ids = append(ids, hostID)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func hostTarget(host provisionedHost) string {
+	return defaultSSHUser + "@" + host.PublicIP
+}
+
+func serverGlobalEnvForArch(hosts map[string]provisionedHost, arch string) map[string]string {
+	env := make(map[string]string)
+	for _, hostID := range sortedProvisionedHostIDs(hosts) {
+		host := hosts[hostID]
+		if host.Architecture != arch {
+			continue
+		}
+		env[serverSSHTargetEnvKey(host.NodeID)] = hostTarget(host)
+	}
+	return env
+}
+
+func serverSSHTargetEnvKey(nodeID string) string {
+	replacer := strings.NewReplacer("-", "_", ".", "_")
+	return "JCS_SERVER_SSH_TARGET_" + strings.ToUpper(replacer.Replace(nodeID))
+}
+
+func buildProvisionedInfraManifestHosts(hosts map[string]provisionedHost, facts map[string]discoveredRemoteFacts, region string) []replay.InfraManifestHost {
+	manifestHosts := make([]replay.InfraManifestHost, 0, len(hosts))
+	for _, hostID := range sortedProvisionedHostIDs(hosts) {
+		host := hosts[hostID]
+		hostFacts := facts[hostID]
+		manifestHosts = append(manifestHosts, replay.InfraManifestHost{
+			Role:             host.HostID,
+			Architecture:     host.Architecture,
+			NodeIDs:          []string{host.NodeID},
+			CloudProvider:    "aws",
+			Region:           region,
+			InstanceType:     host.InstanceType,
+			ImageID:          host.ImageID,
+			DiscoveredCPU:    hostFacts.CPU,
+			DiscoveredKernel: hostFacts.Kernel,
+		})
+	}
+	return manifestHosts
 }
 
 func resolveServerToolchain() (serverToolchain, error) {
 	info := serverToolchain{
-		goBinary:          lookupEnvTrimmed("JCS_TOOL_GO"),
-		tofuBinary:        lookupEnvTrimmed("JCS_TOOL_TOFU"),
-		dockerStaticAMD64: lookupEnvTrimmed("JCS_TOOL_DOCKER_STATIC_AMD64"),
-		dockerStaticARM64: lookupEnvTrimmed("JCS_TOOL_DOCKER_STATIC_ARM64"),
+		goBinary:   lookupEnvTrimmed("JCS_TOOL_GO"),
+		tofuBinary: lookupEnvTrimmed("JCS_TOOL_TOFU"),
 	}
 	for _, item := range []struct {
 		label string
@@ -780,8 +750,6 @@ func resolveServerToolchain() (serverToolchain, error) {
 	}{
 		{"JCS_TOOL_GO", info.goBinary},
 		{"JCS_TOOL_TOFU", info.tofuBinary},
-		{"JCS_TOOL_DOCKER_STATIC_AMD64", info.dockerStaticAMD64},
-		{"JCS_TOOL_DOCKER_STATIC_ARM64", info.dockerStaticARM64},
 	} {
 		if strings.TrimSpace(item.path) == "" {
 			return serverToolchain{}, fmt.Errorf("%s is required; run scripts/bootstrap-pinned-toolchain.sh first", item.label)
@@ -864,33 +832,7 @@ func (r *serverSSHRunner) Wait(ctx context.Context, target string, timeout time.
 	}
 }
 
-func installRemoteContainerRuntime(ctx context.Context, runner *serverSSHRunner, target, archivePath string) error {
-	if err := runner.uploadFile(ctx, target, archivePath, "/tmp/jcs-docker-static.tgz"); err != nil {
-		return err
-	}
-	script := strings.Join([]string{
-		"set -euo pipefail",
-		"sudo rm -rf /opt/jcs-docker-static",
-		"sudo mkdir -p /opt/jcs-docker-static",
-		"sudo tar -xzf /tmp/jcs-docker-static.tgz -C /opt/jcs-docker-static",
-		"for bin in /opt/jcs-docker-static/docker/*; do sudo ln -sf \"$bin\" \"/usr/local/bin/$(basename \"$bin\")\"; done",
-		"if ! sudo pgrep -x dockerd >/dev/null 2>&1; then sudo nohup /opt/jcs-docker-static/docker/dockerd >/tmp/jcs-dockerd.log 2>&1 & fi",
-		"for _ in $(seq 1 60); do if sudo docker version >/dev/null 2>&1; then exit 0; fi; sleep 2; done",
-		"echo \"error: docker daemon did not become ready\" >&2",
-		"exit 1",
-	}, "\n")
-	if _, err := runner.run(ctx, target, script, nil); err != nil {
-		return fmt.Errorf("install remote container runtime on %s: %w", target, err)
-	}
-	return nil
-}
-
-func discoverRemoteFacts(ctx context.Context, runner *serverSSHRunner, target, imageTag string) (discoveredRemoteFacts, error) {
-	imageCmd := fmt.Sprintf("sudo docker pull %s >/dev/null && sudo docker image inspect --format='{{index .RepoDigests 0}}' %s", shellQuote(imageTag), shellQuote(imageTag))
-	imageDigest, err := runner.run(ctx, target, imageCmd, nil)
-	if err != nil {
-		return discoveredRemoteFacts{}, fmt.Errorf("resolve remote image digest on %s: %w", target, err)
-	}
+func discoverRemoteFacts(ctx context.Context, runner *serverSSHRunner, target string) (discoveredRemoteFacts, error) {
 	cpuCmd := strings.Join([]string{
 		`awk -F: '`,
 		`/^model name/ {gsub(/^[ \t]+/, "", $2); print $2; exit}`,
@@ -918,23 +860,20 @@ func discoverRemoteFacts(ctx context.Context, runner *serverSSHRunner, target, i
 		return discoveredRemoteFacts{}, fmt.Errorf("discover remote kernel on %s: %w", target, err)
 	}
 	return discoveredRemoteFacts{
-		CPU:            strings.TrimSpace(cpu),
-		Kernel:         strings.TrimSpace(kernel),
-		ContainerImage: strings.TrimSpace(imageDigest),
+		CPU:    strings.TrimSpace(cpu),
+		Kernel: strings.TrimSpace(kernel),
 	}, nil
 }
 
 func newServerAdapterFactory(runner *serverSSHRunner, workerPath string) replay.AdapterFactory {
 	return func(node replay.NodeSpec) (replay.NodeAdapter, error) {
-		switch node.Mode {
-		case replay.NodeModeVM, replay.NodeModeContainer:
-			return &serverRemoteAdapter{
-				ssh:        runner,
-				workerPath: workerPath,
-			}, nil
-		default:
+		if node.Mode != replay.NodeModeVM {
 			return nil, fmt.Errorf("node %s unsupported server mode %q", node.ID, node.Mode)
 		}
+		return &serverRemoteAdapter{
+			ssh:        runner,
+			workerPath: workerPath,
+		}, nil
 	}
 }
 
@@ -965,11 +904,7 @@ func (a *serverRemoteAdapter) RunReplay(ctx context.Context, node replay.NodeSpe
 	if uploadErr := a.uploadReplayInputs(ctx, target, bundlePath, remoteTmp); uploadErr != nil {
 		return uploadErr
 	}
-	uid, gid, err := a.resolveContainerIdentity(ctx, node, target)
-	if err != nil {
-		return err
-	}
-	runCmd, err := buildRemoteReplayCommand(node, replayIndex, remoteTmp, schemaVersion, uid, gid)
+	runCmd, err := buildRemoteReplayCommand(node, replayIndex, remoteTmp, schemaVersion)
 	if err != nil {
 		return err
 	}
@@ -1025,14 +960,10 @@ func resolveReplayInvocation(node replay.NodeSpec) (string, string, error) {
 	return target, schemaVersion, nil
 }
 
-func (a *serverRemoteAdapter) resolveContainerIdentity(ctx context.Context, node replay.NodeSpec, target string) (string, string, error) {
-	if node.Mode != replay.NodeModeContainer {
-		return "", "", nil
+func buildRemoteReplayCommand(node replay.NodeSpec, replayIndex int, remoteTmp, schemaVersion string) (string, error) {
+	if node.Mode != replay.NodeModeVM {
+		return "", fmt.Errorf("node %s remote aws release mode must be vm", node.ID)
 	}
-	return a.ssh.remoteUIDGID(ctx, target)
-}
-
-func buildRemoteReplayCommand(node replay.NodeSpec, replayIndex int, remoteTmp, schemaVersion, uid, gid string) (string, error) {
 	workerBundlePath := remoteTmp + "/bundle.tgz"
 	workerEvidencePath := remoteTmp + "/evidence.json"
 	workerArgs := []string{
@@ -1045,42 +976,9 @@ func buildRemoteReplayCommand(node replay.NodeSpec, replayIndex int, remoteTmp, 
 		"--replay-index", shellQuote(fmt.Sprintf("%d", replayIndex)),
 		"--schema-version", shellQuote(schemaVersion),
 	}
-	if node.Mode == replay.NodeModeVM {
-		return strings.Join([]string{
-			"chmod +x " + shellQuote(remoteTmp+"/jcs-offline-worker"),
-			"LC_ALL=C LANG=C TZ=UTC " + shellQuote(remoteTmp+"/jcs-offline-worker") + " " + strings.Join(workerArgs, " "),
-		}, " && "), nil
-	}
-	image := resolveServerRunnerValue(node.Runner.Env, "JCS_CONTAINER_IMAGE", "JCS_CONTAINER_IMAGE_ENV")
-	if image == "" {
-		image = resolveServerRunnerValue(node.Runner.Env, "JCS_SERVER_CONTAINER_IMAGE", "")
-	}
-	if image == "" {
-		return "", fmt.Errorf("node %s container image is empty", node.ID)
-	}
-	if uid == "" || gid == "" {
-		return "", fmt.Errorf("node %s remote uid/gid is empty", node.ID)
-	}
-	containerName := fmt.Sprintf("jcs-replay-%s-%03d", node.ID, replayIndex)
-	containerBundlePath := "/work/bundle.tgz"
-	containerEvidencePath := "/work/out/evidence.json"
-	containerWorkerArgs := append([]string(nil), workerArgs...)
-	containerWorkerArgs[1] = shellQuote(containerBundlePath)
-	containerWorkerArgs[3] = shellQuote(containerEvidencePath)
-	containerWorkerArgs = append(containerWorkerArgs, "--image-digest", shellQuote(image))
 	return strings.Join([]string{
 		"chmod +x " + shellQuote(remoteTmp+"/jcs-offline-worker"),
-		fmt.Sprintf(
-			"sudo docker run --rm --name %s --network none --user %s:%s -v %s:/work/bundle.tgz:ro -v %s:/work/jcs-offline-worker:ro -v %s:/work/out -e LC_ALL=C -e LANG=C -e TZ=UTC %s /work/jcs-offline-worker %s",
-			shellQuote(containerName),
-			shellQuote(uid),
-			shellQuote(gid),
-			shellQuote(remoteTmp+"/bundle.tgz"),
-			shellQuote(remoteTmp+"/jcs-offline-worker"),
-			shellQuote(remoteTmp),
-			shellQuote(image),
-			strings.Join(containerWorkerArgs, " "),
-		),
+		"LC_ALL=C LANG=C TZ=UTC " + shellQuote(remoteTmp+"/jcs-offline-worker") + " " + strings.Join(workerArgs, " "),
 	}, " && "), nil
 }
 
@@ -1095,18 +993,6 @@ func resolveServerRunnerValue(env map[string]string, key, indirectKey string) st
 		return strings.TrimSpace(env[name])
 	}
 	return ""
-}
-
-func (r *serverSSHRunner) remoteUIDGID(ctx context.Context, target string) (string, string, error) {
-	out, err := r.run(ctx, target, "printf '%s:%s' \"$(id -u)\" \"$(id -g)\"", nil)
-	if err != nil {
-		return "", "", err
-	}
-	parts := strings.Split(strings.TrimSpace(out), ":")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("parse remote uid/gid %q", strings.TrimSpace(out))
-	}
-	return parts[0], parts[1], nil
 }
 
 //nolint:gosec // REQ:OFFLINE-AUTO-001 server evidence uploads explicit local bundle and worker paths selected by Go-native orchestration.

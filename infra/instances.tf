@@ -1,27 +1,39 @@
-resource "aws_instance" "x86_replay" {
-  ami                    = data.aws_ami.debian13_x86.id
-  instance_type          = "t3a.small"
-  associate_public_ip_address = true
-  key_name               = aws_key_pair.replay.key_name
-  vpc_security_group_ids = [aws_security_group.replay.id]
-
-  root_block_device {
-    volume_size = 10
-    volume_type = "gp3"
-  }
-
-  tags = {
-    Name    = "jcs-replay-x86_64"
-    Purpose = "jcs-offline-replay"
+locals {
+  aws_release_hosts_raw = jsondecode(file("${path.module}/aws_release_hosts.json"))
+  aws_release_hosts = {
+    for host in local.aws_release_hosts_raw.hosts : host.host_id => host
   }
 }
 
-resource "aws_instance" "arm64_replay" {
-  ami                    = data.aws_ami.debian13_arm64.id
-  instance_type          = "t4g.small"
+data "aws_ami" "release_host" {
+  for_each    = local.aws_release_hosts
+  most_recent = true
+  owners      = [each.value.ami_owner]
+
+  filter {
+    name   = "name"
+    values = [each.value.ami_name]
+  }
+
+  filter {
+    name   = "architecture"
+    values = [each.value.architecture]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_instance" "release_host" {
+  for_each = local.aws_release_hosts
+
+  ami                         = data.aws_ami.release_host[each.key].id
+  instance_type               = each.value.instance_type
   associate_public_ip_address = true
-  key_name               = aws_key_pair.replay.key_name
-  vpc_security_group_ids = [aws_security_group.replay.id]
+  key_name                    = aws_key_pair.replay.key_name
+  vpc_security_group_ids      = [aws_security_group.replay.id]
 
   root_block_device {
     volume_size = 10
@@ -29,7 +41,11 @@ resource "aws_instance" "arm64_replay" {
   }
 
   tags = {
-    Name    = "jcs-replay-arm64"
-    Purpose = "jcs-offline-replay"
+    Name         = each.key
+    Purpose      = "jcs-official-aws-release"
+    Architecture = each.value.architecture
+    NodeID       = each.value.node_id
+    Distro       = each.value.distro
+    KernelFamily = each.value.kernel_family
   }
 }

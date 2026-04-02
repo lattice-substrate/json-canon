@@ -1,0 +1,245 @@
+{
+  "schema_version": "aws-release-hosts.v1",
+  "hosts": [
+    {
+      "host_id": "aws-native-debian13-amd-x86_64",
+      "node_id": "aws-native-debian13-amd-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-amd",
+      "instance_type": "t3a.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian13-intel-x86_64",
+      "node_id": "aws-native-debian13-intel-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-intel",
+      "instance_type": "t3.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian12-x86_64",
+      "node_id": "aws-native-debian12-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-12",
+      "kernel_family": "oldstable",
+      "instance_type": "t3a.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-12-amd64-*"
+    },
+    {
+      "host_id": "aws-native-debian11-x86_64",
+      "node_id": "aws-native-debian11-x86_64",
+      "architecture": "x86_64",
+      "distro": "debian-11",
+      "kernel_family": "previous-oldstable",
+      "instance_type": "t3a.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-11-amd64-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-server-x86_64",
+      "node_id": "aws-native-ubuntu2004-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-focal-20.04-amd64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2004-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-focal-20.04-amd64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-server-x86_64",
+      "node_id": "aws-native-ubuntu2204-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-jammy-22.04-amd64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2204-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-jammy-22.04-amd64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-server-x86_64",
+      "node_id": "aws-native-ubuntu2404-server-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "server",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-minimal-x86_64",
+      "node_id": "aws-native-ubuntu2404-minimal-x86_64",
+      "architecture": "x86_64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "minimal",
+      "instance_type": "t3a.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-amzn2-x86_64",
+      "node_id": "aws-native-amzn2-x86_64",
+      "architecture": "x86_64",
+      "distro": "amazon-linux-2",
+      "kernel_family": "amzn2",
+      "instance_type": "t3a.small",
+      "ami_owner": "137112412989",
+      "ami_name": "amzn2-ami-hvm-2.0.*-x86_64-gp2"
+    },
+    {
+      "host_id": "aws-native-al2023-x86_64",
+      "node_id": "aws-native-al2023-x86_64",
+      "architecture": "x86_64",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023",
+      "instance_type": "t3a.small",
+      "ami_owner": "137112412989",
+      "ami_name": "al2023-ami-2023.*-x86_64"
+    },
+    {
+      "host_id": "aws-native-debian13-g2-arm64",
+      "node_id": "aws-native-debian13-g2-arm64",
+      "architecture": "arm64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-g2",
+      "instance_type": "t4g.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian13-g3-arm64",
+      "node_id": "aws-native-debian13-g3-arm64",
+      "architecture": "arm64",
+      "distro": "debian-13",
+      "kernel_family": "cloud-g3",
+      "instance_type": "c7g.medium",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-13-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian12-arm64",
+      "node_id": "aws-native-debian12-arm64",
+      "architecture": "arm64",
+      "distro": "debian-12",
+      "kernel_family": "oldstable",
+      "instance_type": "t4g.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-12-arm64-*"
+    },
+    {
+      "host_id": "aws-native-debian11-arm64",
+      "node_id": "aws-native-debian11-arm64",
+      "architecture": "arm64",
+      "distro": "debian-11",
+      "kernel_family": "previous-oldstable",
+      "instance_type": "t4g.small",
+      "ami_owner": "679593333241",
+      "ami_name": "debian-11-arm64-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-server-arm64",
+      "node_id": "aws-native-ubuntu2004-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-focal-20.04-arm64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2004-minimal-arm64",
+      "node_id": "aws-native-ubuntu2004-minimal-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-20.04",
+      "kernel_family": "minimal",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-focal-20.04-arm64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-server-arm64",
+      "node_id": "aws-native-ubuntu2204-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-jammy-22.04-arm64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2204-minimal-arm64",
+      "node_id": "aws-native-ubuntu2204-minimal-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-22.04",
+      "kernel_family": "minimal",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-jammy-22.04-arm64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-server-arm64",
+      "node_id": "aws-native-ubuntu2404-server-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "server",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"
+    },
+    {
+      "host_id": "aws-native-ubuntu2404-minimal-arm64",
+      "node_id": "aws-native-ubuntu2404-minimal-arm64",
+      "architecture": "arm64",
+      "distro": "ubuntu-24.04",
+      "kernel_family": "minimal",
+      "instance_type": "t4g.small",
+      "ami_owner": "099720109477",
+      "ami_name": "ubuntu-minimal/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-minimal-*"
+    },
+    {
+      "host_id": "aws-native-amzn2-arm64",
+      "node_id": "aws-native-amzn2-arm64",
+      "architecture": "arm64",
+      "distro": "amazon-linux-2",
+      "kernel_family": "amzn2",
+      "instance_type": "t4g.small",
+      "ami_owner": "137112412989",
+      "ami_name": "amzn2-ami-hvm-2.0.*-arm64-gp2"
+    },
+    {
+      "host_id": "aws-native-al2023-arm64",
+      "node_id": "aws-native-al2023-arm64",
+      "architecture": "arm64",
+      "distro": "amazon-linux-2023",
+      "kernel_family": "al2023",
+      "instance_type": "t4g.small",
+      "ami_owner": "137112412989",
+      "ami_name": "al2023-ami-2023.*-arm64"
+    }
+  ]
+}

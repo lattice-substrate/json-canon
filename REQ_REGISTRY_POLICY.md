@@ -122,6 +122,14 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFLINE-ARCH-001 | offline/matrix.yaml + offline/matrix.arm64.yaml | Profile | MUST | Release architecture scope MUST be explicit and constrained to the supported set: `x86_64` and `arm64`. |
 | OFFLINE-LOCAL-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Local operators MUST have a Go-native `jcs-offline-replay cross-arch` workflow that can execute offline vector gates, including the optional official ES6 100,000,000-line gate. |
 
+## AWS: Official Release Evidence
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| AWS-RELEASE-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Contracts | MUST | Official AWS release matrices (`offline/matrix.server-x86_64.yaml`, `offline/matrix.server-arm64.yaml`) and profiles (`offline/profiles/server-linux-x86_64.yaml`, `offline/profiles/server-linux-arm64.yaml`) MUST be vm-only native-host contracts, MUST schedule 12 lanes / 60 total replays per architecture, MUST enforce `hard_release_gate: true`, and MUST include `infra-substrate-binding` in `required_suites`. |
+| AWS-TOOLCHAIN-001 | offline/toolchain.lock.tsv + offline/README.md | Supply Chain | MUST | The official AWS release toolchain lock MUST contain only the pinned host-side artifacts actually executed by the official AWS release path (`go`, `opentofu`, `jq`) and MUST NOT require remote container-runtime artifacts. |
+| AWS-GATE-001 | CONTRIBUTING.md + .github/workflows/release.yml | Release Process | MUST | Official release gating MUST require `evidence.v2` for both x86_64 and arm64 AWS evidence artifacts, MUST bind `JCS_OFFLINE_INFRA_MANIFEST`, and MUST NOT accept `evidence.v1` as a release substitute. |
+
 ## API: Library Public API
 
 | ID | Spec | Section | Level | Requirement |

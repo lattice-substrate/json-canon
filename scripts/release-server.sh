@@ -57,7 +57,8 @@ mkdir -p "$OUT_DIR"
 "$ROOT/scripts/bootstrap-pinned-toolchain.sh" \
   --output-dir "$TOOLCHAIN_ROOT" \
   --env-file "$TOOLCHAIN_ENV" \
-  --host-arch "$HOST_ARCH" >/dev/null
+  --host-arch "$HOST_ARCH" \
+  --purposes build,provision >/dev/null
 
 # shellcheck disable=SC1090
 source "$TOOLCHAIN_ENV"

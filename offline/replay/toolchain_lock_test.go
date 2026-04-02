@@ -15,8 +15,8 @@ func validToolchainLockFixture() string {
 		"id\tscope\tpurpose\tname\tversion\tos\tarch\tformat\tsource_url\tsha256\texecutable_path",
 		"go-linux-amd64\thost\tbuild\tgo\t1.24.13\tlinux\tamd64\ttar.gz\thttps://go.dev/dl/go1.24.13.linux-amd64.tar.gz\t" + strings.Repeat("a", 64) + "\tgo/bin/go",
 		"go-linux-arm64\thost\tbuild\tgo\t1.24.13\tlinux\tarm64\ttar.gz\thttps://go.dev/dl/go1.24.13.linux-arm64.tar.gz\t" + strings.Repeat("b", 64) + "\tgo/bin/go",
-		"docker-static-linux-amd64\tremote\tcontainer-runtime\tdocker\t29.3.1\tlinux\tamd64\ttar.gz\thttps://download.docker.com/linux/static/stable/x86_64/docker-29.3.1.tgz\t" + strings.Repeat("c", 64) + "\t",
-		"docker-static-linux-arm64\tremote\tcontainer-runtime\tdocker\t29.3.1\tlinux\tarm64\ttar.gz\thttps://download.docker.com/linux/static/stable/aarch64/docker-29.3.1.tgz\t" + strings.Repeat("d", 64) + "\t",
+		"tofu-linux-amd64\thost\tprovision\topentofu\t1.10.6\tlinux\tamd64\tzip\thttps://github.com/opentofu/opentofu/releases/download/v1.10.6/tofu_1.10.6_linux_amd64.zip\t" + strings.Repeat("c", 64) + "\ttofu",
+		"jq-linux-amd64\thost\tworkflow-json-query\tjq\t1.8.1\tlinux\tamd64\traw\thttps://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64\t" + strings.Repeat("d", 64) + "\tjq-linux-amd64",
 		"",
 	}, "\n")
 }
@@ -75,7 +75,7 @@ func TestLoadToolchainLockRejectsInvalid(t *testing.T) {
 				"# schema_version=toolchain-lock.v1",
 				"id\tscope\tpurpose\tname\tversion\tos\tarch\tformat\tsource_url\tsha256\texecutable_path",
 				"go-linux-amd64\thost\tbuild\tgo\t1.24.13\tlinux\tamd64\ttar.gz\thttps://go.dev/dl/go1.24.13.linux-amd64.tar.gz\t" + strings.Repeat("a", 64) + "\tgo/bin/go",
-				"go-linux-amd64\tremote\tcontainer-runtime\tdocker\t29.3.1\tlinux\tamd64\ttar.gz\thttps://download.docker.com/linux/static/stable/x86_64/docker-29.3.1.tgz\t" + strings.Repeat("b", 64) + "\t",
+				"go-linux-amd64\thost\tprovision\topentofu\t1.10.6\tlinux\tamd64\tzip\thttps://github.com/opentofu/opentofu/releases/download/v1.10.6/tofu_1.10.6_linux_amd64.zip\t" + strings.Repeat("b", 64) + "\ttofu",
 			}, "\n"),
 			want: "duplicate artifact id",
 		},
@@ -117,7 +117,10 @@ func TestSelectToolchainArtifacts(t *testing.T) {
 		t.Fatalf("expected 3 selected artifacts, got %d", len(selected))
 	}
 	for _, artifact := range selected {
-		if artifact.Scope == replay.ToolchainScopeHost && artifact.Arch != "amd64" {
+		if artifact.Scope != replay.ToolchainScopeHost {
+			t.Fatalf("unexpected non-host artifact selected: %#v", artifact)
+		}
+		if artifact.Arch != "amd64" {
 			t.Fatalf("unexpected host artifact arch: %#v", artifact)
 		}
 	}

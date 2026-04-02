@@ -300,6 +300,9 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-TOOLCHAIN-001": checkOfflineToolchainLockPresent,
 		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
 		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
+		"AWS-RELEASE-001":       checkOfflineServerProfileContract,
+		"AWS-TOOLCHAIN-001":     checkOfficialAWSToolchainContract,
+		"AWS-GATE-001":          checkOfflineReleaseGatePolicy,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -2501,6 +2504,7 @@ func checkOfflineReleaseGatePolicy(t *testing.T, h *harness) {
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_PROFILE", "release workflow profile override env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_COMMIT", "release workflow expected git commit env")
 	assertContains(t, releaseWorkflow, "JCS_OFFLINE_EXPECTED_GIT_TAG", "release workflow expected git tag env")
+	assertContains(t, releaseWorkflow, "release evidence must be evidence.v2", "release workflow v2-only gate")
 }
 
 // TestOfflineArchScopeDualArch verifies release architecture scope includes x86_64 and arm64.
@@ -2586,6 +2590,8 @@ func checkOfflineInfraManifestSchemaPresent(t *testing.T, h *harness) {
 		"hosts",
 		"tools",
 		"artifact_relative_path",
+		"architecture",
+		"node_ids",
 		"instance_type",
 		"image_id",
 	} {
@@ -2600,47 +2606,130 @@ func checkOfflineToolchainLockPresent(t *testing.T, h *harness) {
 	if err != nil {
 		t.Fatalf("load toolchain lock %s: %v", lockPath, err)
 	}
-	if len(lock.Artifacts) < 5 {
-		t.Fatalf("toolchain lock %s must include the pinned host and remote artifacts, got %d", lockPath, len(lock.Artifacts))
+	if len(lock.Artifacts) < 6 {
+		t.Fatalf("toolchain lock %s must include the pinned official AWS host artifacts for both supported arches, got %d", lockPath, len(lock.Artifacts))
 	}
 	lockRaw := mustReadText(t, lockPath)
 	for _, needle := range []string{
 		"toolchain-lock.v1",
 		"go-linux-amd64",
+		"go-linux-arm64",
 		"tofu-linux-amd64",
+		"tofu-linux-arm64",
 		"jq-linux-amd64",
-		"docker-static-linux-amd64",
-		"docker-static-linux-arm64",
+		"jq-linux-arm64",
 	} {
 		assertContains(t, lockRaw, needle, "toolchain lock artifact")
 	}
 }
 
+func checkOfficialAWSToolchainContract(t *testing.T, h *harness) {
+	t.Helper()
+	lockPath := filepath.Join(h.root, "offline", "toolchain.lock.tsv")
+	lock, err := replay.LoadToolchainLock(lockPath)
+	if err != nil {
+		t.Fatalf("load toolchain lock %s: %v", lockPath, err)
+	}
+	wantIDs := map[string]struct{}{
+		"go-linux-amd64":   {},
+		"go-linux-arm64":   {},
+		"tofu-linux-amd64": {},
+		"tofu-linux-arm64": {},
+		"jq-linux-amd64":   {},
+		"jq-linux-arm64":   {},
+	}
+	if len(lock.Artifacts) != len(wantIDs) {
+		t.Fatalf("official AWS toolchain lock must contain exactly %d host artifacts, got %d", len(wantIDs), len(lock.Artifacts))
+	}
+	for _, artifact := range lock.Artifacts {
+		if artifact.Scope != replay.ToolchainScopeHost {
+			t.Fatalf("official AWS toolchain lock must be host-only, found %s for %s", artifact.Scope, artifact.ID)
+		}
+		if _, ok := wantIDs[artifact.ID]; !ok {
+			t.Fatalf("official AWS toolchain lock contains unexpected artifact %s", artifact.ID)
+		}
+		delete(wantIDs, artifact.ID)
+	}
+	for id := range wantIDs {
+		t.Fatalf("official AWS toolchain lock missing required artifact %s", id)
+	}
+}
+
 func checkOfflineServerProfileContract(t *testing.T, h *harness) {
 	t.Helper()
-	profiles := []string{
-		filepath.Join(h.root, "offline", "profiles", "server-linux-x86_64.yaml"),
-		filepath.Join(h.root, "offline", "profiles", "server-linux-arm64.yaml"),
+	tests := []struct {
+		profilePath string
+		matrixPath  string
+		wantName    string
+		arch        string
+	}{
+		{
+			profilePath: filepath.Join(h.root, "offline", "profiles", "server-linux-x86_64.yaml"),
+			matrixPath:  filepath.Join(h.root, "offline", "matrix.server-x86_64.yaml"),
+			wantName:    "aws-native-release-linux-x86_64",
+			arch:        "x86_64",
+		},
+		{
+			profilePath: filepath.Join(h.root, "offline", "profiles", "server-linux-arm64.yaml"),
+			matrixPath:  filepath.Join(h.root, "offline", "matrix.server-arm64.yaml"),
+			wantName:    "aws-native-release-linux-arm64",
+			arch:        "arm64",
+		},
 	}
-	for _, profilePath := range profiles {
-		profile, err := replay.LoadProfile(profilePath)
-		if err != nil {
-			t.Fatalf("load server profile %s: %v", profilePath, err)
-		}
-		if !profile.HardReleaseGate {
-			t.Fatalf("server profile %s must have hard_release_gate=true", profilePath)
-		}
-		hasInfraBinding := false
-		for _, suite := range profile.RequiredSuites {
-			if suite == "infra-substrate-binding" {
-				hasInfraBinding = true
-				break
-			}
-		}
-		if !hasInfraBinding {
-			t.Fatalf("server profile %s must include infra-substrate-binding in required_suites", profilePath)
+	for _, tc := range tests {
+		checkServerProfileMatrixContract(t, tc)
+	}
+}
+
+func checkServerProfileMatrixContract(t *testing.T, tc struct {
+	profilePath string
+	matrixPath  string
+	wantName    string
+	arch        string
+}) {
+	t.Helper()
+	profile, err := replay.LoadProfile(tc.profilePath)
+	if err != nil {
+		t.Fatalf("load server profile %s: %v", tc.profilePath, err)
+	}
+	if profile.Name != tc.wantName {
+		t.Fatalf("server profile %s name mismatch: got %q want %q", tc.profilePath, profile.Name, tc.wantName)
+	}
+	if !profile.HardReleaseGate {
+		t.Fatalf("server profile %s must have hard_release_gate=true", tc.profilePath)
+	}
+	if !profileHasInfraBinding(profile.RequiredSuites) {
+		t.Fatalf("server profile %s must include infra-substrate-binding in required_suites", tc.profilePath)
+	}
+	matrix, err := replay.LoadMatrix(tc.matrixPath)
+	if err != nil {
+		t.Fatalf("load official aws matrix %s: %v", tc.matrixPath, err)
+	}
+	if matrix.Architecture != tc.arch {
+		t.Fatalf("official aws matrix %s architecture mismatch: got %q want %q", tc.matrixPath, matrix.Architecture, tc.arch)
+	}
+	if len(matrix.Nodes) != 12 {
+		t.Fatalf("official aws matrix %s must include 12 native lanes, got %d", tc.matrixPath, len(matrix.Nodes))
+	}
+	totalRuns := 0
+	for _, node := range matrix.Nodes {
+		totalRuns += node.Replays
+		if node.Mode != replay.NodeModeVM {
+			t.Fatalf("official aws matrix %s must be vm-only, found %s for node %s", tc.matrixPath, node.Mode, node.ID)
 		}
 	}
+	if totalRuns != 60 {
+		t.Fatalf("official aws matrix %s must schedule 60 total runs, got %d", tc.matrixPath, totalRuns)
+	}
+}
+
+func profileHasInfraBinding(suites []string) bool {
+	for _, suite := range suites {
+		if suite == "infra-substrate-binding" {
+			return true
+		}
+	}
+	return false
 }
 
 func checkOfflineGoNativeServerAutomation(t *testing.T, h *harness) {

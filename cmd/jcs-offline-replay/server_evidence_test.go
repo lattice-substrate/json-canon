@@ -52,39 +52,38 @@ func TestResolveGitHeadCommitLooseGitDir(t *testing.T) {
 	}
 }
 
-func TestBuildRemoteReplayCommandContainerUsesSudoDocker(t *testing.T) {
+func TestBuildRemoteReplayCommandNativeVM(t *testing.T) {
 	t.Parallel()
 
-	node := testMatrixNodeContainerSSH()
-	cmd, err := buildRemoteReplayCommand(node, 3, "/tmp/run", replay.EvidenceSchemaVersionV2, "1000", "1000")
+	node := replay.NodeSpec{
+		ID:           "aws-native-debian13-amd-x86_64",
+		Mode:         replay.NodeModeVM,
+		Distro:       "debian-13",
+		KernelFamily: "cloud-amd",
+	}
+	cmd, err := buildRemoteReplayCommand(node, 3, "/tmp/run", replay.EvidenceSchemaVersionV2)
 	if err != nil {
 		t.Fatalf("buildRemoteReplayCommand: %v", err)
 	}
 	for _, needle := range []string{
-		"sudo docker run",
-		"--image-digest",
-		"/work/jcs-offline-worker",
-		"--bundle '/work/bundle.tgz'",
-		"--evidence '/work/out/evidence.json'",
+		"/tmp/run/jcs-offline-worker",
+		"--bundle '/tmp/run/bundle.tgz'",
+		"--evidence '/tmp/run/evidence.json'",
 		"--schema-version",
 		replay.EvidenceSchemaVersionV2,
 	} {
 		if !strings.Contains(cmd, needle) {
-			t.Fatalf("container command missing %q in %q", needle, cmd)
+			t.Fatalf("native vm command missing %q in %q", needle, cmd)
 		}
 	}
 }
 
-func testMatrixNodeContainerSSH() replay.NodeSpec {
-	return replay.NodeSpec{
-		ID:           "aws-debian13-container-x86_64",
-		Mode:         replay.NodeModeContainer,
-		Distro:       "debian-13",
-		KernelFamily: "cloud",
-		Runner: replay.RunnerConfig{
-			Env: map[string]string{
-				"JCS_SERVER_CONTAINER_IMAGE": "debian@sha256:" + strings.Repeat("b", 64),
-			},
-		},
+func TestServerSSHTargetEnvKey(t *testing.T) {
+	t.Parallel()
+
+	got := serverSSHTargetEnvKey("aws-native-ubuntu2404-minimal-arm64")
+	want := "JCS_SERVER_SSH_TARGET_AWS_NATIVE_UBUNTU2404_MINIMAL_ARM64"
+	if got != want {
+		t.Fatalf("env key mismatch: got %q want %q", got, want)
 	}
 }

@@ -207,6 +207,13 @@ func validateToolchainArtifactPaths(i int, artifact ToolchainArtifact) error {
 
 // SelectToolchainArtifacts returns the host-arch-specific host tools plus all remote tools.
 func SelectToolchainArtifacts(lock *ToolchainLock, hostArch string) ([]ToolchainArtifact, error) {
+	return SelectToolchainArtifactsForPurposes(lock, hostArch, nil)
+}
+
+// SelectToolchainArtifactsForPurposes returns the host-arch-specific host tools plus any
+// remote tools whose purposes are explicitly allowed. When purposes is empty, all purposes
+// are selected.
+func SelectToolchainArtifactsForPurposes(lock *ToolchainLock, hostArch string, purposes []string) ([]ToolchainArtifact, error) {
 	if err := ValidateToolchainLock(lock); err != nil {
 		return nil, err
 	}
@@ -216,8 +223,20 @@ func SelectToolchainArtifacts(lock *ToolchainLock, hostArch string) ([]Toolchain
 	default:
 		return nil, fmt.Errorf("unsupported host toolchain arch %q", hostArch)
 	}
+	allowedPurposes := make(map[string]struct{}, len(purposes))
+	for _, purpose := range purposes {
+		purpose = strings.TrimSpace(purpose)
+		if purpose == "" {
+			continue
+		}
+		allowedPurposes[purpose] = struct{}{}
+	}
+	selectAllPurposes := len(allowedPurposes) == 0
 	selected := make([]ToolchainArtifact, 0, len(lock.Artifacts))
 	for _, artifact := range lock.Artifacts {
+		if !toolchainPurposeAllowed(artifact, allowedPurposes, selectAllPurposes) {
+			continue
+		}
 		if artifact.Scope == ToolchainScopeRemote || artifact.Arch == hostArch {
 			selected = append(selected, artifact)
 		}
@@ -226,6 +245,14 @@ func SelectToolchainArtifacts(lock *ToolchainLock, hostArch string) ([]Toolchain
 		return selected[i].ID < selected[j].ID
 	})
 	return selected, nil
+}
+
+func toolchainPurposeAllowed(artifact ToolchainArtifact, allowedPurposes map[string]struct{}, selectAllPurposes bool) bool {
+	if selectAllPurposes {
+		return true
+	}
+	_, ok := allowedPurposes[artifact.Purpose]
+	return ok
 }
 
 // NormalizeToolchainArch maps common runtime arch tokens to the lock-file arch vocabulary.
