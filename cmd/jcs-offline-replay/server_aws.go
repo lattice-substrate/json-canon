@@ -21,6 +21,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 const (
@@ -28,6 +29,17 @@ const (
 	serverSSMCommandPoll        = 2 * time.Second
 	serverSSMCommandTimeoutSecs = 1800
 	serverPresignExpiry         = 20 * time.Minute
+	serverMaxEvidenceBytes      = 256 << 20
+)
+
+var (
+	createStagingBucketFunc   = createStagingBucket
+	deleteStagingBucketFunc   = deleteStagingBucket
+	uploadStagingFileFunc     = uploadStagingFile
+	presignGetObjectURLFunc   = presignGetObjectURL
+	presignPutObjectURLFunc   = presignPutObjectURL
+	downloadStagingObjectFunc = downloadStagingObject
+	runSSMShellScriptFunc     = runSSMShellScript
 )
 
 type serverAWSClients struct {
@@ -36,6 +48,12 @@ type serverAWSClients struct {
 	s3        *s3.Client
 	s3Presign *s3.PresignClient
 	ssm       *ssm.Client
+	sts       *sts.Client
+}
+
+type serverAWSIdentity struct {
+	AccountID string
+	ARN       string
 }
 
 type serverStaging struct {
@@ -100,6 +118,18 @@ func newServerAWSClients(ctx context.Context, region string) (serverAWSClients, 
 		s3:        s3Client,
 		s3Presign: s3.NewPresignClient(s3Client),
 		ssm:       ssm.NewFromConfig(cfg),
+		sts:       sts.NewFromConfig(cfg),
+	}, nil
+}
+
+func resolveServerAWSIdentity(ctx context.Context, clients serverAWSClients) (serverAWSIdentity, error) {
+	out, err := clients.sts.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		return serverAWSIdentity{}, fmt.Errorf("resolve aws caller identity: %w", err)
+	}
+	return serverAWSIdentity{
+		AccountID: strings.TrimSpace(aws.ToString(out.Account)),
+		ARN:       strings.TrimSpace(aws.ToString(out.Arn)),
 	}, nil
 }
 
@@ -206,7 +236,11 @@ func downloadStagingObject(ctx context.Context, clients serverAWSClients, bucket
 		return nil, fmt.Errorf("get staging object s3://%s/%s: %w", bucket, key, err)
 	}
 	defer closeBestEffort(resp.Body)
-	data, err := io.ReadAll(resp.Body)
+	contentLength := int64(-1)
+	if resp.ContentLength != nil {
+		contentLength = *resp.ContentLength
+	}
+	data, err := readBoundedStagingObject(resp.Body, contentLength, serverMaxEvidenceBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read staging object s3://%s/%s: %w", bucket, key, err)
 	}
@@ -470,4 +504,25 @@ func resolveAMIIDForHost(ctx context.Context, clients serverAWSClients, host aws
 		return aws.ToString(out.Images[i].CreationDate) > aws.ToString(out.Images[j].CreationDate)
 	})
 	return strings.TrimSpace(aws.ToString(out.Images[0].ImageId)), nil
+}
+
+func readBoundedStagingObject(body io.Reader, contentLength, maxBytes int64) ([]byte, error) {
+	if contentLength < 0 {
+		return nil, fmt.Errorf("unknown content length")
+	}
+	if contentLength > maxBytes {
+		return nil, fmt.Errorf("content length %d exceeds maximum %d", contentLength, maxBytes)
+	}
+	limited := &io.LimitedReader{R: body, N: maxBytes + 1}
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("object body exceeds maximum %d", maxBytes)
+	}
+	if contentLength > 0 && int64(len(data)) != contentLength {
+		return nil, fmt.Errorf("content length mismatch: got %d bytes want %d", len(data), contentLength)
+	}
+	return data, nil
 }

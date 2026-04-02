@@ -100,6 +100,111 @@ jobs:
         env:
           JCS_OFFICIAL_ES6_ENABLE_100M: "1"
         run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+        with:
+          version: v1.64.8
+          args: --config=golangci.yml
+      - name: fuzz jcstoken
+        run: go test ./jcstoken -run=^$ -fuzz=FuzzParseCanonicalRoundTrip -fuzztime=30s
+      - name: fuzz jcsfloat
+        run: go test ./jcsfloat -run=^$ -fuzz=FuzzFormatDoubleRoundTrip -fuzztime=30s
+
+  server_evidence:
+    name: Server Evidence
+    needs: pre_release
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      STATE_MODE: remote
+      STATE_BUCKET: ${{ vars.JCS_AWS_STATE_BUCKET }}
+      STATE_REGION: ${{ vars.JCS_AWS_STATE_REGION }}
+      STATE_LOCK_TABLE: ${{ vars.JCS_AWS_STATE_LOCK_TABLE }}
+      STATE_KEY: server-evidence/${{ github.ref_name }}/terraform.tfstate
+      AWS_ROLE_TO_ASSUME: ${{ vars.JCS_AWS_RELEASE_ROLE_ARN }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 2
+      - name: install pinned host toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_lock="${GITHUB_WORKSPACE}/offline/toolchain.lock.tsv"
+          tool_root="${GITHUB_WORKSPACE}/.tmp/toolchain-server-evidence"
+          host_arch="amd64"
+
+          lookup_tool_field() {
+            local artifact_id="$1"
+            local field_name="$2"
+            awk -F '\t' -v artifact_id="$artifact_id" -v field_name="$field_name" '
+              /^#/ || NF == 0 { next }
+              $1 == "id" {
+                for (i = 1; i <= NF; i++) {
+                  idx[$i] = i
+                }
+                next
+              }
+              $1 == artifact_id {
+                print $(idx[field_name])
+                found = 1
+                exit
+              }
+              END { if (!found) exit 1 }
+            ' "$tool_lock"
+          }
+
+          download_bootstrap_tool() {
+            local artifact_id="$1"
+            local url sha dest
+            url="$(lookup_tool_field "$artifact_id" source_url)"
+            sha="$(lookup_tool_field "$artifact_id" sha256)"
+            dest="$tool_root/downloads/$artifact_id/$(basename "$url")"
+            mkdir -p "$(dirname "$dest")"
+            curl -fsSL "$url" -o "$dest"
+            if [[ "$(sha256sum "$dest" | awk '{print $1}')" != "$sha" ]]; then
+              echo "::error::bootstrap tool sha256 mismatch for ${artifact_id}"
+              exit 1
+            fi
+            printf '%s\n' "$dest"
+          }
+
+          bootstrap_go() {
+            local artifact_id archive_path extract_root
+            artifact_id="go-linux-${host_arch}"
+            archive_path="$(download_bootstrap_tool "$artifact_id")"
+            extract_root="$tool_root/extracted/$artifact_id"
+            rm -rf "$extract_root"
+            mkdir -p "$extract_root"
+            tar -xzf "$archive_path" -C "$extract_root"
+            printf '%s\n' "$extract_root/go/bin/go"
+          }
+
+          go_bin="$(bootstrap_go)"
+          "$go_bin" run -mod=readonly ./cmd/jcs-offline-replay sync-toolchain \
+            --lock "$tool_lock" \
+            --output-dir "$tool_root" \
+            --env-file "$tool_root/env.sh" \
+            --host-arch "$host_arch" \
+            --purposes build,provision,workflow-json-query >/dev/null
+          # shellcheck disable=SC1090
+          source "$tool_root/env.sh"
+
+          {
+            echo "PATH=$(dirname "$JCS_TOOL_GO"):$(dirname "$JCS_TOOL_JQ"):$(dirname "$JCS_TOOL_TOFU"):$PATH"
+            echo "JCS_TOOL_GO=$JCS_TOOL_GO"
+            echo "JCS_TOOL_JQ=$JCS_TOOL_JQ"
+          } >> "$GITHUB_ENV"
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: server-evidence
+        shell: bash
+        run: ./scripts/release-server.sh
+        env:
+          TAG: ${{ github.ref_name }}
       - name: resolve evidence source metadata
         id: evidence-source
         shell: bash
@@ -205,19 +310,46 @@ jobs:
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
           JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-arm64.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
+      - name: cleanup server evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          record_path="${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/server-run.v1.json"
+          if [[ -f "${record_path}" ]]; then
+            "$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay server-cleanup --run-record "${record_path}" || true
+          fi
+      - name: verify server evidence outputs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_root="${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}"
+          record_path="${run_root}/server-run.v1.json"
+          infra_manifest="${run_root}/infra-manifest.v1.json"
+          x86_evidence="${run_root}/x86_64/offline-evidence.json"
+          arm_evidence="${run_root}/arm64/offline-evidence.json"
+
+          [[ -f "${record_path}" ]] || { echo "::error::missing server run record: ${record_path}"; exit 1; }
+          [[ -f "${infra_manifest}" ]] || { echo "::error::missing infra manifest: ${infra_manifest}"; exit 1; }
+          [[ -f "${x86_evidence}" ]] || { echo "::error::missing x86_64 evidence: ${x86_evidence}"; exit 1; }
+          [[ -f "${arm_evidence}" ]] || { echo "::error::missing arm64 evidence: ${arm_evidence}"; exit 1; }
+
+          destroy_status="$("$JCS_TOOL_JQ" -r '.destroy_status // empty' "${record_path}")"
+          if [[ "${destroy_status}" != "succeeded" ]]; then
+            echo "::error::server cleanup did not succeed; destroy_status=${destroy_status:-<empty>}"
+            exit 1
+          fi
+      - name: upload server evidence run tree
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          version: v1.64.8
-          args: --config=golangci.yml
-      - name: fuzz jcstoken
-        run: go test ./jcstoken -run=^$ -fuzz=FuzzParseCanonicalRoundTrip -fuzztime=30s
-      - name: fuzz jcsfloat
-        run: go test ./jcsfloat -run=^$ -fuzz=FuzzFormatDoubleRoundTrip -fuzztime=30s
+          name: server-evidence-run
+          path: offline/runs/releases/${{ github.ref_name }}/
 
   build:
     name: Build Artifacts (${{ matrix.os }})
-    needs: pre_release
+    needs: [pre_release, server_evidence]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

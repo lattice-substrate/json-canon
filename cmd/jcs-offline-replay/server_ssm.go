@@ -19,11 +19,15 @@ type serverSSMAdapter struct {
 }
 
 func (r *serverEvidenceRuntime) prepareStaging(stdout io.Writer) error {
+	if err := r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusRunning); err != nil {
+		return err
+	}
 	if err := writeLine(stdout, "==> creating private staging bucket and uploading replay artifacts"); err != nil {
 		return err
 	}
-	bucket, err := createStagingBucket(r.ctx, r.awsClients, r.opts.tag)
+	bucket, err := createStagingBucketFunc(r.ctx, r.awsClients, r.opts.tag)
 	if err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusFailed)
 		return err
 	}
 	x86 := stagedServerArtifacts{
@@ -43,7 +47,8 @@ func (r *serverEvidenceRuntime) prepareStaging(stdout io.Writer) error {
 		{arm.bundleKey, r.armArtifacts.bundlePath},
 		{arm.workerKey, r.armArtifacts.workerPath},
 	} {
-		if err := uploadStagingFile(r.ctx, r.awsClients, bucket, item.key, item.path); err != nil {
+		if err := uploadStagingFileFunc(r.ctx, r.awsClients, bucket, item.key, item.path); err != nil {
+			_ = r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusFailed)
 			return err
 		}
 	}
@@ -52,12 +57,16 @@ func (r *serverEvidenceRuntime) prepareStaging(stdout io.Writer) error {
 		x86:    x86,
 		arm:    arm,
 	}
-	return nil
+	r.runRecord.StagingBucket = bucket
+	if err := r.persistRunRecord(); err != nil {
+		return err
+	}
+	return r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusSucceeded)
 }
 
 func (r *serverEvidenceRuntime) discoverHostFacts(host provisionedHost) (discoveredRemoteFacts, error) {
 	artifacts := r.stagingArtifactsForArch(host.Architecture)
-	workerURL, err := presignGetObjectURL(r.ctx, r.awsClients, r.staging.bucket, artifacts.workerKey)
+	workerURL, err := presignGetObjectURLFunc(r.ctx, r.awsClients, r.staging.bucket, artifacts.workerKey)
 	if err != nil {
 		return discoveredRemoteFacts{}, err
 	}
@@ -69,7 +78,7 @@ func (r *serverEvidenceRuntime) discoverHostFacts(host provisionedHost) (discove
 		`chmod +x "$tmp/jcs-offline-worker"`,
 		`LC_ALL=C LANG=C TZ=UTC "$tmp/jcs-offline-worker" inspect-host`,
 	}, "\n")
-	out, err := runSSMShellScript(r.ctx, r.awsClients, host.InstanceID, "jcs inspect host "+host.HostID, script, 5*time.Minute)
+	out, err := runSSMShellScriptFunc(r.ctx, r.awsClients, host.InstanceID, "jcs inspect host "+host.HostID, script, 5*time.Minute)
 	if err != nil {
 		return discoveredRemoteFacts{}, err
 	}
@@ -120,16 +129,16 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	if !ok {
 		return fmt.Errorf("node %s missing provisioned host binding", node.ID)
 	}
-	bundleURL, err := presignGetObjectURL(ctx, a.aws, a.bucket, a.artifacts.bundleKey)
+	bundleURL, err := presignGetObjectURLFunc(ctx, a.aws, a.bucket, a.artifacts.bundleKey)
 	if err != nil {
 		return err
 	}
-	workerURL, err := presignGetObjectURL(ctx, a.aws, a.bucket, a.artifacts.workerKey)
+	workerURL, err := presignGetObjectURLFunc(ctx, a.aws, a.bucket, a.artifacts.workerKey)
 	if err != nil {
 		return err
 	}
 	evidenceKey := fmt.Sprintf("evidence/%s/%03d/offline-evidence.json", node.ID, replayIndex)
-	evidencePutURL, err := presignPutObjectURL(ctx, a.aws, a.bucket, evidenceKey)
+	evidencePutURL, err := presignPutObjectURLFunc(ctx, a.aws, a.bucket, evidenceKey)
 	if err != nil {
 		return err
 	}
@@ -137,7 +146,7 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	if err != nil {
 		return err
 	}
-	stdout, err := runSSMShellScript(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute)
+	stdout, err := runSSMShellScriptFunc(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute)
 	if err != nil {
 		return err
 	}
@@ -145,7 +154,7 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	if remoteSHA == "" {
 		return fmt.Errorf("ssm replay for %s did not emit evidence sha256", node.ID)
 	}
-	data, err := downloadStagingObject(ctx, a.aws, a.bucket, evidenceKey)
+	data, err := downloadStagingObjectFunc(ctx, a.aws, a.bucket, evidenceKey)
 	if err != nil {
 		return err
 	}

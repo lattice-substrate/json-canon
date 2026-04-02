@@ -252,6 +252,10 @@ release gate must all compose into one fail-closed evidence trail.
 - AWS credentials with EC2 permissions
 - `infra/aws_release_hosts.lock.json` committed under `infra/`
 - `.terraform.lock.hcl` committed under `infra/`
+- shared-CI remote backend prerequisites when running in conformant release mode:
+  - S3 state bucket
+  - DynamoDB lock table
+  - GitHub OIDC IAM role
 
 Before the first billed AWS run, generate the Terraform/OpenTofu lockfile with the
 pinned binaries:
@@ -265,6 +269,23 @@ Do not install `tofu` on the host for this step. The script bootstraps the pinne
 Go artifact from `offline/toolchain.lock.tsv`, then hands off to
 `jcs-offline-replay init-infra-lock`, which executes the pinned OpenTofu binary
 directly.
+
+Shared-CI release orchestration uses remote state:
+
+```bash
+export STATE_MODE=remote
+export STATE_BUCKET=<s3-bucket>
+export STATE_REGION=us-east-1
+export STATE_LOCK_TABLE=<dynamodb-table>
+export STATE_KEY=server-evidence/<tag>/terraform.tfstate
+```
+
+Interrupted or failed AWS runs are recovered with:
+
+```bash
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay server-cleanup \
+  --run-record ./offline/runs/releases/<tag>/server-run.v1.json
+```
 
 Refresh the committed AWS AMI lock whenever the official host selectors need to move:
 

@@ -8,10 +8,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 : "${TAG:?'TAG is required (e.g. v0.4.0)'}"
 AMI_LOCK_PATH="${AMI_LOCK_PATH:-$ROOT/infra/aws_release_hosts.lock.json}"
+STATE_MODE="${STATE_MODE:-local}"
+STATE_BUCKET="${STATE_BUCKET:-}"
+STATE_REGION="${STATE_REGION:-$AWS_REGION}"
+STATE_LOCK_TABLE="${STATE_LOCK_TABLE:-}"
+STATE_KEY="${STATE_KEY:-server-evidence/$TAG/terraform.tfstate}"
 
 AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
-if [[ -z "${AWS_PROFILE:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then
-  echo "error: no AWS credentials found; set AWS_PROFILE or provide $AWS_SHARED_CREDENTIALS_FILE" >&2
+if [[ -z "${AWS_PROFILE:-}" && -z "${AWS_ACCESS_KEY_ID:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then
+  echo "error: no AWS credentials found; set AWS_PROFILE, export AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, or provide $AWS_SHARED_CREDENTIALS_FILE" >&2
   exit 2
 fi
 
@@ -61,11 +66,29 @@ mkdir -p "$OUT_DIR"
 # shellcheck disable=SC1090
 source "$TOOLCHAIN_ENV"
 
-"$JCS_TOOL_GO" run -mod=readonly "$ROOT/cmd/jcs-offline-replay" server-evidence \
-  --tag "$TAG" \
-  --aws-region "$AWS_REGION" \
-  --ami-lock "$AMI_LOCK_PATH" \
-  --toolchain-lock "$TOOL_LOCK" \
-  --toolchain-root "$TOOLCHAIN_ROOT" \
-  --host-arch "$HOST_ARCH" \
+server_args=(
+  server-evidence
+  --tag "$TAG"
+  --aws-region "$AWS_REGION"
+  --ami-lock "$AMI_LOCK_PATH"
+  --toolchain-lock "$TOOL_LOCK"
+  --toolchain-root "$TOOLCHAIN_ROOT"
+  --host-arch "$HOST_ARCH"
   --output-dir "$OUT_DIR"
+  --state-mode "$STATE_MODE"
+)
+
+if [[ -n "$STATE_BUCKET" ]]; then
+  server_args+=(--state-bucket "$STATE_BUCKET")
+fi
+if [[ -n "$STATE_REGION" ]]; then
+  server_args+=(--state-region "$STATE_REGION")
+fi
+if [[ -n "$STATE_LOCK_TABLE" ]]; then
+  server_args+=(--state-lock-table "$STATE_LOCK_TABLE")
+fi
+if [[ -n "$STATE_KEY" ]]; then
+  server_args+=(--state-key "$STATE_KEY")
+fi
+
+"$JCS_TOOL_GO" run -mod=readonly "$ROOT/cmd/jcs-offline-replay" "${server_args[@]}"

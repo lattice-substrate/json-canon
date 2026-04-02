@@ -2733,6 +2733,7 @@ func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
 func checkOfficialAWSInfraOutputContract(t *testing.T, h *harness) {
 	t.Helper()
 	mainTF := mustReadText(t, filepath.Join(h.root, "infra", "main.tf"))
+	assertContains(t, mainTF, `backend "s3" {}`, "official aws remote backend declaration")
 	assertContains(t, mainTF, `resource "aws_vpc_endpoint" "ssm"`, "official aws ssm interface endpoint")
 	assertContains(t, mainTF, `resource "aws_vpc_endpoint" "s3"`, "official aws s3 gateway endpoint")
 
@@ -2742,7 +2743,7 @@ func checkOfficialAWSInfraOutputContract(t *testing.T, h *harness) {
 	assertContains(t, outputsTF, `private_ip`, "official aws provisioned host private ip output")
 
 	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
-	assertContains(t, serverEvidence, `tofuOutputHosts(toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")`, "official aws provisioned host output consumer")
+	assertContains(t, serverEvidence, `tofuOutputHosts(ctx, toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")`, "official aws provisioned host output consumer")
 }
 
 func checkOfflineServerProfileContract(t *testing.T, h *harness) {
@@ -2836,6 +2837,8 @@ func checkOfflineGoNativeServerAutomation(t *testing.T, h *harness) {
 	releaseScript := mustReadText(t, filepath.Join(h.root, "scripts", "release-server.sh"))
 	assertContains(t, releaseScript, "bootstrap-pinned-toolchain.sh", "release wrapper pinned bootstrap")
 	assertContains(t, releaseScript, "server-evidence", "release wrapper Go-native orchestration handoff")
+	assertContains(t, releaseScript, "STATE_MODE", "release wrapper state mode passthrough")
+	assertContains(t, releaseScript, "--state-bucket", "release wrapper remote backend passthrough")
 	for _, forbidden := range []string{
 		"tofu apply",
 		"tofu destroy",
@@ -2864,10 +2867,21 @@ func checkOfflineGoNativeServerAutomation(t *testing.T, h *harness) {
 	contrib := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
 	assertContains(t, contrib, "jcs-offline-replay server-evidence", "contributing Go-native server evidence command")
 	assertContains(t, contrib, "jcs-offline-replay init-infra-lock", "contributing Go-native infra lock command")
+	assertContains(t, contrib, "server-cleanup", "contributing Go-native server cleanup command")
 
 	runbook := mustReadText(t, filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"))
 	assertContains(t, runbook, "jcs-offline-replay server-evidence", "offline runbook Go-native server evidence command")
 	assertContains(t, runbook, "jcs-offline-replay init-infra-lock", "offline runbook Go-native infra lock command")
+	assertContains(t, runbook, "server-cleanup", "offline runbook Go-native server cleanup command")
+
+	releaseWorkflow := mustReadText(t, filepath.Join(h.root, ".github", "workflows", "release.yml"))
+	assertContains(t, releaseWorkflow, "aws-actions/configure-aws-credentials@", "release workflow aws oidc auth")
+	assertContains(t, releaseWorkflow, "Server Evidence", "release workflow server evidence job")
+	assertContains(t, releaseWorkflow, "./scripts/release-server.sh", "release workflow server evidence wrapper")
+	assertContains(t, releaseWorkflow, "cleanup server evidence", "release workflow server evidence cleanup step")
+	assertContains(t, releaseWorkflow, "server-cleanup --run-record", "release workflow Go-native cleanup command")
+	assertContains(t, releaseWorkflow, "upload server evidence run tree", "release workflow server evidence artifact upload")
+	assertContains(t, releaseWorkflow, "server-run.v1.json", "release workflow run record artifact")
 }
 
 // TestCitationIndexCoversNormativeRequirements verifies every normative

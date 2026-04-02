@@ -78,6 +78,17 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 - Requirements AWS-RELEASE-001, AWS-TOOLCHAIN-001, and AWS-GATE-001 added to
   `REQ_REGISTRY_POLICY.md` to lock official AWS release breadth, host-only pinned
   toolchain scope, and fail-closed v1 release gating.
+
+### Changed
+- `jcs-offline-replay server-evidence` now hardens cancellation and evidence-ingestion
+  safety: teardown uses uncancelled cleanup contexts with explicit time bounds, S3
+  evidence downloads fail closed on missing or oversized content length, and the
+  AWS/SSM orchestration path has targeted tests for cleanup and replay failure modes.
+- `jcs-offline-replay server-evidence` now supports remote OpenTofu state for shared-CI
+  evidence generation, emits `server-run.v1.json` for recovery/audit, and writes
+  `audit/server-evidence-summary.{json,md}` alongside the existing run artifacts.
+- `jcs-offline-replay server-cleanup` can recover partial AWS evidence runs from
+  `server-run.v1.json` and perform idempotent staging-bucket / infrastructure teardown.
 - Requirement AWS-AMI-001 added to `REQ_REGISTRY_POLICY.md` to lock stable official AWS
   image selector policy and forbid the unsupported Ubuntu 20.04 minimal arm64 lane.
 - Requirement AWS-OUTPUT-001 added to `REQ_REGISTRY_POLICY.md` to lock the sensitive

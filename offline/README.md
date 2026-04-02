@@ -118,7 +118,8 @@ Use the shell entrypoints below instead of ambient host binaries:
 
 After pinned Go exists, release-critical automation is Go-native:
 - `jcs-offline-replay init-infra-lock`: runs the pinned OpenTofu binary to generate `infra/.terraform.lock.hcl`
-- `jcs-offline-replay server-evidence`: requires a clean git worktree, builds from a detached source worktree at the recorded commit, provisions the official AWS host fleet, resolves attested substrate facts on each native lane, runs both official AWS matrices over private SSM/S3 transport, writes `infra-manifest.v1.json`, and executes both release gates
+- `jcs-offline-replay server-evidence`: requires a clean git worktree, builds from a detached source worktree at the recorded commit, provisions the official AWS host fleet, resolves attested substrate facts on each native lane, runs both official AWS matrices over private SSM/S3 transport, writes `infra-manifest.v1.json`, emits `server-run.v1.json`, and executes both release gates
+- `jcs-offline-replay server-cleanup`: uses `server-run.v1.json` to recover a partial run, delete the staging bucket, and destroy provisioned AWS infrastructure with the recorded backend coordinates
 - `jcs-offline-replay refresh-aws-ami-lock`: resolves the mutable selector catalog in `infra/aws_release_hosts.json` into the committed `infra/aws_release_hosts.lock.json` document used by official release runs
 
 ## Official AWS Release Profiles
@@ -151,14 +152,27 @@ go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 the pinned toolchain under `offline/runs/releases/<tag>/toolchain/` and then invokes
 `jcs-offline-replay server-evidence`, which performs the billed native-AWS orchestration in Go.
 
+Shared-CI conformance mode requires remote OpenTofu state:
+- `STATE_MODE=remote`
+- `STATE_BUCKET=<s3-bucket>`
+- `STATE_REGION=<aws-region>`
+- `STATE_LOCK_TABLE=<dynamodb-table>`
+- optional `STATE_KEY=server-evidence/<tag>/terraform.tfstate`
+
+These backend and IAM prerequisites are external platform infrastructure. This repo
+does not provision them. Recovery from interrupted runs uses
+`jcs-offline-replay server-cleanup --run-record offline/runs/releases/<tag>/server-run.v1.json`.
+
 ## Outputs to Audit
 
 Each full run emits an `offline/runs/...` directory containing:
 
 - immutable bundle (`offline-bundle.tgz`)
 - replay evidence (`offline-evidence.json`)
+- run record (`server-run.v1.json`)
 - controller logs (`logs/*.log`)
 - audit summaries (`audit/audit-summary.md`, `audit/audit-summary.json`)
+- server evidence summaries (`audit/server-evidence-summary.md`, `audit/server-evidence-summary.json`)
 - checksums (`audit/bundle.sha256`, `audit/evidence.sha256`)
 - run index (`RUN_INDEX.txt`)
 

@@ -164,8 +164,9 @@ command. In summary:
 Use `./scripts/release-server.sh` when generating official AWS `evidence.v1`.
 That wrapper stages the pinned toolchain under `offline/runs/releases/<tag>/toolchain/`, then invokes
 `jcs-offline-replay server-evidence`, which requires a clean git worktree, builds
-from a detached source worktree at the recorded commit, writes `infra-manifest.v1.json`, and
-executes the release gates with `--infra-manifest` / `JCS_OFFLINE_INFRA_MANIFEST`.
+from a detached source worktree at the recorded commit, writes `infra-manifest.v1.json`,
+emits `server-run.v1.json`, and executes the release gates with `--infra-manifest` /
+`JCS_OFFLINE_INFRA_MANIFEST`.
 The committed official AWS matrices are vm-only and run natively on EC2 across 12
 lanes / 60 total replays per architecture.
 
@@ -208,7 +209,13 @@ source ./.tmp/pinned-toolchain/env.sh
   --aws-region us-east-1 \
   --ami-lock ./infra/aws_release_hosts.lock.json \
   --toolchain-lock ./offline/toolchain.lock.tsv \
-  --toolchain-root ./offline/runs/releases/<tag>/toolchain
+  --toolchain-root ./offline/runs/releases/<tag>/toolchain \
+  --state-mode remote \
+  --state-bucket <s3-bucket> \
+  --state-region us-east-1 \
+  --state-lock-table <dynamodb-table>
+"$JCS_TOOL_GO" run -mod=readonly ./cmd/jcs-offline-replay server-cleanup \
+  --run-record ./offline/runs/releases/<tag>/server-run.v1.json
 ```
 
 ## 7. Cross-Arch Proof Procedure
@@ -259,6 +266,10 @@ go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1
 
 For official AWS `evidence.v1`, use the committed server matrix/profile pair and
 set `JCS_OFFLINE_INFRA_MANIFEST=$(pwd)/offline/runs/releases/<tag>/infra-manifest.v1.json`.
+Shared CI runs are expected to use remote OpenTofu state with locking; the backend
+bucket, lock table, and GitHub OIDC role are external platform prerequisites and
+are not provisioned by this repo. Interrupted runs are recovered with
+`jcs-offline-replay server-cleanup --run-record <path>`.
 
 **Evidence source binding model:** Evidence records `source_git_commit` at
 generation time (commit A). Evidence files are then committed on top (commit B),

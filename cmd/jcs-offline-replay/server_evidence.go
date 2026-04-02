@@ -29,9 +29,20 @@ const (
 	serverProvisionTimeout   = 20 * time.Minute
 	serverReleaseGateTimeout = 10 * time.Minute
 	serverRuntimeTimeout     = 12 * time.Hour
+	serverBuildTimeout       = 5 * time.Minute
 )
 
 var fullSHAPattern = regexp.MustCompile("^[0-9a-f]{40}$")
+
+var (
+	runCommandInDirFunc               = runCommandInDir
+	newServerEvidenceRuntimeFunc      = newServerEvidenceRuntime
+	newServerAWSClientsFunc           = newServerAWSClients
+	waitForSSMManagedInstancesFunc    = waitForSSMManagedInstances
+	provisionServerInfrastructureFunc = provisionServerInfrastructure
+	destroyServerInfrastructureFunc   = destroyServerInfrastructure
+	buildServerRunArtifactsFunc       = buildServerRunArtifacts
+)
 
 type serverEvidenceOptions struct {
 	tag               string
@@ -44,6 +55,15 @@ type serverEvidenceOptions struct {
 	lockFilePath      string
 	infraDir          string
 	root              string
+	state             serverStateConfig
+}
+
+type serverStateConfig struct {
+	Mode      string
+	Bucket    string
+	Region    string
+	LockTable string
+	Key       string
 }
 
 type provisionedHost struct {
@@ -98,7 +118,12 @@ type serverEvidenceRuntime struct {
 	armArtifacts      serverBuildArtifacts
 	sourceRoot        string
 	sourceCleanup     func() error
+	runRecordPath     string
+	runRecord         serverRunRecord
 	destroyed         bool
+	provisionFunc     func(io.Writer) error
+	executeFunc       func(io.Writer) error
+	destroyFunc       func() error
 }
 
 func cmdInitInfraLock(flags map[string]string, stdout io.Writer) error {
@@ -110,7 +135,7 @@ func cmdInitInfraLock(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if _, err := runCommandInDir(context.Background(), infraDir, nil, toolchain.tofuBinary, "init", "-input=false", "-upgrade=false"); err != nil {
+	if _, err := runCommandInDirFunc(context.Background(), infraDir, nil, toolchain.tofuBinary, "init", "-input=false", "-upgrade=false", "-backend=false"); err != nil {
 		return err
 	}
 	return writef(stdout, "infra lock ready: %s\n", filepath.Join(infraDir, ".terraform.lock.hcl"))
@@ -134,6 +159,10 @@ func parseServerEvidenceOptions(flags map[string]string) (serverEvidenceOptions,
 	if err != nil {
 		return serverEvidenceOptions{}, err
 	}
+	state, err := resolveServerStateConfig(flags, defaultString(flags, "--aws-region", defaultAWSRegion), required.tag)
+	if err != nil {
+		return serverEvidenceOptions{}, err
+	}
 	outputDir := resolveServerEvidencePath(root, flags["--output-dir"], filepath.Join("offline", "runs", "releases", required.tag))
 	toolchainRoot := resolveServerEvidencePath(root, flags["--toolchain-root"], filepath.Join(outputDir, "toolchain"))
 	toolchainLockPath := resolveServerEvidencePath(root, flags["--toolchain-lock"], filepath.Join("offline", "toolchain.lock.tsv"))
@@ -148,6 +177,7 @@ func parseServerEvidenceOptions(flags map[string]string) (serverEvidenceOptions,
 		lockFilePath:      filepath.Join(root, "infra", ".terraform.lock.hcl"),
 		infraDir:          filepath.Join(root, "infra"),
 		root:              root,
+		state:             state,
 	}, nil
 }
 
@@ -157,10 +187,17 @@ func runServerEvidence(opts serverEvidenceOptions, stdout io.Writer) (retErr err
 	ctx, cancel := context.WithTimeout(signalCtx, serverRuntimeTimeout)
 	defer cancel()
 
-	runtimeState, err := newServerEvidenceRuntime(ctx, opts)
+	runtimeState, err := newServerEvidenceRuntimeFunc(ctx, opts)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if retErr != nil {
+			retErr = errors.Join(retErr, runtimeState.completeRunRecordFailure(retErr))
+			return
+		}
+		retErr = errors.Join(retErr, runtimeState.completeRunRecordSuccess())
+	}()
 	defer func() {
 		if runtimeState.sourceCleanup != nil {
 			retErr = errors.Join(retErr, runtimeState.sourceCleanup())
@@ -193,6 +230,34 @@ func requireServerEvidenceFlags(flags map[string]string) (requiredServerEvidence
 		return requiredServerEvidenceFlags{}, fmt.Errorf("server-evidence requires --tag")
 	}
 	return required, nil
+}
+
+func resolveServerStateConfig(flags map[string]string, defaultRegion, tag string) (serverStateConfig, error) {
+	mode := strings.TrimSpace(flags["--state-mode"])
+	if mode == "" {
+		mode = serverStateModeLocal
+	}
+	switch mode {
+	case serverStateModeLocal:
+		return serverStateConfig{Mode: serverStateModeLocal}, nil
+	case serverStateModeRemote:
+		cfg := serverStateConfig{
+			Mode:      serverStateModeRemote,
+			Bucket:    strings.TrimSpace(flags["--state-bucket"]),
+			Region:    defaultString(flags, "--state-region", defaultRegion),
+			LockTable: strings.TrimSpace(flags["--state-lock-table"]),
+			Key:       strings.TrimSpace(flags["--state-key"]),
+		}
+		if cfg.Bucket == "" || cfg.LockTable == "" {
+			return serverStateConfig{}, fmt.Errorf("server-evidence remote state requires --state-bucket and --state-lock-table")
+		}
+		if cfg.Key == "" {
+			cfg.Key = filepath.ToSlash(filepath.Join("server-evidence", tag, "terraform.tfstate"))
+		}
+		return cfg, nil
+	default:
+		return serverStateConfig{}, fmt.Errorf("unsupported --state-mode %q", mode)
+	}
 }
 
 func resolveServerEvidencePath(root, rawPath, fallback string) string {
@@ -239,13 +304,26 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 		_ = cleanupSourceRoot()
 		return nil, fmt.Errorf("sha256 terraform lock: %w", err)
 	}
-	tofuVersion, err := resolveTofuVersion(toolchain.tofuBinary, opts.infraDir)
+	tofuVersion, err := resolveTofuVersion(ctx, toolchain.tofuBinary, opts.infraDir)
 	if err != nil {
 		_ = cleanupSourceRoot()
 		return nil, err
 	}
-	awsClients, err := newServerAWSClients(ctx, opts.awsRegion)
+	awsClients, err := newServerAWSClientsFunc(ctx, opts.awsRegion)
 	if err != nil {
+		_ = cleanupSourceRoot()
+		return nil, err
+	}
+	awsIdentity, err := resolveServerAWSIdentity(ctx, awsClients)
+	if err != nil {
+		_ = cleanupSourceRoot()
+		return nil, err
+	}
+	runRecordPath := filepath.Join(opts.outputDir, "server-run.v1.json")
+	runRecord := newServerRunRecord(runRecordPath, opts, gitCommit, sourceRoot, lockSHA)
+	runRecord.AWSAccountID = awsIdentity.AccountID
+	runRecord.AWSRoleARN = awsIdentity.ARN
+	if err := writeServerRunRecord(runRecordPath, &runRecord); err != nil {
 		_ = cleanupSourceRoot()
 		return nil, err
 	}
@@ -260,6 +338,8 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 		hostFacts:     make(map[string]discoveredRemoteFacts),
 		sourceRoot:    sourceRoot,
 		sourceCleanup: cleanupSourceRoot,
+		runRecordPath: runRecordPath,
+		runRecord:     runRecord,
 	}, nil
 }
 
@@ -305,24 +385,41 @@ type releaseGateRun struct {
 }
 
 func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
+	if r.provisionFunc != nil {
+		return r.provisionFunc(stdout)
+	}
+	if err := r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusRunning); err != nil {
+		return err
+	}
 	if err := writef(stdout, "==> provisioning infrastructure (tag=%s, commit=%s)\n", r.opts.tag, r.gitCommit[:12]); err != nil {
 		return err
 	}
-	infra, err := provisionServerInfrastructure(r.ctx, r.opts, r.toolchain, r.gitCommit, r.lockSHA)
+	infra, err := provisionServerInfrastructureFunc(r.ctx, r.opts, r.toolchain, r.gitCommit, r.lockSHA)
 	if err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusFailed)
 		return err
 	}
 	r.infra = infra
+	if err := r.persistRunRecord(); err != nil {
+		return err
+	}
 	if err := writef(stdout, "==> instances ready: %d official AWS hosts\n", len(infra.Hosts)); err != nil {
 		return err
 	}
 	if err := writeLine(stdout, "==> waiting for SSM on all provisioned hosts"); err != nil {
 		return err
 	}
-	return waitForSSMManagedInstances(r.ctx, r.awsClients, infra.Hosts, serverSSMReadyTimeout)
+	if err := waitForSSMManagedInstancesFunc(r.ctx, r.awsClients, infra.Hosts, serverSSMReadyTimeout); err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusFailed)
+		return err
+	}
+	return r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusSucceeded)
 }
 
 func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
+	if r.executeFunc != nil {
+		return r.executeFunc(stdout)
+	}
 	if err := r.buildArtifacts(stdout); err != nil {
 		return err
 	}
@@ -348,6 +445,9 @@ func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
 }
 
 func (r *serverEvidenceRuntime) discoverRemoteFacts(stdout io.Writer) error {
+	if err := r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusRunning); err != nil {
+		return err
+	}
 	if err := writeLine(stdout, "==> discovering native substrate identity on provisioned hosts"); err != nil {
 		return err
 	}
@@ -355,14 +455,20 @@ func (r *serverEvidenceRuntime) discoverRemoteFacts(stdout io.Writer) error {
 		host := r.infra.Hosts[hostID]
 		facts, err := r.discoverHostFacts(host)
 		if err != nil {
+			_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
 			return err
 		}
 		if err := validateDiscoveredRemoteFacts(hostID, facts); err != nil {
+			_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
 			return err
 		}
 		r.hostFacts[hostID] = facts
 	}
-	return writeDiscoveredFactSummary(stdout, r.infra.Hosts, r.hostFacts)
+	if err := writeDiscoveredFactSummary(stdout, r.infra.Hosts, r.hostFacts); err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
+		return err
+	}
+	return r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusSucceeded)
 }
 
 func validateDiscoveredRemoteFacts(hostID string, facts discoveredRemoteFacts) error {
@@ -412,6 +518,9 @@ func writeDiscoveredFactSummary(stdout io.Writer, hosts map[string]provisionedHo
 
 func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 	r.infraManifestPath = filepath.Join(r.opts.outputDir, "infra-manifest.v1.json")
+	if err := r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusRunning); err != nil {
+		return err
+	}
 	if err := writeLine(stdout, "==> writing infra manifest"); err != nil {
 		return err
 	}
@@ -422,9 +531,10 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		"--purposes":       "build,provision",
 	}, r.infraManifestPath)
 	if err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusFailed)
 		return err
 	}
-	return writeInfraManifestDocument(r.infraManifestPath, &replay.InfraManifest{
+	if err := writeInfraManifestDocument(r.infraManifestPath, &replay.InfraManifest{
 		SchemaVersion:      replay.InfraManifestSchemaVersion,
 		GeneratedAtUTC:     manifestNowUTC().Format(time.RFC3339Nano),
 		InfraRepoURL:       serverRepoURL,
@@ -434,24 +544,36 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		ProviderLockSHA256: r.lockSHA,
 		Hosts:              buildProvisionedInfraManifestHosts(r.infra.Hosts, r.hostFacts, r.opts.awsRegion),
 		Tools:              tools,
-	})
+	}); err != nil {
+		_ = r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusFailed)
+		return err
+	}
+	r.runRecord.InfraManifestPath = r.infraManifestPath
+	if err := r.persistRunRecord(); err != nil {
+		return err
+	}
+	return r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusSucceeded)
 }
 
 func (r *serverEvidenceRuntime) buildArtifacts(stdout io.Writer) error {
 	if err := writeLine(stdout, "==> building architecture-specific jcs-canon control binaries"); err != nil {
 		return err
 	}
-	x86Artifacts, err := buildServerRunArtifacts(r.opts, r.sourceRoot, r.toolchain, "x86_64")
+	x86Artifacts, err := buildServerRunArtifactsFunc(r.ctx, r.opts, r.sourceRoot, r.toolchain, "x86_64")
 	if err != nil {
 		return err
 	}
-	armArtifacts, err := buildServerRunArtifacts(r.opts, r.sourceRoot, r.toolchain, "arm64")
+	armArtifacts, err := buildServerRunArtifactsFunc(r.ctx, r.opts, r.sourceRoot, r.toolchain, "arm64")
 	if err != nil {
 		return err
 	}
 	r.x86Artifacts = x86Artifacts
 	r.armArtifacts = armArtifacts
-	return nil
+	r.runRecord.X86BundlePath = x86Artifacts.bundlePath
+	r.runRecord.ArmBundlePath = armArtifacts.bundlePath
+	r.runRecord.X86ControlPath = x86Artifacts.controlBinaryPath
+	r.runRecord.ArmControlPath = armArtifacts.controlBinaryPath
+	return r.persistRunRecord()
 }
 
 func (r *serverEvidenceRuntime) runReplays(stdout io.Writer) error {
@@ -468,16 +590,38 @@ func (r *serverEvidenceRuntime) runReplays(stdout io.Writer) error {
 }
 
 func (r *serverEvidenceRuntime) runReplayForArch(stdout io.Writer, arch string) error {
+	statusField := &r.runRecord.X86ReplayStatus
+	if arch == matrixArchitectureARM64 {
+		statusField = &r.runRecord.ArmReplayStatus
+	}
+	if err := r.setRunRecordStatus(statusField, serverRunStatusRunning); err != nil {
+		return err
+	}
 	cfg := r.serverMatrixRunForArch(arch)
-	return runServerMatrix(r.ctx, cfg, stdout)
+	if err := runServerMatrix(r.ctx, cfg, stdout); err != nil {
+		_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
+		return err
+	}
+	return r.setRunRecordStatus(statusField, serverRunStatusSucceeded)
 }
 
 func (r *serverEvidenceRuntime) runReleaseGates(stdout io.Writer) error {
 	for _, arch := range []string{"x86_64", "arm64"} {
+		statusField := &r.runRecord.X86GateStatus
+		if arch == matrixArchitectureARM64 {
+			statusField = &r.runRecord.ArmGateStatus
+		}
+		if err := r.setRunRecordStatus(statusField, serverRunStatusRunning); err != nil {
+			return err
+		}
 		if err := writef(stdout, "==> running release gate: %s\n", arch); err != nil {
 			return err
 		}
 		if err := runServerReleaseGate(r.ctx, r.toolchain.goBinary, r.opts.root, r.releaseGateRunForArch(arch)); err != nil {
+			_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
+			return err
+		}
+		if err := r.setRunRecordStatus(statusField, serverRunStatusSucceeded); err != nil {
 			return err
 		}
 	}
@@ -485,17 +629,38 @@ func (r *serverEvidenceRuntime) runReleaseGates(stdout io.Writer) error {
 }
 
 func (r *serverEvidenceRuntime) destroy() error {
+	if r.destroyFunc != nil {
+		return r.destroyFunc()
+	}
 	if r.destroyed {
 		return nil
 	}
-	if err := deleteStagingBucket(context.WithoutCancel(r.ctx), r.awsClients, r.staging.bucket); err != nil {
+	if err := r.setRunRecordStatus(&r.runRecord.DestroyStatus, serverRunStatusRunning); err != nil {
 		return err
 	}
-	if err := destroyServerInfrastructure(r.ctx, r.opts, r.toolchain, r.gitCommit, r.lockSHA); err != nil {
-		return err
+	var errs []error
+
+	bucketCtx, cancelBucket := cleanupContext(r.ctx, serverProvisionTimeout)
+	if err := deleteStagingBucketFunc(bucketCtx, r.awsClients, r.staging.bucket); err != nil {
+		errs = append(errs, err)
+	}
+	cancelBucket()
+
+	infraCtx, cancelInfra := cleanupContext(r.ctx, serverProvisionTimeout)
+	if err := destroyServerInfrastructureFunc(infraCtx, r.opts, r.toolchain, r.gitCommit, r.lockSHA); err != nil {
+		errs = append(errs, err)
+	}
+	cancelInfra()
+
+	if len(errs) != 0 {
+		_ = r.setRunRecordStatus(&r.runRecord.DestroyStatus, serverRunStatusFailed)
+		return errors.Join(errs...)
 	}
 	r.destroyed = true
-	return nil
+	if err := r.setRunRecordStatus(&r.runRecord.DestroyStatus, serverRunStatusSucceeded); err != nil {
+		return err
+	}
+	return writeServerAuditSummaries(r.runRecord)
 }
 
 func (r *serverEvidenceRuntime) writeSuccess(stdout io.Writer) error {
@@ -553,15 +718,15 @@ func (r *serverEvidenceRuntime) artifactsForArch(arch string) serverBuildArtifac
 	return r.x86Artifacts
 }
 
-func buildServerRunArtifacts(opts serverEvidenceOptions, sourceRoot string, toolchain serverToolchain, matrixArch string) (serverBuildArtifacts, error) {
+func buildServerRunArtifacts(ctx context.Context, opts serverEvidenceOptions, sourceRoot string, toolchain serverToolchain, matrixArch string) (serverBuildArtifacts, error) {
 	archDir := filepath.Join(opts.outputDir, matrixArch)
 	controlBinaryPath := filepath.Join(archDir, "jcs-canon")
 	workerPath := filepath.Join(archDir, "jcs-offline-worker")
 	bundlePath := filepath.Join(archDir, "offline-bundle.tgz")
-	if err := buildGoBinary(toolchain.goBinary, sourceRoot, matrixArch, opts.tag, "./cmd/jcs-canon", controlBinaryPath); err != nil {
+	if err := buildGoBinary(ctx, toolchain.goBinary, sourceRoot, matrixArch, opts.tag, "./cmd/jcs-canon", controlBinaryPath); err != nil {
 		return serverBuildArtifacts{}, err
 	}
-	if err := buildGoBinary(toolchain.goBinary, sourceRoot, matrixArch, "v0.0.0-dev", "./cmd/jcs-offline-worker", workerPath); err != nil {
+	if err := buildGoBinary(ctx, toolchain.goBinary, sourceRoot, matrixArch, "v0.0.0-dev", "./cmd/jcs-offline-worker", workerPath); err != nil {
 		return serverBuildArtifacts{}, err
 	}
 	matrixPath := filepath.Join(sourceRoot, "offline", "matrix.server-"+matrixArch+".yaml")
@@ -656,21 +821,21 @@ func runServerReleaseGate(parent context.Context, goBinary, repoRoot string, cfg
 		"JCS_OFFLINE_EXPECTED_GIT_TAG":    cfg.expectedTag,
 		"JCS_OFFLINE_INFRA_MANIFEST":      cfg.infraManifestPath,
 	}
-	_, err := runCommandInDir(ctx, repoRoot, env, goBinary, "test", "-mod=readonly", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
+	_, err := runCommandInDirFunc(ctx, repoRoot, env, goBinary, "test", "-mod=readonly", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
 	return err
 }
 
 func provisionServerInfrastructure(ctx context.Context, opts serverEvidenceOptions, toolchain serverToolchain, gitCommit, lockSHA string) (provisionedInfra, error) {
 	ctx, cancel := context.WithTimeout(ctx, serverProvisionTimeout)
 	defer cancel()
-	if _, err := runCommandInDir(ctx, opts.infraDir, nil, toolchain.tofuBinary, "init", "-input=false", "-upgrade=false"); err != nil {
+	if err := initServerInfrastructure(ctx, opts, toolchain); err != nil {
 		return provisionedInfra{}, err
 	}
 	args := append([]string{"apply", "-auto-approve", "-input=false"}, tofuVarArgs(gitCommit, lockSHA, opts.awsRegion, opts.amiLockPath)...)
-	if _, err := runCommandInDir(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...); err != nil {
+	if _, err := runCommandInDirFunc(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...); err != nil {
 		return provisionedInfra{}, err
 	}
-	hosts, err := tofuOutputHosts(toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")
+	hosts, err := tofuOutputHosts(ctx, toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")
 	if err != nil {
 		return provisionedInfra{}, err
 	}
@@ -678,10 +843,32 @@ func provisionServerInfrastructure(ctx context.Context, opts serverEvidenceOptio
 }
 
 func destroyServerInfrastructure(ctx context.Context, opts serverEvidenceOptions, toolchain serverToolchain, gitCommit, lockSHA string) error {
-	ctx, cancel := context.WithTimeout(ctx, serverProvisionTimeout)
-	defer cancel()
+	if err := initServerInfrastructure(ctx, opts, toolchain); err != nil {
+		return err
+	}
 	args := append([]string{"destroy", "-auto-approve", "-input=false"}, tofuVarArgs(gitCommit, lockSHA, opts.awsRegion, opts.amiLockPath)...)
-	_, err := runCommandInDir(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...)
+	_, err := runCommandInDirFunc(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...)
+	return err
+}
+
+func initServerInfrastructure(ctx context.Context, opts serverEvidenceOptions, toolchain serverToolchain) error {
+	args := []string{"init", "-input=false", "-upgrade=false"}
+	switch opts.state.Mode {
+	case "", serverStateModeLocal:
+		args = append(args, "-backend=false")
+	case serverStateModeRemote:
+		args = append(args,
+			"-reconfigure",
+			"-backend-config=bucket="+opts.state.Bucket,
+			"-backend-config=region="+opts.state.Region,
+			"-backend-config=dynamodb_table="+opts.state.LockTable,
+			"-backend-config=key="+opts.state.Key,
+			"-backend-config=encrypt=true",
+		)
+	default:
+		return fmt.Errorf("unsupported server state mode %q", opts.state.Mode)
+	}
+	_, err := runCommandInDirFunc(ctx, opts.infraDir, nil, toolchain.tofuBinary, args...)
 	return err
 }
 
@@ -695,8 +882,8 @@ func tofuVarArgs(gitCommit, lockSHA, awsRegion, amiLockPath string) []string {
 	}
 }
 
-func tofuOutputHosts(tofuBinary, infraDir, name string) (map[string]provisionedHost, error) {
-	out, err := runCommandInDir(context.Background(), infraDir, nil, tofuBinary, "output", "-json", name)
+func tofuOutputHosts(ctx context.Context, tofuBinary, infraDir, name string) (map[string]provisionedHost, error) {
+	out, err := runCommandInDirFunc(ctx, infraDir, nil, tofuBinary, "output", "-json", name)
 	if err != nil {
 		return nil, err
 	}
@@ -793,8 +980,8 @@ func resolveServerToolchain() (serverToolchain, error) {
 	return info, nil
 }
 
-func resolveTofuVersion(tofuBinary, infraDir string) (string, error) {
-	out, err := runCommandInDir(context.Background(), infraDir, nil, tofuBinary, "version")
+func resolveTofuVersion(ctx context.Context, tofuBinary, infraDir string) (string, error) {
+	out, err := runCommandInDirFunc(ctx, infraDir, nil, tofuBinary, "version")
 	if err != nil {
 		return "", err
 	}
@@ -806,7 +993,7 @@ func resolveTofuVersion(tofuBinary, infraDir string) (string, error) {
 	return match[1], nil
 }
 
-func buildGoBinary(goBinary, repoRoot, matrixArch, version, pkgPath, outPath string) error {
+func buildGoBinary(parent context.Context, goBinary, repoRoot, matrixArch, version, pkgPath, outPath string) error {
 	goArch, err := goArchForMatrixArch(matrixArch)
 	if err != nil {
 		return err
@@ -814,9 +1001,9 @@ func buildGoBinary(goBinary, repoRoot, matrixArch, version, pkgPath, outPath str
 	if mkErr := os.MkdirAll(filepath.Dir(outPath), dirPerm); mkErr != nil {
 		return fmt.Errorf("create output dir for %s: %w", outPath, mkErr)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, serverBuildTimeout)
 	defer cancel()
-	_, err = runCommandInDir(ctx, repoRoot, map[string]string{
+	_, err = runCommandInDirFunc(ctx, repoRoot, map[string]string{
 		"CGO_ENABLED": "0",
 		"GOOS":        "linux",
 		"GOARCH":      goArch,
@@ -828,7 +1015,7 @@ func buildGoBinary(goBinary, repoRoot, matrixArch, version, pkgPath, outPath str
 }
 
 func validateCleanGitWorktree(ctx context.Context, root string) error {
-	out, err := runCommandInDir(ctx, root, nil, "git", "status", "--porcelain", "--untracked-files=normal")
+	out, err := runCommandInDirFunc(ctx, root, nil, "git", "status", "--porcelain", "--untracked-files=normal")
 	if err != nil {
 		return fmt.Errorf("check git worktree cleanliness: %w", err)
 	}
@@ -844,11 +1031,11 @@ func prepareDetachedSourceTree(ctx context.Context, root, commit string) (string
 		return "", nil, fmt.Errorf("create detached source root: %w", err)
 	}
 	cleanup := func() error {
-		_, removeErr := runCommandInDir(context.Background(), root, nil, "git", "worktree", "remove", "--force", sourceRoot)
+		_, removeErr := runCommandInDirFunc(context.Background(), root, nil, "git", "worktree", "remove", "--force", sourceRoot)
 		fileErr := os.RemoveAll(sourceRoot)
 		return errors.Join(removeErr, fileErr)
 	}
-	if _, err := runCommandInDir(ctx, root, nil, "git", "worktree", "add", "--detach", sourceRoot, commit); err != nil {
+	if _, err := runCommandInDirFunc(ctx, root, nil, "git", "worktree", "add", "--detach", sourceRoot, commit); err != nil {
 		_ = os.RemoveAll(sourceRoot)
 		return "", nil, fmt.Errorf("create detached source worktree: %w", err)
 	}
@@ -939,6 +1126,10 @@ func runCommandInDir(ctx context.Context, dir string, env map[string]string, nam
 		return "", fmt.Errorf("run %s %s failed: %w", name, strings.Join(args, " "), err)
 	}
 	return out.String(), nil
+}
+
+func cleanupContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), timeout)
 }
 
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {

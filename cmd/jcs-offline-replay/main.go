@@ -80,6 +80,8 @@ func dispatchSubcommand(sub string, flags map[string]string, stdout io.Writer, s
 		return 0, cmdRefreshAWSAMILock(flags, stdout)
 	case "server-evidence":
 		return 0, cmdServerEvidence(flags, stdout)
+	case "server-cleanup":
+		return 0, cmdServerCleanup(flags, stdout)
 	case "write-infra-manifest":
 		return 0, cmdWriteInfraManifest(flags, stdout)
 	case "inspect-matrix":
@@ -791,7 +793,7 @@ const matrixArchitectureARM64 = "arm64"
 
 func usageLines() []string {
 	return []string{
-		"usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|sync-toolchain|init-infra-lock|refresh-aws-ami-lock|server-evidence|write-infra-manifest|inspect-matrix> [flags]",
+		"usage: jcs-offline-replay <prepare|run|preflight|audit-summary|run-suite|cross-arch|verify-evidence|report|sync-toolchain|init-infra-lock|refresh-aws-ami-lock|server-evidence|server-cleanup|write-infra-manifest|inspect-matrix> [flags]",
 		"  prepare --matrix <path> --profile <path> --binary <path> --bundle <path> [--worker <path>]",
 		"  run --matrix <path> --profile <path> --bundle <path> --evidence <path> [--infra-manifest <path>] [--timeout 12h] [--source-git-commit <sha>] [--source-git-tag <tag>]",
 		"  preflight --matrix <path> [--strict] [--no-strict]",
@@ -803,7 +805,8 @@ func usageLines() []string {
 		"  sync-toolchain --lock <path> --output-dir <path> [--env-file <path>] [--host-arch <amd64|arm64>] [--purposes <csv>]",
 		"  init-infra-lock [--infra-dir <path>]",
 		"  refresh-aws-ami-lock [--input <path>] [--output <path>] [--aws-region <region>]",
-		"  server-evidence --tag <tag> [--aws-region <region>] [--ami-lock <path>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>]",
+		"  server-evidence --tag <tag> [--aws-region <region>] [--ami-lock <path>] [--toolchain-lock <path>] [--toolchain-root <path>] [--host-arch <amd64|arm64>] [--output-dir <path>] [--state-mode <local|remote>] [--state-bucket <name>] [--state-region <region>] [--state-lock-table <name>] [--state-key <key>]",
+		"  server-cleanup --run-record <path>",
 		"  write-infra-manifest --output <path> --toolchain-lock <path> --toolchain-root <path> [--host-arch <amd64|arm64>] --infra-repo-url <url> --infra-repo-commit <sha> --provider-engine <name> --provider-version <ver> --provider-lock-sha256 <sha> --cloud-provider <name> --region <name> --x86-instance-type <type> --x86-image-id <id> --arm64-instance-type <type> --arm64-image-id <id>",
 		"  inspect-matrix --matrix <path>",
 	}

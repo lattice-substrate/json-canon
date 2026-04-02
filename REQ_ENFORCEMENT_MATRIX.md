@@ -163,13 +163,13 @@ OFFLINE-TOOLCHAIN-001,policy,L1,offline/replay/toolchain_lock.go,LoadToolchainLo
 OFFLINE-TOOLCHAIN-001,policy,L1,cmd/jcs-offline-replay/toolchain.go,cmdSyncToolchain,36,cmd/jcs-offline-replay/toolchain_test.go,TestCmdSyncToolchainAndCollectEvidence,TEST
 OFFLINE-TOOLCHAIN-001,policy,L1,cmd/jcs-offline-replay/toolchain.go,collectToolchainEvidence,68,cmd/jcs-offline-replay/toolchain_test.go,TestCmdSyncToolchainAndCollectEvidence,TEST
 OFFLINE-TOOLCHAIN-001,policy,L3,conformance/harness_test.go,checkOfflineToolchainLockPresent,2606,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-TOOLCHAIN-001,CONFORMANCE
-OFFLINE-AUTO-001,policy,L1,cmd/jcs-offline-replay/server_evidence.go,runServerEvidence,154,cmd/jcs-offline-replay/server_evidence_test.go,TestBuildRemoteReplaySSMCommandNativeVM,TEST
-OFFLINE-AUTO-001,policy,L3,conformance/harness_test.go,checkOfflineGoNativeServerAutomation,2828,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-AUTO-001,CONFORMANCE
+OFFLINE-AUTO-001,policy,L1,cmd/jcs-offline-replay/server_evidence.go,runServerEvidence,184,cmd/jcs-offline-replay/server_evidence_test.go,TestBuildRemoteReplaySSMCommandNativeVM,TEST
+OFFLINE-AUTO-001,policy,L3,conformance/harness_test.go,checkOfflineGoNativeServerAutomation,2829,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-AUTO-001,CONFORMANCE
 OFFLINE-SERVER-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleInfraBindingRequiresManifest,TEST
 OFFLINE-SERVER-001,policy,L1,offline/replay/evidence.go,ValidateEvidenceBundle,129,offline/replay/evidence_test.go,TestValidateEvidenceBundleNativeHostManifestMismatch,TEST
 OFFLINE-SERVER-001,policy,L1,offline/conformance/harness_test.go,profileRequiresInfraBinding,433,offline/conformance/harness_test.go,TestOfflineServerProfileContract,TEST
-OFFLINE-SERVER-001,policy,L3,conformance/harness_test.go,checkOfflineServerProfileContract,2748,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-SERVER-001,CONFORMANCE
-AWS-RELEASE-001,policy,L3,conformance/harness_test.go,checkOfflineServerProfileContract,2748,conformance/harness_test.go,TestConformanceRequirements/AWS-RELEASE-001,CONFORMANCE
+OFFLINE-SERVER-001,policy,L3,conformance/harness_test.go,checkOfflineServerProfileContract,2749,conformance/harness_test.go,TestConformanceRequirements/OFFLINE-SERVER-001,CONFORMANCE
+AWS-RELEASE-001,policy,L3,conformance/harness_test.go,checkOfflineServerProfileContract,2749,conformance/harness_test.go,TestConformanceRequirements/AWS-RELEASE-001,CONFORMANCE
 AWS-AMI-001,policy,L3,conformance/harness_test.go,checkOfficialAWSHostCatalogContract,2662,conformance/harness_test.go,TestConformanceRequirements/AWS-AMI-001,CONFORMANCE
 AWS-OUTPUT-001,policy,L3,conformance/harness_test.go,checkOfficialAWSInfraOutputContract,2733,conformance/harness_test.go,TestConformanceRequirements/AWS-OUTPUT-001,CONFORMANCE
 AWS-TOOLCHAIN-001,policy,L3,conformance/harness_test.go,checkOfficialAWSToolchainContract,2630,conformance/harness_test.go,TestConformanceRequirements/AWS-TOOLCHAIN-001,CONFORMANCE
