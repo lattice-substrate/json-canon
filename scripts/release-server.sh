@@ -5,12 +5,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-: "${AWS_ACCESS_KEY_ID:?'AWS_ACCESS_KEY_ID is required'}"
-: "${AWS_SECRET_ACCESS_KEY:?'AWS_SECRET_ACCESS_KEY is required'}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 : "${TAG:?'TAG is required (e.g. v0.4.0)'}"
 : "${SSH_KEY_PATH:?'SSH_KEY_PATH must point to a private key file'}"
 : "${SSH_INGRESS_CIDR:?'SSH_INGRESS_CIDR is required (for example 203.0.113.10/32)'}"
+
+AWS_SHARED_CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
+if [[ -z "${AWS_PROFILE:-}" && ! -f "$AWS_SHARED_CREDENTIALS_FILE" ]]; then
+  echo "error: no AWS credentials found; set AWS_PROFILE or provide $AWS_SHARED_CREDENTIALS_FILE" >&2
+  exit 2
+fi
 
 SSH_KEY_PATH="$(cd "$(dirname "$SSH_KEY_PATH")" && pwd)/$(basename "$SSH_KEY_PATH")"
 SSH_PUB_PATH="${SSH_KEY_PATH}.pub"

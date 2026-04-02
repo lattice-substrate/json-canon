@@ -264,14 +264,17 @@ directly.
 **Single command:**
 
 ```bash
-AWS_ACCESS_KEY_ID=<key> \
-AWS_SECRET_ACCESS_KEY=<secret> \
+AWS_PROFILE=<profile> \
 AWS_REGION=us-east-1 \
 TAG=<release-tag> \
 SSH_KEY_PATH=~/.ssh/id_rsa \
 SSH_INGRESS_CIDR=203.0.113.10/32 \
 ./scripts/release-server.sh
 ```
+
+The wrapper uses the standard AWS credential chain. Prefer a named profile in
+`~/.aws/credentials` or short-lived session credentials over exporting raw
+long-lived access keys into the shell environment.
 
 The wrapper stages the pinned toolchain from `offline/toolchain.lock.tsv` and
 then invokes `jcs-offline-replay server-evidence`. That Go-native subcommand
