@@ -6,7 +6,7 @@
 [![Coverage](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml)
 [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.18890836.svg)](https://doi.org/10.5281/zenodo.18890836)
 
-json-canon produces byte-deterministic JSON. Same input, same bytes, across Go versions, architectures, and kernel versions. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written Burger-Dybvig number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. Zero external dependencies. Linux only.
+json-canon produces byte-deterministic JSON. Determinism claims are scoped to the exact source commit, toolchain, matrix, and evidence artifacts recorded for a release; they are not asserted as an unconstrained platform guarantee. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written Burger-Dybvig number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. The canonicalization pipeline avoids `encoding/json` and `strconv.FormatFloat`; release-evidence automation adds pinned toolchain and AWS SDK dependencies. Linux only.
 
 ## Go API
 
@@ -92,7 +92,7 @@ json-canon owns every stage of the pipeline from input bytes to canonical output
 
 **Error taxonomy.** 13 failure classes mapped to 3 exit codes (0, 2, 10). Classified by root cause, not error origin. A missing file path is `CLI_USAGE` (the invocation is wrong), not `INTERNAL_IO` (infrastructure broke). Exit code 2 means "fix your input or invocation." Exit code 10 means "investigate the environment." The class name is the stable contract; the surrounding message text is not. Machines should switch on the class, not parse the message.
 
-**Determinism evidence.** Unit tests prove correctness. They do not prove determinism across environments. CI runs the full test suite on both x86_64 and arm64 on every push and PR, catching architecture-specific regressions before merge. An offline replay harness provides deeper coverage at release time, running the tool across Linux distributions (Debian, Ubuntu, Alpine, Fedora, Rocky, openSUSE) in both container and VM execution modes on both architectures, capturing SHA-256 digests of all output. Releases are gated on byte-identical digests across the full matrix. The evidence bundle (checksummed, machine-readable, committed alongside the source) makes the determinism claim auditable, not just asserted.
+**Determinism evidence.** Unit tests prove correctness. They do not prove determinism across environments. CI runs the vet and unit-test matrix on both x86_64 and arm64 on every push and PR; conformance, race, and fuzz gates currently run on x86_64 in CI. The offline replay harness provides the release-time determinism evidence, running the tool across Linux distributions (Debian, Ubuntu, Alpine, Fedora, Rocky, openSUSE) in both container and VM execution modes on both architectures, capturing SHA-256 digests of all output. Releases are gated on byte-identical digests across the recorded matrix. The evidence bundle makes the determinism claim auditable instead of asserted.
 
 ## Engineering Articles
 

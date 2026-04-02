@@ -33,13 +33,15 @@ const (
 )
 
 var (
-	createStagingBucketFunc   = createStagingBucket
-	deleteStagingBucketFunc   = deleteStagingBucket
-	uploadStagingFileFunc     = uploadStagingFile
-	presignGetObjectURLFunc   = presignGetObjectURL
-	presignPutObjectURLFunc   = presignPutObjectURL
-	downloadStagingObjectFunc = downloadStagingObject
-	runSSMShellScriptFunc     = runSSMShellScript
+	createStagingBucketFunc       = createStagingBucket
+	deleteStagingBucketFunc       = deleteStagingBucket
+	uploadStagingFileFunc         = uploadStagingFile
+	presignGetObjectURLFunc       = presignGetObjectURL
+	presignPutObjectURLFunc       = presignPutObjectURL
+	downloadStagingObjectFunc     = downloadStagingObject
+	runSSMShellScriptFunc         = runSSMShellScript
+	resolveAMIIDForHostFunc       = resolveAMIIDForHost
+	resolveAWSReleaseHostLockFunc = resolveAWSReleaseHostLock
 )
 
 type serverAWSClients struct {
@@ -404,11 +406,11 @@ func cmdRefreshAWSAMILock(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	clients, err := newServerAWSClients(context.Background(), region)
+	clients, err := newServerAWSClientsFunc(context.Background(), region)
 	if err != nil {
 		return err
 	}
-	lock, err := resolveAWSReleaseHostLock(context.Background(), clients, catalog, region)
+	lock, err := resolveAWSReleaseHostLockFunc(context.Background(), clients, catalog, region)
 	if err != nil {
 		return err
 	}
@@ -447,7 +449,7 @@ func resolveAWSReleaseHostLock(ctx context.Context, clients serverAWSClients, ca
 	}
 	items := make([]awsReleaseHostLockItem, 0, len(catalog.Hosts))
 	for _, host := range catalog.Hosts {
-		amiID, err := resolveAMIIDForHost(ctx, clients, host)
+		amiID, err := resolveAMIIDForHostFunc(ctx, clients, host)
 		if err != nil {
 			return nil, err
 		}

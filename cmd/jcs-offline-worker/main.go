@@ -30,9 +30,14 @@ import (
 const maxVectorLineBytes = 4 * 1024 * 1024
 
 const (
-	imdsAddress        = "http://169.254.169.254"
 	imdsTokenTTL       = "21600"
 	imdsRequestTimeout = 2 * time.Second
+)
+
+var (
+	imdsAddress    = "http://169.254.169.254"
+	imdsHTTPClient = http.DefaultClient
+	readFileFunc   = os.ReadFile
 )
 
 type vectorCase struct {
@@ -723,7 +728,7 @@ func wallClockNowUTC() time.Time {
 // discoverCPU reads the CPU model name from /proc/cpuinfo.
 // Returns empty string if the file is absent or the field is not present.
 func discoverCPU() string {
-	data, err := os.ReadFile("/proc/cpuinfo")
+	data, err := readFileFunc("/proc/cpuinfo")
 	if err != nil {
 		return ""
 	}
@@ -743,7 +748,7 @@ func discoverCPU() string {
 // discoverKernel reads the kernel version from /proc/version.
 // Returns empty string if the file is absent or cannot be parsed.
 func discoverKernel() string {
-	data, err := os.ReadFile("/proc/version")
+	data, err := readFileFunc("/proc/version")
 	if err != nil {
 		return ""
 	}
@@ -812,7 +817,7 @@ func fetchIMDSToken() (string, error) {
 		return "", fmt.Errorf("build imds token request: %w", err)
 	}
 	req.Header.Set("X-aws-ec2-metadata-token-ttl-seconds", imdsTokenTTL)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := imdsHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request imds token: %w", err)
 	}
@@ -839,7 +844,7 @@ func fetchIMDSPath(token, rel string) (string, error) {
 		return "", fmt.Errorf("build imds request %s: %w", rel, err)
 	}
 	req.Header.Set("X-aws-ec2-metadata-token", token)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := imdsHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request imds path %s: %w", rel, err)
 	}
@@ -866,7 +871,7 @@ func discoverArchitecture() string {
 }
 
 func readOSRelease() map[string]string {
-	data, err := os.ReadFile("/etc/os-release")
+	data, err := readFileFunc("/etc/os-release")
 	if err != nil {
 		return map[string]string{}
 	}

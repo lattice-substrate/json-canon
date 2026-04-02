@@ -29,6 +29,8 @@ const (
 	resultFail              = "FAIL"
 )
 
+var runGoCommandLoggedFunc = runGoCommandLogged
+
 type runSuiteOptions struct {
 	MatrixPath        string
 	ProfilePath       string
@@ -527,7 +529,7 @@ func buildCanonicalizer(outputPath, matrixArchitecture, version, logPath string,
 	if err != nil {
 		return err
 	}
-	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": goArch},
+	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{"CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": goArch},
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid= -X main.version="+version, "-o", outputPath, "./cmd/jcs-canon")
 }
 
@@ -535,7 +537,7 @@ func buildController(outputPath, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] build jcs-offline-replay"); err != nil {
 		return err
 	}
-	return runGoCommandLogged(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
+	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-replay")
 }
 
@@ -557,7 +559,7 @@ func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSource
 	if strings.TrimSpace(infraManifestPath) != "" {
 		env["JCS_OFFLINE_INFRA_MANIFEST"] = infraManifestPath
 	}
-	return runGoCommandLogged(logPath, stdout, env, "test", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
+	return runGoCommandLoggedFunc(logPath, stdout, env, "test", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
 }
 
 func resolveOfflineSourceIdentity() (string, string, error) {
@@ -587,7 +589,7 @@ func runOfficialVectorGates(outputDir string, stdout io.Writer) error {
 		return err
 	}
 	logPath := filepath.Join(outputDir, "logs", "official-vectors.log")
-	return runGoCommandLogged(logPath, stdout, nil,
+	return runGoCommandLoggedFunc(logPath, stdout, nil,
 		"test", "./conformance", "-run", "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K", "-count=1", "-timeout=30m")
 }
 
@@ -596,7 +598,7 @@ func runOfficialES6100MGate(outputDir string, stdout io.Writer) error {
 		return err
 	}
 	logPath := filepath.Join(outputDir, "logs", "official-es6-100m.log")
-	return runGoCommandLogged(logPath, stdout, map[string]string{"JCS_OFFICIAL_ES6_ENABLE_100M": "1"},
+	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{"JCS_OFFICIAL_ES6_ENABLE_100M": "1"},
 		"test", "./conformance", "-run", "TestOfficialES6CorpusChecksums100M", "-count=1", "-timeout=6h")
 }
 

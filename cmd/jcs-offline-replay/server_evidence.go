@@ -42,6 +42,14 @@ var (
 	provisionServerInfrastructureFunc = provisionServerInfrastructure
 	destroyServerInfrastructureFunc   = destroyServerInfrastructure
 	buildServerRunArtifactsFunc       = buildServerRunArtifacts
+	resolveServerAWSIdentityFunc      = resolveServerAWSIdentity
+	collectToolchainEvidenceFunc      = collectToolchainEvidence
+	writeInfraManifestDocumentFunc    = writeInfraManifestDocument
+	runServerMatrixFunc               = runServerMatrix
+	runServerReleaseGateFunc          = runServerReleaseGate
+	loadInfraManifestFunc             = replay.LoadInfraManifest
+	runReplayMatrixFunc               = replay.RunMatrix
+	writeEvidenceBundleFunc           = replay.WriteEvidence
 )
 
 type serverEvidenceOptions struct {
@@ -316,7 +324,7 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 		_ = cleanupSourceRoot()
 		return nil, err
 	}
-	awsIdentity, err := resolveServerAWSIdentity(ctx, awsClients)
+	awsIdentity, err := resolveServerAWSIdentityFunc(ctx, awsClients)
 	if err != nil {
 		_ = cleanupSourceRoot()
 		return nil, err
@@ -526,7 +534,7 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 	if err := writeLine(stdout, "==> writing infra manifest"); err != nil {
 		return err
 	}
-	tools, err := collectToolchainEvidence(map[string]string{
+	tools, err := collectToolchainEvidenceFunc(map[string]string{
 		"--toolchain-lock": r.opts.toolchainLockPath,
 		"--toolchain-root": r.opts.toolchainRoot,
 		"--host-arch":      r.opts.hostArch,
@@ -536,7 +544,7 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		_ = r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusFailed)
 		return err
 	}
-	if err := writeInfraManifestDocument(r.infraManifestPath, &replay.InfraManifest{
+	if err := writeInfraManifestDocumentFunc(r.infraManifestPath, &replay.InfraManifest{
 		SchemaVersion:      replay.InfraManifestSchemaVersion,
 		GeneratedAtUTC:     manifestNowUTC().Format(time.RFC3339Nano),
 		InfraRepoURL:       serverRepoURL,
@@ -600,7 +608,7 @@ func (r *serverEvidenceRuntime) runReplayForArch(stdout io.Writer, arch string) 
 		return err
 	}
 	cfg := r.serverMatrixRunForArch(arch)
-	if err := runServerMatrix(r.ctx, cfg, stdout); err != nil {
+	if err := runServerMatrixFunc(r.ctx, cfg, stdout); err != nil {
 		_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
 		return err
 	}
@@ -619,7 +627,7 @@ func (r *serverEvidenceRuntime) runReleaseGates(stdout io.Writer) error {
 		if err := writef(stdout, "==> running release gate: %s\n", arch); err != nil {
 			return err
 		}
-		if err := runServerReleaseGate(r.ctx, r.toolchain.goBinary, r.opts.root, r.releaseGateRunForArch(arch)); err != nil {
+		if err := runServerReleaseGateFunc(r.ctx, r.toolchain.goBinary, r.opts.root, r.releaseGateRunForArch(arch)); err != nil {
 			_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
 			return err
 		}
@@ -769,7 +777,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 	if err != nil {
 		return fmt.Errorf("load run inputs: %w", err)
 	}
-	infraManifest, err := replay.LoadInfraManifest(cfg.infraManifestPath)
+	infraManifest, err := loadInfraManifestFunc(cfg.infraManifestPath)
 	if err != nil {
 		return fmt.Errorf("load infra manifest: %w", err)
 	}
@@ -783,7 +791,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, serverRuntimeTimeout)
 	defer cancel()
-	evidence, err := replay.RunMatrix(runCtx, matrix, profile, newServerSSMAdapterFactory(cfg.awsClients, cfg.stagingBucket, cfg.stagedArtifacts, cfg.hosts), replay.RunOptions{
+	evidence, err := runReplayMatrixFunc(runCtx, matrix, profile, newServerSSMAdapterFactory(cfg.awsClients, cfg.stagingBucket, cfg.stagedArtifacts, cfg.hosts), replay.RunOptions{
 		BundlePath:            cfg.bundlePath,
 		BundleSHA256:          bundleSHA,
 		ControlBinarySHA256:   manifest.BinarySHA256,
@@ -804,7 +812,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 	if evidence.ControlBinarySHA != controlBinarySHA {
 		return fmt.Errorf("evidence control binary sha mismatch: got=%s want=%s", evidence.ControlBinarySHA, controlBinarySHA)
 	}
-	if err := replay.WriteEvidence(cfg.evidencePath, evidence); err != nil {
+	if err := writeEvidenceBundleFunc(cfg.evidencePath, evidence); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
 	return writeRunSummary(stdout, cfg.evidencePath, evidence)
