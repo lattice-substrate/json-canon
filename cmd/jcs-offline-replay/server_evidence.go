@@ -1033,9 +1033,11 @@ func (a *serverRemoteAdapter) resolveContainerIdentity(ctx context.Context, node
 }
 
 func buildRemoteReplayCommand(node replay.NodeSpec, replayIndex int, remoteTmp, schemaVersion, uid, gid string) (string, error) {
+	workerBundlePath := remoteTmp + "/bundle.tgz"
+	workerEvidencePath := remoteTmp + "/evidence.json"
 	workerArgs := []string{
-		"--bundle", shellQuote(remoteTmp + "/bundle.tgz"),
-		"--evidence", shellQuote(remoteTmp + "/evidence.json"),
+		"--bundle", shellQuote(workerBundlePath),
+		"--evidence", shellQuote(workerEvidencePath),
 		"--node-id", shellQuote(node.ID),
 		"--mode", shellQuote(string(node.Mode)),
 		"--distro", shellQuote(node.Distro),
@@ -1060,7 +1062,11 @@ func buildRemoteReplayCommand(node replay.NodeSpec, replayIndex int, remoteTmp, 
 		return "", fmt.Errorf("node %s remote uid/gid is empty", node.ID)
 	}
 	containerName := fmt.Sprintf("jcs-replay-%s-%03d", node.ID, replayIndex)
+	containerBundlePath := "/work/bundle.tgz"
+	containerEvidencePath := "/work/out/evidence.json"
 	containerWorkerArgs := append([]string(nil), workerArgs...)
+	containerWorkerArgs[1] = shellQuote(containerBundlePath)
+	containerWorkerArgs[3] = shellQuote(containerEvidencePath)
 	containerWorkerArgs = append(containerWorkerArgs, "--image-digest", shellQuote(image))
 	return strings.Join([]string{
 		"chmod +x " + shellQuote(remoteTmp+"/jcs-offline-worker"),

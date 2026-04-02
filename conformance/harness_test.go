@@ -2196,6 +2196,36 @@ func TestNolintInventoryArtifact(t *testing.T) {
 	checkNolintInventoryArtifact(t, h)
 }
 
+func TestCollectNolintInventorySkipsGeneratedRuns(t *testing.T) {
+	root := t.TempDir()
+	livePath := filepath.Join(root, "pkg", "live.go")
+	if err := os.MkdirAll(filepath.Dir(livePath), 0o750); err != nil {
+		t.Fatalf("mkdir live path: %v", err)
+	}
+	liveSource := "package pkg\n\n//nolint:gosec // REQ:TEST-NOLINT-001 live source fixture\nfunc live() {}\n"
+	if err := os.WriteFile(livePath, []byte(liveSource), 0o600); err != nil {
+		t.Fatalf("write live source: %v", err)
+	}
+	runPath := filepath.Join(root, "offline", "runs", "releases", "fixture", "toolchain", ".extracted", "go", "src", "huge.go")
+	if err := os.MkdirAll(filepath.Dir(runPath), 0o750); err != nil {
+		t.Fatalf("mkdir generated path: %v", err)
+	}
+	generatedSource := "package generated\n\n" + strings.Repeat("A", 1024*1024)
+	if err := os.WriteFile(runPath, []byte(generatedSource), 0o600); err != nil {
+		t.Fatalf("write generated source: %v", err)
+	}
+	records, err := collectNolintInventory(root)
+	if err != nil {
+		t.Fatalf("collectNolintInventory: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 nolint record, got %d", len(records))
+	}
+	if records[0].Path != "pkg/live.go" {
+		t.Fatalf("unexpected nolint path %q", records[0].Path)
+	}
+}
+
 func checkNolintInventoryArtifact(t *testing.T, h *harness) {
 	t.Helper()
 	records, err := collectNolintInventory(h.root)
@@ -2228,7 +2258,7 @@ func collectNolintInventory(root string) ([]nolintDirectiveRecord, error) {
 			return walkErr
 		}
 		if d.IsDir() {
-			return skipInventoryDir(path)
+			return skipInventoryDir(root, path)
 		}
 		if filepath.Ext(path) != ".go" {
 			return nil
@@ -2252,9 +2282,19 @@ func collectNolintInventory(root string) ([]nolintDirectiveRecord, error) {
 	return records, nil
 }
 
-func skipInventoryDir(path string) error {
+func skipInventoryDir(root, path string) error {
+	rel, err := filepath.Rel(root, path)
+	if err == nil {
+		rel = filepath.ToSlash(rel)
+		switch {
+		case rel == "offline/runs":
+			return filepath.SkipDir
+		case strings.HasPrefix(rel, "offline/runs/"):
+			return filepath.SkipDir
+		}
+	}
 	switch filepath.Base(path) {
-	case ".git", "vendor", ".tmp":
+	case ".git", "vendor", ".tmp", ".extracted":
 		return filepath.SkipDir
 	default:
 		return nil

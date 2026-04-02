@@ -64,6 +64,8 @@ func TestBuildRemoteReplayCommandContainerUsesSudoDocker(t *testing.T) {
 		"sudo docker run",
 		"--image-digest",
 		"/work/jcs-offline-worker",
+		"--bundle '/work/bundle.tgz'",
+		"--evidence '/work/out/evidence.json'",
 		"--schema-version",
 		replay.EvidenceSchemaVersionV2,
 	} {
