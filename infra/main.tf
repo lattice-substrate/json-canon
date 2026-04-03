@@ -90,14 +90,6 @@ resource "aws_security_group" "replay_instance" {
   vpc_id      = aws_vpc.replay.id
 
   egress {
-    description     = "HTTPS to interface endpoints"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.vpc_endpoint.id]
-  }
-
-  egress {
     description     = "HTTPS to S3 gateway endpoint"
     from_port       = 443
     to_port         = 443
@@ -116,14 +108,6 @@ resource "aws_security_group" "vpc_endpoint" {
   description = "Allow replay hosts to reach AWS private interface endpoints."
   vpc_id      = aws_vpc.replay.id
 
-  ingress {
-    description     = "Replay hosts to AWS endpoints"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.replay_instance.id]
-  }
-
   egress {
     description = "Endpoint response traffic inside replay VPC"
     from_port   = 0
@@ -136,6 +120,26 @@ resource "aws_security_group" "vpc_endpoint" {
     Name    = "jcs-replay-endpoint-sg"
     Purpose = "jcs-official-aws-release"
   }
+}
+
+resource "aws_security_group_rule" "replay_instance_to_vpc_endpoint_https" {
+  type                     = "egress"
+  description              = "HTTPS to interface endpoints"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.replay_instance.id
+  source_security_group_id = aws_security_group.vpc_endpoint.id
+}
+
+resource "aws_security_group_rule" "vpc_endpoint_from_replay_instance_https" {
+  type                     = "ingress"
+  description              = "Replay hosts to AWS endpoints"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.vpc_endpoint.id
+  source_security_group_id = aws_security_group.replay_instance.id
 }
 
 resource "aws_vpc_endpoint" "ssm" {
