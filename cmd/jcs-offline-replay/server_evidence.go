@@ -860,6 +860,7 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 		ControlBinarySHA256:   manifest.BinarySHA256,
 		MatrixSHA256:          matrixSHA,
 		ProfileSHA256:         profileSHA,
+		VectorSetSHA256:       manifest.VectorSetSHA256,
 		SourceGitCommit:       cfg.sourceGitCommit,
 		SourceGitTag:          cfg.sourceGitTag,
 		Orchestrator:          "jcs-offline-replay server-evidence",

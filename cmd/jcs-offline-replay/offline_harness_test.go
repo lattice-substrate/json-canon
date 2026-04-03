@@ -64,8 +64,10 @@ func TestBuildAuditSummary(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
+		VectorSetSHA256:    digest,
 		ProfileName:        "maximal-offline",
 		Architecture:       "x86_64",
+		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
 		RequiredSuites:     []string{"canonical-byte-stability"},
 		AggregateCanonical: digest,
@@ -95,8 +97,10 @@ func TestBuildAuditSummaryDetectsParityFailure(t *testing.T) {
 	digestB := strings.Repeat("b", 64)
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
+		VectorSetSHA256:    digestA,
 		ProfileName:        "maximal-offline",
 		Architecture:       "x86_64",
+		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
 		RequiredSuites:     []string{"canonical-byte-stability"},
 		AggregateCanonical: digestA,
@@ -119,8 +123,8 @@ func TestBuildAuditSummaryDetectsParityFailure(t *testing.T) {
 
 func TestBuildCrossArchReport(t *testing.T) {
 	digest := strings.Repeat("a", 64)
-	x86 := &replay.EvidenceBundle{AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
-	arm := &replay.EvidenceBundle{AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
+	x86 := &replay.EvidenceBundle{VectorSetSHA256: digest, AggregateMethod: replay.ReplayAggregateMethod, AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
+	arm := &replay.EvidenceBundle{VectorSetSHA256: digest, AggregateMethod: replay.ReplayAggregateMethod, AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
 	report := buildCrossArchReport(x86, arm, "x86.json", "arm.json", time.Date(2026, 2, 22, 0, 0, 0, 0, time.UTC))
 	if report.Result != "PASS" {
 		t.Fatalf("result=%s want PASS", report.Result)
@@ -200,8 +204,10 @@ func TestBuildAuditSummary_RepoRelativePaths(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
+		VectorSetSHA256:    digest,
 		ProfileName:        "maximal-offline",
 		Architecture:       "x86_64",
+		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
 		RequiredSuites:     []string{"canonical-byte-stability"},
 		AggregateCanonical: digest,
@@ -224,8 +230,8 @@ func TestBuildAuditSummary_RepoRelativePaths(t *testing.T) {
 
 func TestBuildCrossArchReport_RepoRelativePaths(t *testing.T) {
 	digest := strings.Repeat("a", 64)
-	x86 := &replay.EvidenceBundle{AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
-	arm := &replay.EvidenceBundle{AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
+	x86 := &replay.EvidenceBundle{VectorSetSHA256: digest, AggregateMethod: replay.ReplayAggregateMethod, AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
+	arm := &replay.EvidenceBundle{VectorSetSHA256: digest, AggregateMethod: replay.ReplayAggregateMethod, AggregateCanonical: digest, AggregateVerify: digest, AggregateClass: digest, AggregateExitCode: digest}
 	x86Rel := "offline/runs/v1/x86_64/offline-evidence.json"
 	armRel := "offline/runs/v1/arm64/offline-evidence.json"
 	report := buildCrossArchReport(x86, arm, x86Rel, armRel, time.Date(2026, 2, 27, 0, 0, 0, 0, time.UTC))

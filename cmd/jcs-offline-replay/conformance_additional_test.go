@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -408,6 +411,7 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fileSHA256(manifest): %v", err)
 	}
+	aggregateDigest := governedReplayAggregateDigest("aws-node", 1, strings.Repeat("f", 64))
 
 	if err := replay.WriteEvidence(evidencePath, &replay.EvidenceBundle{
 		SchemaVersion:       replay.EvidenceSchemaVersion,
@@ -415,21 +419,23 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 		ControlBinarySHA:    controlSHA,
 		MatrixSHA256:        matrixSHA,
 		ProfileSHA256:       profileSHA,
+		VectorSetSHA256:     strings.Repeat("e", 64),
 		SourceGitCommit:     strings.Repeat("a", 40),
 		SourceGitTag:        "v1.2.3-test",
 		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
 		Orchestrator:        "jcs-offline-replay server-evidence",
 		ProfileName:         "aws-native-release-linux-" + matrixArch,
 		Architecture:        matrixArch,
+		AggregateMethod:     replay.ReplayAggregateMethod,
 		RequiredSuites:      []string{"infra-substrate-binding"},
 		HardReleaseGate:     true,
 		InfraManifestSHA256: manifestSHA,
 		InfraRepoURL:        serverRepoURL,
 		InfraRepoCommit:     strings.Repeat("a", 40),
-		AggregateCanonical:  strings.Repeat("f", 64),
-		AggregateVerify:     strings.Repeat("f", 64),
-		AggregateClass:      strings.Repeat("f", 64),
-		AggregateExitCode:   strings.Repeat("f", 64),
+		AggregateCanonical:  aggregateDigest,
+		AggregateVerify:     aggregateDigest,
+		AggregateClass:      aggregateDigest,
+		AggregateExitCode:   aggregateDigest,
 		NodeReplays: []replay.NodeRunEvidence{{
 			NodeID:                     "aws-node",
 			Mode:                       "vm",
@@ -469,6 +475,11 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 			t.Fatalf("unexpected stdout: %q", stdout.String())
 		}
 	})
+}
+
+func governedReplayAggregateDigest(nodeID string, replayIndex int, digest string) string {
+	sum := sha256.Sum256([]byte(nodeID + "\x1f" + fmt.Sprintf("%03d", replayIndex) + "\x1f" + digest + "\n"))
+	return hex.EncodeToString(sum[:])
 }
 
 func TestServerEvidenceCommandWrappers(t *testing.T) {

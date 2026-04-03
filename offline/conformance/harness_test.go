@@ -356,6 +356,7 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 		ExpectedControlBinarySHA256: mustFileSHA256(t, controlBinaryPath),
 		ExpectedMatrixSHA256:        mustFileSHA256(t, matrixPath),
 		ExpectedProfileSHA256:       mustFileSHA256(t, profilePath),
+		ExpectedVectorSetSHA256:     evidence.VectorSetSHA256,
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
 		ExpectedSourceGitTag:        lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),

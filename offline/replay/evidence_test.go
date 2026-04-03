@@ -1,8 +1,12 @@
 package replay_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -41,9 +45,11 @@ func TestValidateEvidenceBundleRejectsTamperedMetadata(t *testing.T) {
 		{name: "control_binary_sha256", tamper: func(e *replay.EvidenceBundle) { e.ControlBinarySHA = strings.Repeat("b", 64) }, want: "control_binary_sha256 mismatch"},
 		{name: "matrix_sha256", tamper: func(e *replay.EvidenceBundle) { e.MatrixSHA256 = strings.Repeat("b", 64) }, want: "matrix_sha256 mismatch"},
 		{name: "profile_sha256", tamper: func(e *replay.EvidenceBundle) { e.ProfileSHA256 = strings.Repeat("b", 64) }, want: "profile_sha256 mismatch"},
+		{name: "vector_set_sha256", tamper: func(e *replay.EvidenceBundle) { e.VectorSetSHA256 = strings.Repeat("b", 64) }, want: "vector_set_sha256 mismatch"},
 		{name: "architecture", tamper: func(e *replay.EvidenceBundle) { e.Architecture = "arm64" }, want: "architecture mismatch"},
 		{name: "source_git_commit", tamper: func(e *replay.EvidenceBundle) { e.SourceGitCommit = strings.Repeat("b", 40) }, want: "source_git_commit mismatch"},
 		{name: "source_git_tag", tamper: func(e *replay.EvidenceBundle) { e.SourceGitTag = "v0.0.0-wrong" }, want: "source_git_tag mismatch"},
+		{name: "aggregate_method", tamper: func(e *replay.EvidenceBundle) { e.AggregateMethod = "legacy" }, want: "aggregate_method mismatch"},
 	}
 
 	for _, tc := range tests {
@@ -176,7 +182,7 @@ func TestValidateEvidenceBundleNativeHostManifestMismatch(t *testing.T) {
 func TestLoadEvidenceRejectsUnknownFieldsAndTrailingJSON(t *testing.T) {
 	dir := t.TempDir()
 	unknownPath := filepath.Join(dir, "unknown.json")
-	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_name":"max","architecture":"x86_64","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
+	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","vector_set_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_name":"max","architecture":"x86_64","aggregate_method":"replay-aggregate.v1","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
 	if err := os.WriteFile(unknownPath, []byte(unknownDoc), 0o600); err != nil {
 		t.Fatalf("write unknown fixture: %v", err)
 	}
@@ -219,18 +225,16 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		ControlBinarySHA:   digest,
 		MatrixSHA256:       digest,
 		ProfileSHA256:      digest,
+		VectorSetSHA256:    digest,
 		SourceGitCommit:    sourceCommit,
 		SourceGitTag:       sourceTag,
 		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
 		Orchestrator:       "jcs-offline-replay",
 		ProfileName:        "max",
 		Architecture:       "x86_64",
+		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
 		RequiredSuites:     []string{"canonical-byte-stability"},
-		AggregateCanonical: digest,
-		AggregateVerify:    digest,
-		AggregateClass:     digest,
-		AggregateExitCode:  digest,
 		NodeReplays: []replay.NodeRunEvidence{
 			mkRun("c1", "container", "debian", "host", 1, digest),
 			mkRun("c1", "container", "debian", "host", 2, digest),
@@ -238,11 +242,16 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 			mkRun("v1", "vm", "ubuntu", "ga", 2, digest),
 		},
 	}
+	e.AggregateCanonical = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.CanonicalSHA256 })
+	e.AggregateVerify = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.VerifySHA256 })
+	e.AggregateClass = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.FailureClassSHA256 })
+	e.AggregateExitCode = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.ExitCodeSHA256 })
 	opts := replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        digest,
 		ExpectedControlBinarySHA256: digest,
 		ExpectedMatrixSHA256:        digest,
 		ExpectedProfileSHA256:       digest,
+		ExpectedVectorSetSHA256:     digest,
 		ExpectedArchitecture:        "x86_64",
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,
@@ -308,31 +317,34 @@ func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		ControlBinarySHA:    digest,
 		MatrixSHA256:        digest,
 		ProfileSHA256:       digest,
+		VectorSetSHA256:     digest,
 		SourceGitCommit:     sourceCommit,
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
 		Orchestrator:        "jcs-offline-replay server-evidence",
 		ProfileName:         profile.Name,
 		Architecture:        "x86_64",
+		AggregateMethod:     replay.ReplayAggregateMethod,
 		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
 		HardReleaseGate:     true,
 		InfraManifestSHA256: strings.Repeat("c", 64),
 		InfraRepoURL:        manifest.InfraRepoURL,
 		InfraRepoCommit:     manifest.InfraRepoCommit,
-		AggregateCanonical:  digest,
-		AggregateVerify:     digest,
-		AggregateClass:      digest,
-		AggregateExitCode:   digest,
 		NodeReplays: []replay.NodeRunEvidence{
 			nativeRun("aws-native-ubuntu", 1, digest),
 			nativeRun("aws-native-ubuntu", 2, digest),
 		},
 	}
+	e.AggregateCanonical = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.CanonicalSHA256 })
+	e.AggregateVerify = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.VerifySHA256 })
+	e.AggregateClass = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.FailureClassSHA256 })
+	e.AggregateExitCode = testReplayAggregateDigest(e.NodeReplays, func(run replay.NodeRunEvidence) string { return run.ExitCodeSHA256 })
 	opts := replay.EvidenceValidationOptions{
 		ExpectedBundleSHA256:        digest,
 		ExpectedControlBinarySHA256: digest,
 		ExpectedMatrixSHA256:        digest,
 		ExpectedProfileSHA256:       digest,
+		ExpectedVectorSetSHA256:     digest,
 		ExpectedArchitecture:        "x86_64",
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,
@@ -477,4 +489,130 @@ func nativeRun(nodeID string, replayIndex int, digest string) replay.NodeRunEvid
 	run.AWSImageID = "ami-0abc1234"
 	run.TransportAttestationSHA256 = strings.Repeat("9", 64)
 	return run
+}
+
+func testReplayAggregateDigest(nodeReplays []replay.NodeRunEvidence, selectDigest func(replay.NodeRunEvidence) string) string {
+	sorted := append([]replay.NodeRunEvidence(nil), nodeReplays...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].NodeID == sorted[j].NodeID {
+			return sorted[i].ReplayIndex < sorted[j].ReplayIndex
+		}
+		return sorted[i].NodeID < sorted[j].NodeID
+	})
+	if len(sorted) >= 0 {
+		var governed strings.Builder
+		for _, run := range sorted {
+			governed.WriteString(run.NodeID)
+			governed.WriteByte('\x1f')
+			governed.WriteString(fmt.Sprintf("%03d", run.ReplayIndex))
+			governed.WriteByte('\x1f')
+			governed.WriteString(selectDigest(run))
+			governed.WriteByte('\n')
+		}
+		sum := sha256.Sum256([]byte(governed.String()))
+		return hex.EncodeToString(sum[:])
+	}
+	var b strings.Builder
+	for _, run := range sorted {
+		b.WriteString(run.NodeID)
+		b.WriteByte('\x1f')
+		if run.ReplayIndex < 10 {
+			b.WriteString("00")
+		} else if run.ReplayIndex < 100 {
+			b.WriteByte('0')
+		}
+		b.WriteString(strings.TrimSpace(strings.TrimLeft(strings.ReplaceAll(strings.Repeat("0", 0), " ", ""), "")))
+		b.WriteString(strings.TrimLeft(strings.Repeat("0", 0), "0"))
+		b.WriteString(strings.TrimSpace(strings.TrimPrefix(strings.Repeat("0", 0), "")))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteString(strings.TrimPrefix(strings.TrimSuffix("", ""), ""))
+		b.WriteString(strings.TrimSpace(""))
+		b.WriteByte('\x1f')
+		b.WriteString(selectDigest(run))
+		b.WriteByte('\n')
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }

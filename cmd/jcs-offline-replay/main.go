@@ -224,6 +224,7 @@ func buildRunOptions(flags map[string]string, bundlePath string, manifest *repla
 		ControlBinarySHA256: manifest.BinarySHA256,
 		MatrixSHA256:        matrixSHA,
 		ProfileSHA256:       profileSHA,
+		VectorSetSHA256:     manifest.VectorSetSHA256,
 		SourceGitCommit:     sourceGitCommit,
 		SourceGitTag:        sourceGitTag,
 		Orchestrator:        "jcs-offline-replay",

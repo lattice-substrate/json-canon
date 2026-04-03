@@ -27,6 +27,7 @@ type RunOptions struct {
 	ControlBinarySHA256   string
 	MatrixSHA256          string
 	ProfileSHA256         string
+	VectorSetSHA256       string
 	SourceGitCommit       string
 	SourceGitTag          string
 	Orchestrator          string
@@ -96,12 +97,14 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ControlBinarySHA:    opts.ControlBinarySHA256,
 		MatrixSHA256:        opts.MatrixSHA256,
 		ProfileSHA256:       opts.ProfileSHA256,
+		VectorSetSHA256:     opts.VectorSetSHA256,
 		SourceGitCommit:     sourceCommit,
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      now().UTC().Format(time.RFC3339Nano),
 		Orchestrator:        opts.Orchestrator,
 		ProfileName:         profile.Name,
 		Architecture:        matrix.Architecture,
+		AggregateMethod:     ReplayAggregateMethod,
 		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
 		HardReleaseGate:     profile.HardReleaseGate,
 		InfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
@@ -168,17 +171,25 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		return bundle.NodeReplays[i].NodeID < bundle.NodeReplays[j].NodeID
 	})
 
-	base := bundle.NodeReplays[0]
-	bundle.AggregateCanonical = base.CanonicalSHA256
-	bundle.AggregateVerify = base.VerifySHA256
-	bundle.AggregateClass = base.FailureClassSHA256
-	bundle.AggregateExitCode = base.ExitCodeSHA256
+	bundle.AggregateCanonical = computeReplayAggregateDigest(bundle.NodeReplays, func(run NodeRunEvidence) string {
+		return run.CanonicalSHA256
+	})
+	bundle.AggregateVerify = computeReplayAggregateDigest(bundle.NodeReplays, func(run NodeRunEvidence) string {
+		return run.VerifySHA256
+	})
+	bundle.AggregateClass = computeReplayAggregateDigest(bundle.NodeReplays, func(run NodeRunEvidence) string {
+		return run.FailureClassSHA256
+	})
+	bundle.AggregateExitCode = computeReplayAggregateDigest(bundle.NodeReplays, func(run NodeRunEvidence) string {
+		return run.ExitCodeSHA256
+	})
 
 	if err := ValidateEvidenceBundle(bundle, matrix, profile, EvidenceValidationOptions{
 		ExpectedBundleSHA256:        opts.BundleSHA256,
 		ExpectedControlBinarySHA256: opts.ControlBinarySHA256,
 		ExpectedMatrixSHA256:        opts.MatrixSHA256,
 		ExpectedProfileSHA256:       opts.ProfileSHA256,
+		ExpectedVectorSetSHA256:     opts.VectorSetSHA256,
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,

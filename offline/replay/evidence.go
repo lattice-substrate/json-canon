@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,10 @@ import (
 // EvidenceSchemaVersion is the stable schema identifier for evidence bundles.
 const EvidenceSchemaVersion = "evidence.v1"
 
+// ReplayAggregateMethod identifies the governed replay aggregate construction used
+// by evidence.v1 aggregate_* fields.
+const ReplayAggregateMethod = "replay-aggregate.v1"
+
 var errNilManifestIndex = errors.New("infra manifest not provided")
 
 // EvidenceBundle is the machine-consumed replay output artifact.
@@ -22,12 +27,14 @@ type EvidenceBundle struct {
 	ControlBinarySHA string   `json:"control_binary_sha256"`
 	MatrixSHA256     string   `json:"matrix_sha256"`
 	ProfileSHA256    string   `json:"profile_sha256"`
+	VectorSetSHA256  string   `json:"vector_set_sha256"`
 	SourceGitCommit  string   `json:"source_git_commit"`
 	SourceGitTag     string   `json:"source_git_tag"`
 	GeneratedAtUTC   string   `json:"generated_at_utc"`
 	Orchestrator     string   `json:"orchestrator"`
 	ProfileName      string   `json:"profile_name"`
 	Architecture     string   `json:"architecture"`
+	AggregateMethod  string   `json:"aggregate_method"`
 	RequiredSuites   []string `json:"required_suites"`
 	HardReleaseGate  bool     `json:"hard_release_gate"`
 	// Infra-manifest binding for infra-backed/native-host evidence flows.
@@ -78,6 +85,7 @@ type EvidenceValidationOptions struct {
 	ExpectedControlBinarySHA256 string
 	ExpectedMatrixSHA256        string
 	ExpectedProfileSHA256       string
+	ExpectedVectorSetSHA256     string
 	ExpectedArchitecture        string
 	ExpectedSourceGitCommit     string
 	ExpectedSourceGitTag        string
@@ -141,14 +149,15 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	for _, field := range []struct {
 		name  string
 		value string
-	}{
-		{name: "bundle_sha256", value: e.BundleSHA256},
-		{name: "control_binary_sha256", value: e.ControlBinarySHA},
-		{name: "matrix_sha256", value: e.MatrixSHA256},
-		{name: "profile_sha256", value: e.ProfileSHA256},
-		{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
-		{name: "aggregate_verify_sha256", value: e.AggregateVerify},
-		{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
+		}{
+			{name: "bundle_sha256", value: e.BundleSHA256},
+			{name: "control_binary_sha256", value: e.ControlBinarySHA},
+			{name: "matrix_sha256", value: e.MatrixSHA256},
+			{name: "profile_sha256", value: e.ProfileSHA256},
+			{name: "vector_set_sha256", value: e.VectorSetSHA256},
+			{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
+			{name: "aggregate_verify_sha256", value: e.AggregateVerify},
+			{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
 		{name: "aggregate_exit_code_sha256", value: e.AggregateExitCode},
 	} {
 		if err := validateSHA256Token(field.name, field.value); err != nil {
@@ -180,6 +189,9 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	if opts.ExpectedProfileSHA256 != "" && e.ProfileSHA256 != opts.ExpectedProfileSHA256 {
 		return fmt.Errorf("profile_sha256 mismatch: evidence=%q expected=%q", e.ProfileSHA256, opts.ExpectedProfileSHA256)
 	}
+	if opts.ExpectedVectorSetSHA256 != "" && e.VectorSetSHA256 != opts.ExpectedVectorSetSHA256 {
+		return fmt.Errorf("vector_set_sha256 mismatch: evidence=%q expected=%q", e.VectorSetSHA256, opts.ExpectedVectorSetSHA256)
+	}
 	if expectedCommit := strings.TrimSpace(opts.ExpectedSourceGitCommit); expectedCommit != "" &&
 		e.SourceGitCommit != expectedCommit {
 		return fmt.Errorf("source_git_commit mismatch: evidence=%q expected=%q", e.SourceGitCommit, expectedCommit)
@@ -187,6 +199,9 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	if expectedTag := strings.TrimSpace(opts.ExpectedSourceGitTag); expectedTag != "" &&
 		e.SourceGitTag != expectedTag {
 		return fmt.Errorf("source_git_tag mismatch: evidence=%q expected=%q", e.SourceGitTag, expectedTag)
+	}
+	if e.AggregateMethod != ReplayAggregateMethod {
+		return fmt.Errorf("aggregate_method mismatch: evidence=%q expected=%q", e.AggregateMethod, ReplayAggregateMethod)
 	}
 	if err := validateEvidenceInfraFields(e, opts, requiresInfraBinding); err != nil {
 		return err
@@ -281,7 +296,6 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		byNode[r.NodeID] = append(byNode[r.NodeID], r)
 	}
 
-	var baseline *NodeRunEvidence
 	for _, id := range requiredNodes {
 		runs := byNode[id]
 		wantReplays := requiredReplayCount(matrixByID[id], p)
@@ -289,46 +303,30 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 			return fmt.Errorf("node %s has %d replays, want at least %d", id, len(runs), wantReplays)
 		}
 		seenReplay := make(map[int]struct{}, len(runs))
-		for _, run := range runs {
-			seenReplay[run.ReplayIndex] = struct{}{}
-			if baseline == nil {
-				r := run
-				baseline = &r
-				continue
+			for _, run := range runs {
+				seenReplay[run.ReplayIndex] = struct{}{}
 			}
-			if run.CanonicalSHA256 != baseline.CanonicalSHA256 {
-				return fmt.Errorf("canonical digest drift at node %s replay %d", run.NodeID, run.ReplayIndex)
-			}
-			if run.VerifySHA256 != baseline.VerifySHA256 {
-				return fmt.Errorf("verify digest drift at node %s replay %d", run.NodeID, run.ReplayIndex)
-			}
-			if run.FailureClassSHA256 != baseline.FailureClassSHA256 {
-				return fmt.Errorf("failure-class digest drift at node %s replay %d", run.NodeID, run.ReplayIndex)
-			}
-			if run.ExitCodeSHA256 != baseline.ExitCodeSHA256 {
-				return fmt.Errorf("exit-code digest drift at node %s replay %d", run.NodeID, run.ReplayIndex)
-			}
-		}
-		for i := 1; i <= wantReplays; i++ {
-			if _, ok := seenReplay[i]; !ok {
+			for i := 1; i <= wantReplays; i++ {
+				if _, ok := seenReplay[i]; !ok {
 				return fmt.Errorf("node %s missing replay index %d", id, i)
 			}
 		}
 	}
 
-	if baseline == nil {
-		return fmt.Errorf("no baseline replay digest found")
-	}
-	if e.AggregateCanonical != baseline.CanonicalSHA256 {
+	recomputedCanonical := computeReplayAggregateDigest(e.NodeReplays, func(run NodeRunEvidence) string { return run.CanonicalSHA256 })
+	recomputedVerify := computeReplayAggregateDigest(e.NodeReplays, func(run NodeRunEvidence) string { return run.VerifySHA256 })
+	recomputedClass := computeReplayAggregateDigest(e.NodeReplays, func(run NodeRunEvidence) string { return run.FailureClassSHA256 })
+	recomputedExitCode := computeReplayAggregateDigest(e.NodeReplays, func(run NodeRunEvidence) string { return run.ExitCodeSHA256 })
+	if e.AggregateCanonical != recomputedCanonical {
 		return fmt.Errorf("aggregate canonical digest mismatch")
 	}
-	if e.AggregateVerify != baseline.VerifySHA256 {
+	if e.AggregateVerify != recomputedVerify {
 		return fmt.Errorf("aggregate verify digest mismatch")
 	}
-	if e.AggregateClass != baseline.FailureClassSHA256 {
+	if e.AggregateClass != recomputedClass {
 		return fmt.Errorf("aggregate failure-class digest mismatch")
 	}
-	if e.AggregateExitCode != baseline.ExitCodeSHA256 {
+	if e.AggregateExitCode != recomputedExitCode {
 		return fmt.Errorf("aggregate exit-code digest mismatch")
 	}
 
@@ -341,6 +339,27 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 
 	return nil
+}
+
+func computeReplayAggregateDigest(nodeReplays []NodeRunEvidence, selectDigest func(NodeRunEvidence) string) string {
+	sorted := append([]NodeRunEvidence(nil), nodeReplays...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].NodeID == sorted[j].NodeID {
+			return sorted[i].ReplayIndex < sorted[j].ReplayIndex
+		}
+		return sorted[i].NodeID < sorted[j].NodeID
+	})
+	var b strings.Builder
+	for _, run := range sorted {
+		b.WriteString(run.NodeID)
+		b.WriteByte('\x1f')
+		b.WriteString(fmt.Sprintf("%03d", run.ReplayIndex))
+		b.WriteByte('\x1f')
+		b.WriteString(selectDigest(run))
+		b.WriteByte('\n')
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])
 }
 
 //nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 infra binding validation keeps each mismatch explicit for auditability.

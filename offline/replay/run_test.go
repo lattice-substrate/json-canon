@@ -71,6 +71,7 @@ func TestRunMatrix(t *testing.T) {
 		ControlBinarySHA256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
 		MatrixSHA256:        "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 		ProfileSHA256:       "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		VectorSetSHA256:     "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		SourceGitCommit:     strings.Repeat("f", 40),
 		SourceGitTag:        "v0.0.0-dev",
 		Now: func() time.Time {
