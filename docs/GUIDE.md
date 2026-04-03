@@ -260,7 +260,7 @@ Produce a deterministic hash from arbitrary JSON:
 | Capability | json-canon | Cyberphone Go | encoding/json |
 |------------|-----------|---------------|---------------|
 | RFC 8785 canonical output | Yes | Yes | No |
-| ECMA-262 Number::toString | Yes (Schubfach) | Yes (strconv-based) | No |
+| ECMA-262 Number::toString | Yes (Burger-Dybvig) | Yes (strconv-based) | No |
 | UTF-16 code-unit key sort | Yes | Yes | No (byte order) |
 | Strict RFC 8259 grammar | Yes | Partial | Partial |
 | I-JSON constraints (RFC 7493) | Yes | No | No |
