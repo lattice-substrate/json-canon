@@ -65,7 +65,8 @@ func TestBuildAuditSummary(t *testing.T) {
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
 		VectorSetSHA256:    digest,
-		ProfileName:        "maximal-offline",
+		ProfileID:          "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1",
+		ProfileName:        "base-conformance",
 		Architecture:       "x86_64",
 		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
@@ -98,7 +99,8 @@ func TestBuildAuditSummaryDetectsParityFailure(t *testing.T) {
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
 		VectorSetSHA256:    digestA,
-		ProfileName:        "maximal-offline",
+		ProfileID:          "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1",
+		ProfileName:        "base-conformance",
 		Architecture:       "x86_64",
 		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
@@ -205,7 +207,8 @@ func TestBuildAuditSummary_RepoRelativePaths(t *testing.T) {
 	evidence := &replay.EvidenceBundle{
 		SchemaVersion:      replay.EvidenceSchemaVersion,
 		VectorSetSHA256:    digest,
-		ProfileName:        "maximal-offline",
+		ProfileID:          "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1",
+		ProfileName:        "base-conformance",
 		Architecture:       "x86_64",
 		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,

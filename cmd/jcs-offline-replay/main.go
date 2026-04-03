@@ -181,6 +181,7 @@ func cmdRun(flags map[string]string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	runOpts.AttestationOutputRoot = filepath.Join(filepath.Dir(evidencePath), "attestations")
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	evidence, err := replay.RunMatrix(ctx, matrix, profile, adapterFactory(), runOpts)

@@ -26,6 +26,7 @@ type TransportAttestation struct {
 	IIDDocumentSHA256  string `json:"iid_document_sha256"`
 	IIDSignatureSHA256 string `json:"iid_signature_sha256"`
 	IIDPKCS7SHA256     string `json:"iid_pkcs7_sha256"`
+	IIDTrustRootSetID  string `json:"iid_trust_root_set_id"`
 	PublicKey          string `json:"public_key"`
 	Signature          string `json:"signature"`
 }
@@ -120,6 +121,9 @@ func ValidateTransportAttestation(a *TransportAttestation) error {
 		if _, err := base64.StdEncoding.DecodeString(field.value); err != nil {
 			return fmt.Errorf("transport attestation %s must be valid base64: %w", field.name, err)
 		}
+	}
+	if a.IIDTrustRootSetID != "aws-iid-trust-roots.v1" {
+		return fmt.Errorf("transport attestation iid_trust_root_set_id must be %q", "aws-iid-trust-roots.v1")
 	}
 	return nil
 }

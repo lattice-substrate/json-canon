@@ -182,7 +182,7 @@ func TestValidateEvidenceBundleNativeHostManifestMismatch(t *testing.T) {
 func TestLoadEvidenceRejectsUnknownFieldsAndTrailingJSON(t *testing.T) {
 	dir := t.TempDir()
 	unknownPath := filepath.Join(dir, "unknown.json")
-	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","vector_set_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_name":"max","architecture":"x86_64","aggregate_method":"replay-aggregate.v1","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
+	unknownDoc := `{"schema_version":"evidence.v1","bundle_sha256":"` + strings.Repeat("a", 64) + `","control_binary_sha256":"` + strings.Repeat("a", 64) + `","matrix_sha256":"` + strings.Repeat("a", 64) + `","profile_sha256":"` + strings.Repeat("a", 64) + `","vector_set_sha256":"` + strings.Repeat("a", 64) + `","source_git_commit":"` + strings.Repeat("b", 40) + `","source_git_tag":"v0.0.0","generated_at_utc":"2026-01-01T00:00:00Z","orchestrator":"jcs-offline-replay","profile_id":"https://lattice-substrate.github.io/jcs/profiles/offline-measured-evidence.v1","profile_name":"offline-measured-evidence","architecture":"x86_64","aggregate_method":"replay-aggregate.v1","required_suites":["canonical-byte-stability"],"hard_release_gate":true,"node_replays":[{"node_id":"c1","mode":"container","distro":"debian","kernel_family":"host","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"` + strings.Repeat("a", 64) + `","verify_sha256":"` + strings.Repeat("a", 64) + `","failure_class_sha256":"` + strings.Repeat("a", 64) + `","exit_code_sha256":"` + strings.Repeat("a", 64) + `"}],"aggregate_canonical_sha256":"` + strings.Repeat("a", 64) + `","aggregate_verify_sha256":"` + strings.Repeat("a", 64) + `","aggregate_failure_class_sha256":"` + strings.Repeat("a", 64) + `","aggregate_exit_code_sha256":"` + strings.Repeat("a", 64) + `","unknown":true}`
 	if err := os.WriteFile(unknownPath, []byte(unknownDoc), 0o600); err != nil {
 		t.Fatalf("write unknown fixture: %v", err)
 	}
@@ -230,7 +230,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		SourceGitTag:       sourceTag,
 		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
 		Orchestrator:       "jcs-offline-replay",
-		ProfileName:        "max",
+		ProfileID:          "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1",
+		ProfileName:        "base-conformance",
 		Architecture:       "x86_64",
 		AggregateMethod:    replay.ReplayAggregateMethod,
 		HardReleaseGate:    true,
@@ -269,11 +270,13 @@ func validInfraBoundEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		HardReleaseGate:  true,
 		EvidenceRequired: true,
 	}
-	e.ProfileName = p.Name
+	e.ProfileID = "https://lattice-substrate.github.io/jcs/profiles/offline-measured-evidence.v1"
+	e.ProfileName = "offline-measured-evidence"
 	e.RequiredSuites = append([]string(nil), p.RequiredSuites...)
 	e.InfraManifestSHA256 = strings.Repeat("c", 64)
 	e.InfraRepoURL = "https://github.com/example/json-canon-conformance-infra"
 	e.InfraRepoCommit = strings.Repeat("d", 40)
+	e.IIDTrustRootSetID = "aws-iid-trust-roots.v1"
 	e.NodeReplays[0].DiscoveredCPU = testCPUIntel
 	e.NodeReplays[0].DiscoveredKernel = testKernel610
 	e.NodeReplays[0].ImageDigest = "debian@sha256:" + strings.Repeat("1", 64)
@@ -322,7 +325,8 @@ func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
 		Orchestrator:        "jcs-offline-replay server-evidence",
-		ProfileName:         profile.Name,
+		ProfileID:           "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
+		ProfileName:         "official-cloud-measured-release",
 		Architecture:        "x86_64",
 		AggregateMethod:     replay.ReplayAggregateMethod,
 		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
@@ -330,6 +334,7 @@ func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		InfraManifestSHA256: strings.Repeat("c", 64),
 		InfraRepoURL:        manifest.InfraRepoURL,
 		InfraRepoCommit:     manifest.InfraRepoCommit,
+		IIDTrustRootSetID:   "aws-iid-trust-roots.v1",
 		NodeReplays: []replay.NodeRunEvidence{
 			nativeRun("aws-native-ubuntu", 1, digest),
 			nativeRun("aws-native-ubuntu", 2, digest),

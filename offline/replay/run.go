@@ -39,6 +39,7 @@ type RunOptions struct {
 	InfraRepoURL        string
 	InfraRepoCommit     string
 	InfraManifest       *InfraManifest
+	AttestationOutputRoot string
 }
 
 // RunMatrix orchestrates replay execution across required nodes and replays.
@@ -102,7 +103,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      now().UTC().Format(time.RFC3339Nano),
 		Orchestrator:        opts.Orchestrator,
-		ProfileName:         profile.Name,
+		ProfileID:           profileIDForName(profile.Name),
+		ProfileName:         profileNameForEvidence(profile.Name),
 		Architecture:        matrix.Architecture,
 		AggregateMethod:     ReplayAggregateMethod,
 		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
@@ -110,6 +112,9 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		InfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
 		InfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
 		InfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
+	}
+	if bundle.InfraManifestSHA256 != "" || bundle.InfraRepoURL != "" || bundle.InfraRepoCommit != "" {
+		bundle.IIDTrustRootSetID = "aws-iid-trust-roots.v1"
 	}
 
 	tmpRoot, err := os.MkdirTemp("", "jcs-offline-replay-*")
@@ -156,6 +161,9 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 			runEvidence, err := LoadNodeRunEvidence(evidencePath)
 			if err != nil {
 				return nil, fmt.Errorf("node %s replay %d load evidence: %w", node.ID, replayIdx, err)
+			}
+			if err := copyAttestationSidecar(evidencePath, opts.AttestationOutputRoot, node.ID, replayIdx); err != nil {
+				return nil, fmt.Errorf("node %s replay %d persist attestation: %w", node.ID, replayIdx, err)
 			}
 			bundle.NodeReplays = append(bundle.NodeReplays, *runEvidence)
 		}
@@ -220,6 +228,25 @@ func LoadNodeRunEvidenceFromBytes(data []byte) (*NodeRunEvidence, error) {
 		return nil, err
 	}
 	return &run, nil
+}
+
+func copyAttestationSidecar(evidencePath, outputRoot, nodeID string, replayIndex int) error {
+	if strings.TrimSpace(outputRoot) == "" {
+		return nil
+	}
+	sourcePath := strings.TrimSuffix(evidencePath, filepath.Ext(evidencePath)) + ".transport-attestation.v1.json"
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	destPath := filepath.Join(outputRoot, nodeID, fmt.Sprintf("%03d", replayIndex), "transport-attestation.v1.json")
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(destPath, data, 0o600)
 }
 
 //nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 default runtime clock for evidence generation when no injected clock is provided.

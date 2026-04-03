@@ -533,7 +533,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			SourceGitTag:        opts.SourceGitTag,
 			GeneratedAtUTC:      "2026-01-01T00:00:00Z",
 			Orchestrator:        "jcs-offline-replay server-evidence",
-			ProfileName:         profile.Name,
+			ProfileID:           "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
+			ProfileName:         "official-cloud-measured-release",
 			Architecture:        matrix.Architecture,
 			AggregateMethod:     replay.ReplayAggregateMethod,
 			RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
@@ -541,6 +542,7 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			InfraManifestSHA256: opts.InfraManifestSHA256,
 			InfraRepoURL:        opts.InfraRepoURL,
 			InfraRepoCommit:     opts.InfraRepoCommit,
+			IIDTrustRootSetID:   "aws-iid-trust-roots.v1",
 			NodeReplays: []replay.NodeRunEvidence{{
 				NodeID:                     "aws-native-x86",
 				Mode:                       "vm",

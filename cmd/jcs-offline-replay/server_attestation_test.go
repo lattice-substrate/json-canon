@@ -29,15 +29,16 @@ func mustTestTransportAttestationData(t *testing.T, evidence []byte, challenge, 
 		t.Fatalf("generate ed25519 key: %v", err)
 	}
 	attestation := replay.TransportAttestation{
-		SchemaVersion:  replay.TransportAttestationSchemaVersion,
-		Challenge:      challenge,
-		NodeID:         nodeID,
-		ReplayIndex:    replayIndex,
-		EvidenceSHA256: sha256HexString(string(evidence)),
-		IIDDocument:    `{"availabilityZone":"us-east-1a","imageId":"ami-123","instanceId":"i-123","region":"us-east-1"}`,
-		IIDSignature:   base64.StdEncoding.EncodeToString([]byte("signature")),
-		IIDPKCS7:       base64.StdEncoding.EncodeToString([]byte("pkcs7")),
-		PublicKey:      base64.StdEncoding.EncodeToString(publicKey),
+		SchemaVersion:     replay.TransportAttestationSchemaVersion,
+		Challenge:         challenge,
+		NodeID:            nodeID,
+		ReplayIndex:       replayIndex,
+		EvidenceSHA256:    sha256HexString(string(evidence)),
+		IIDDocument:       `{"availabilityZone":"us-east-1a","imageId":"ami-123","instanceId":"i-123","region":"us-east-1"}`,
+		IIDSignature:      base64.StdEncoding.EncodeToString([]byte("signature")),
+		IIDPKCS7:          base64.StdEncoding.EncodeToString([]byte("pkcs7")),
+		IIDTrustRootSetID: "aws-iid-trust-roots.v1",
+		PublicKey:         base64.StdEncoding.EncodeToString(publicKey),
 	}
 	attestation.IIDDocumentSHA256 = sha256HexString(attestation.IIDDocument)
 	attestation.IIDSignatureSHA256 = sha256HexString(attestation.IIDSignature)

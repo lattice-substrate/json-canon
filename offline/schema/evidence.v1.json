@@ -15,6 +15,7 @@
     "source_git_tag",
     "generated_at_utc",
     "orchestrator",
+    "profile_id",
     "profile_name",
     "architecture",
     "aggregate_method",
@@ -37,12 +38,31 @@
     "source_git_tag": { "type": "string", "minLength": 1 },
     "generated_at_utc": { "type": "string", "minLength": 1 },
     "orchestrator": { "type": "string", "minLength": 1 },
-    "profile_name": { "type": "string", "minLength": 1 },
+    "profile_id": {
+      "type": "string",
+      "enum": [
+        "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1",
+        "https://lattice-substrate.github.io/jcs/profiles/offline-measured-evidence.v1",
+        "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1"
+      ]
+    },
+    "profile_name": {
+      "type": "string",
+      "enum": [
+        "base-conformance",
+        "offline-measured-evidence",
+        "official-cloud-measured-release"
+      ]
+    },
     "architecture": { "type": "string", "enum": ["x86_64", "arm64"] },
     "aggregate_method": { "const": "replay-aggregate.v1" },
     "infra_manifest_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
     "infra_repo_url": { "type": "string", "pattern": "^https://.+" },
     "infra_repo_commit": { "type": "string", "pattern": "^[0-9a-fA-F]{40}$" },
+    "iid_trust_root_set_id": {
+      "type": "string",
+      "enum": ["aws-iid-trust-roots.v1"]
+    },
     "required_suites": {
       "type": "array",
       "minItems": 1,
@@ -104,5 +124,27 @@
     "aggregate_verify_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
     "aggregate_failure_class_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
     "aggregate_exit_code_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile_name": {
+            "enum": [
+              "offline-measured-evidence",
+              "official-cloud-measured-release"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "infra_manifest_sha256",
+          "infra_repo_url",
+          "infra_repo_commit",
+          "iid_trust_root_set_id"
+        ]
+      }
+    }
+  ]
 }

@@ -312,6 +312,50 @@ jobs:
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
           JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-arm64.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
+      - name: checkout pinned governance repos
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock_file="${GITHUB_WORKSPACE}/governance.lock.json"
+          gov_root="${GITHUB_WORKSPACE}/.tmp/governance"
+          mkdir -p "${gov_root}"
+          for repo in jcs-spec jcs-contracts jcs-conformance-harness jcs-integration-tests; do
+            url="$("$JCS_TOOL_JQ" -r --arg repo "$repo" '.repositories[$repo].url' "${lock_file}")"
+            commit="$("$JCS_TOOL_JQ" -r --arg repo "$repo" '.repositories[$repo].commit' "${lock_file}")"
+            dest="${gov_root}/${repo}"
+            rm -rf "${dest}"
+            git clone --no-tags --depth=1 "${url}" "${dest}"
+            (
+              cd "${dest}"
+              git fetch --no-tags --depth=1 origin "${commit}"
+              git checkout --detach "${commit}"
+            )
+          done
+      - name: governed release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          gov_root="${GITHUB_WORKSPACE}/.tmp/governance"
+          "$JCS_TOOL_GO" run "${gov_root}/jcs-integration-tests/cmd/jcs-integration" release-gate \
+            --spec "${gov_root}/jcs-spec" \
+            --impl "${GITHUB_WORKSPACE}" \
+            --contracts "${gov_root}/jcs-contracts" \
+            --conformance "${gov_root}/jcs-conformance-harness" \
+            --integration "${gov_root}/jcs-integration-tests" \
+            --evidence-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-evidence.json" \
+            --bundle-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-bundle.tgz" \
+            --control-binary-x86 "${GITHUB_WORKSPACE}/.tmp/release-offline-control/jcs-canon-x86_64" \
+            --matrix-x86 "${{ steps.gate-x86.outputs.matrix }}" \
+            --profile-x86 "${{ steps.gate-x86.outputs.profile }}" \
+            --evidence-arm64 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/arm64/offline-evidence.json" \
+            --bundle-arm64 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/arm64/offline-bundle.tgz" \
+            --control-binary-arm64 "${GITHUB_WORKSPACE}/.tmp/release-offline-control/jcs-canon-arm64" \
+            --matrix-arm64 "${{ steps.gate-arm64.outputs.matrix }}" \
+            --profile-arm64 "${{ steps.gate-arm64.outputs.profile }}" \
+            --infra-manifest "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/infra-manifest.v1.json" \
+            --attestation-dir-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/attestations" \
+            --attestation-dir-arm64 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/arm64/attestations" \
+            --cross-arch-report "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/cross-arch.report.v1.json"
       - name: cleanup server evidence
         if: always()
         shell: bash

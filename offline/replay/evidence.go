@@ -32,6 +32,7 @@ type EvidenceBundle struct {
 	SourceGitTag     string   `json:"source_git_tag"`
 	GeneratedAtUTC   string   `json:"generated_at_utc"`
 	Orchestrator     string   `json:"orchestrator"`
+	ProfileID        string   `json:"profile_id"`
 	ProfileName      string   `json:"profile_name"`
 	Architecture     string   `json:"architecture"`
 	AggregateMethod  string   `json:"aggregate_method"`
@@ -41,6 +42,7 @@ type EvidenceBundle struct {
 	InfraManifestSHA256 string            `json:"infra_manifest_sha256,omitempty"`
 	InfraRepoURL        string            `json:"infra_repo_url,omitempty"`
 	InfraRepoCommit     string            `json:"infra_repo_commit,omitempty"`
+	IIDTrustRootSetID   string            `json:"iid_trust_root_set_id,omitempty"`
 	NodeReplays         []NodeRunEvidence `json:"node_replays"`
 	AggregateCanonical  string            `json:"aggregate_canonical_sha256"`
 	AggregateVerify     string            `json:"aggregate_verify_sha256"`
@@ -143,8 +145,15 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	if e.SchemaVersion != EvidenceSchemaVersion {
 		return fmt.Errorf("unsupported schema_version %q", e.SchemaVersion)
 	}
-	if e.ProfileName != p.Name {
-		return fmt.Errorf("profile mismatch: evidence=%q profile=%q", e.ProfileName, p.Name)
+	expectedProfileName := profileNameForEvidence(p.Name)
+	if expectedProfileName == "" {
+		return fmt.Errorf("unsupported profile name %q", p.Name)
+	}
+	if e.ProfileName != expectedProfileName {
+		return fmt.Errorf("profile mismatch: evidence=%q profile=%q", e.ProfileName, expectedProfileName)
+	}
+	if profileIDForName(p.Name) != e.ProfileID {
+		return fmt.Errorf("profile_id mismatch: evidence=%q expected=%q", e.ProfileID, profileIDForName(p.Name))
 	}
 	for _, field := range []struct {
 		name  string
@@ -205,6 +214,11 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 	if err := validateEvidenceInfraFields(e, opts, requiresInfraBinding); err != nil {
 		return err
+	}
+	if requiresNativeHostBinding || requiresInfraBinding {
+		if e.IIDTrustRootSetID != "aws-iid-trust-roots.v1" {
+			return fmt.Errorf("iid_trust_root_set_id mismatch: evidence=%q expected=%q", e.IIDTrustRootSetID, "aws-iid-trust-roots.v1")
+		}
 	}
 	if err := validateNativeHostManifestExpectation(opts.ExpectedInfraManifest, requiresNativeHostBinding); err != nil {
 		return err
@@ -339,6 +353,34 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 
 	return nil
+}
+
+func profileNameForEvidence(name string) string {
+	switch {
+	case name == "base-conformance":
+		return "base-conformance"
+	case name == "offline-measured-evidence", name == "infra-bound":
+		return "offline-measured-evidence"
+	case name == "max", strings.HasPrefix(name, "maximal-offline"):
+		return "base-conformance"
+	case name == "official-cloud-measured-release", strings.HasPrefix(name, "aws-native-release-"):
+		return "official-cloud-measured-release"
+	default:
+		return ""
+	}
+}
+
+func profileIDForName(name string) string {
+	switch profileNameForEvidence(name) {
+	case "base-conformance":
+		return "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1"
+	case "offline-measured-evidence":
+		return "https://lattice-substrate.github.io/jcs/profiles/offline-measured-evidence.v1"
+	case "official-cloud-measured-release":
+		return "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1"
+	default:
+		return ""
+	}
 }
 
 func computeReplayAggregateDigest(nodeReplays []NodeRunEvidence, selectDigest func(NodeRunEvidence) string) string {

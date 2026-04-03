@@ -258,6 +258,7 @@ func writeTransportAttestation(cfg workerArgs, evidence replay.NodeRunEvidence) 
 		IIDDocumentSHA256:  inspection.IIDDocumentSHA256,
 		IIDSignatureSHA256: inspection.IIDSignatureSHA256,
 		IIDPKCS7SHA256:     inspection.IIDPKCS7SHA256,
+		IIDTrustRootSetID:  "aws-iid-trust-roots.v1",
 		PublicKey:          base64.StdEncoding.EncodeToString(publicKey),
 	}
 	attestation.Signature = base64.StdEncoding.EncodeToString(
