@@ -3,6 +3,7 @@ package replay
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -11,6 +12,8 @@ import (
 
 // EvidenceSchemaVersion is the stable schema identifier for evidence bundles.
 const EvidenceSchemaVersion = "evidence.v1"
+
+var errNilManifestIndex = errors.New("infra manifest not provided")
 
 // EvidenceBundle is the machine-consumed replay output artifact.
 type EvidenceBundle struct {
@@ -102,6 +105,7 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 
 // LoadEvidence loads an evidence bundle from disk.
 func LoadEvidence(path string) (*EvidenceBundle, error) {
+	//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 evidence paths are explicit operator/runtime artifacts.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read evidence: %w", err)
@@ -206,8 +210,11 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		matrixByID[node.ID] = node
 	}
 	manifestIndex, err := buildInfraManifestNodeIndex(opts.ExpectedInfraManifest, requiredNodes)
-	if err != nil {
+	if err != nil && !errors.Is(err, errNilManifestIndex) {
 		return err
+	}
+	if errors.Is(err, errNilManifestIndex) {
+		manifestIndex = nil
 	}
 	if err := validateRequiredManifestBindings(manifestIndex, requiredNodes, requiresInfraBinding, requiresNativeHostBinding); err != nil {
 		return err
@@ -336,6 +343,7 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 infra binding validation keeps each mismatch explicit for auditability.
 func validateEvidenceInfraFields(e *EvidenceBundle, opts EvidenceValidationOptions, requiresInfraBinding bool) error {
 	hasInfraFields := strings.TrimSpace(e.InfraManifestSHA256) != "" ||
 		strings.TrimSpace(e.InfraRepoURL) != "" ||
@@ -387,6 +395,7 @@ func validateEvidenceInfraFields(e *EvidenceBundle, opts EvidenceValidationOptio
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 node replay validation keeps each field requirement explicit for operator diagnostics.
 func validateNodeRunEvidenceFields(
 	r NodeRunEvidence,
 	node NodeSpec,
@@ -443,6 +452,7 @@ func validateNativeHostManifestExpectation(manifest *InfraManifest, requiresNati
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 manifest binding checks stay explicit for per-field audit attribution.
 func validateRequiredManifestBindings(
 	manifestIndex map[string]InfraManifestHost,
 	requiredNodes []string,
@@ -503,7 +513,7 @@ func validateRequiredManifestBindings(
 
 func buildInfraManifestNodeIndex(manifest *InfraManifest, requiredNodes []string) (map[string]InfraManifestHost, error) {
 	if manifest == nil {
-		return nil, nil
+		return nil, errNilManifestIndex
 	}
 	index := make(map[string]InfraManifestHost, len(manifest.Hosts))
 	for _, host := range manifest.Hosts {
@@ -522,6 +532,7 @@ func buildInfraManifestNodeIndex(manifest *InfraManifest, requiredNodes []string
 	return index, nil
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 manifest/evidence comparisons stay explicit for clear mismatch diagnostics.
 func validateNodeRunEvidenceAgainstManifest(r NodeRunEvidence, manifestIndex map[string]InfraManifestHost) error {
 	if manifestIndex == nil {
 		return nil

@@ -34,6 +34,7 @@ type serverEvidenceSummary struct {
 	DestroyStatus     string `json:"destroy_status"`
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-AUTO-001 audit summary emission keeps each artifact binding explicit.
 func writeServerAuditSummaries(record serverRunRecord) error {
 	auditDir := filepath.Join(record.OutputDir, "audit")
 	summary := serverEvidenceSummary{
@@ -91,11 +92,11 @@ func writeServerAuditSummaries(record serverRunRecord) error {
 		return fmt.Errorf("marshal server evidence summary: %w", err)
 	}
 	data = append(data, '\n')
-	if err := atomicWriteFile(jsonPath, data, filePerm); err != nil {
+	if err := atomicWriteFile(jsonPath, data); err != nil {
 		return fmt.Errorf("write server evidence summary json: %w", err)
 	}
 	md := buildServerEvidenceSummaryMarkdown(summary)
-	if err := atomicWriteFile(mdPath, []byte(md), filePerm); err != nil {
+	if err := atomicWriteFile(mdPath, []byte(md)); err != nil {
 		return fmt.Errorf("write server evidence summary markdown: %w", err)
 	}
 	return nil

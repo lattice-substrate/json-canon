@@ -201,6 +201,8 @@ func LoadNodeRunEvidence(path string) (*NodeRunEvidence, error) {
 	return &run, nil
 }
 
+// LoadNodeRunEvidenceFromBytes decodes one node replay evidence artifact from
+// in-memory JSON bytes.
 func LoadNodeRunEvidenceFromBytes(data []byte) (*NodeRunEvidence, error) {
 	var run NodeRunEvidence
 	if err := decodeStrictJSONBytes("node evidence", data, &run); err != nil {

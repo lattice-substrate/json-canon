@@ -168,6 +168,16 @@ These backend and IAM prerequisites are external platform infrastructure. This r
 does not provision them. Recovery from interrupted runs uses
 `jcs-offline-replay server-cleanup --run-record offline/runs/releases/<tag>/server-run.v1.json`.
 
+If the operator machine loses power during a conformant remote-state run:
+- EC2 instances and the staging bucket may still exist until cleanup runs
+- the OpenTofu state remains in the configured remote backend
+- recovery is to rerun `jcs-offline-replay server-cleanup --run-record ...`
+  from the same repo checkout or any checkout that still has the recorded
+  run-record path
+
+If the operator used debug-only local state instead, automatic recovery is not
+guaranteed because the local OpenTofu state may be lost with the machine.
+
 For native-host runs, the worker records raw instance-identity material from IMDS and
 the orchestrator verifies the IID signature before accepting the host facts. The
 resulting manifest requires `iid_verified=true`, and replay evidence records only the

@@ -6,7 +6,7 @@
 [![Coverage](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml/badge.svg?branch=main&event=push)](https://github.com/lattice-substrate/json-canon/actions/workflows/coverage.yml)
 [![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.18890836.svg)](https://doi.org/10.5281/zenodo.18890836)
 
-json-canon produces byte-deterministic JSON. Determinism claims are scoped to the exact source commit, toolchain, matrix, and evidence artifacts recorded for a release; they are not asserted as an unconstrained platform guarantee. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written Burger-Dybvig number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. The canonicalization pipeline avoids `encoding/json` and `strconv.FormatFloat`; release-evidence automation adds pinned toolchain and AWS SDK dependencies. Linux only.
+json-canon produces byte-deterministic JSON. Determinism claims are scoped to the exact source commit, toolchain, matrix, and evidence artifacts recorded for a release; they are not asserted as an unconstrained platform guarantee. It implements [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) (JSON Canonicalization Scheme) with a strict parser that rejects ambiguous input, a hand-written fixed-width Schubfach number formatter validated against 286,362 oracle test vectors, and a stable CLI contract under SemVer. The canonicalization pipeline avoids `encoding/json` and `strconv.FormatFloat`; release-evidence automation adds pinned toolchain and AWS SDK dependencies. Linux only.
 
 ## Go API
 
@@ -86,7 +86,7 @@ json-canon owns every stage of the pipeline from input bytes to canonical output
 
 **Parser.** A strict RFC 8259 parser that rejects what `encoding/json` silently accepts: lone surrogates, duplicate keys after escape decoding, noncharacters, lexical negative zero, overflow, underflow. Seven independent resource bounds (input size, nesting depth, total values, object members, array elements, string bytes, number token length), all fail-fast, all configurable. If the parser returns a value, that value has exactly one canonical representation.
 
-**Number formatting.** Burger-Dybvig algorithm with ECMA-262 even-digit tie-breaking, implemented from scratch in pure `math/big` arithmetic. `strconv.FormatFloat` is a high-quality formatter, but it is not an ECMA-262 conformance contract. Its output policy can change across Go versions and doesn't match RFC 8785's required formatting rules at key exponent boundaries. The implementation is validated against 286,362 oracle test vectors (54,445 boundary cases + 231,917 stress vectors) with pinned SHA-256 checksums on the test data itself.
+**Number formatting.** Fixed-width Schubfach with the same ECMA-262 conformance contract and the same canonical output bytes as the earlier multiprecision implementation. `strconv.FormatFloat` is a high-quality formatter, but it is not an ECMA-262 conformance contract. Its output policy can change across Go versions and doesn't match RFC 8785's required formatting rules at key exponent boundaries. The implementation is validated against 286,362 oracle test vectors (54,445 boundary cases + 231,917 stress vectors) with pinned SHA-256 checksums on the test data itself.
 
 **Key sorting.** UTF-16 code-unit order, not UTF-8 byte order. These orderings disagree for characters above U+FFFF. A supplementary-plane character like U+10000 sorts *before* U+E000 in UTF-16 code-unit order and *after* it in UTF-8 byte order. Most implementations get this wrong because the bug only surfaces with emoji, CJK Extension B, or historic script keys. Rare in testing, not rare in production. RFC 8785 §3.2.3 mandates UTF-16 code-unit order because JCS is defined for interoperability with ECMAScript string semantics.
 
@@ -98,11 +98,12 @@ json-canon owns every stage of the pipeline from input bytes to canonical output
 
 Detailed technical articles covering the engineering behind json-canon:
 
-1. [Shortest Round-Trip: Implementing IEEE 754 to Decimal Conversion in Go](https://lattice-substrate.github.io/blog/2026/02/27/shortest-roundtrip-ieee754-burger-dybvig/) - Burger-Dybvig algorithm, multiprecision arithmetic, ECMA-262 formatting
-2. [A Strict RFC 8259 JSON Parser](https://lattice-substrate.github.io/blog/2026/02/26/strict-rfc8259-json-parser/) - single-pass parser design, surrogate validation, bounds enforcement
-3. [The Small Decisions That Infrastructure Depends On](https://lattice-substrate.github.io/blog/2026/02/25/small-decisions-infrastructure-primitive/) - UTF-16 sort order, failure taxonomy, ABI contracts
-4. [Proving Determinism: Evidence-Based Release Engineering](https://lattice-substrate.github.io/blog/2026/02/24/proving-determinism-evidence-release/) - offline replay harness, SHA-256 evidence chains, release gating
-5. [IEEE 754 Compliance Does Not Mean Platform Independence](https://lattice-substrate.github.io/blog/2026/03/04/fma-go-floating-point-determinism/) - FMA instructions, Go compiler fusion policy, platform-independent digit generation
+1. [Shortest Round-Trip: Implementing IEEE 754 to Decimal Conversion in Go](https://lattice-substrate.github.io/blog/2026/02/27/shortest-roundtrip-ieee754-burger-dybvig/) - shortest-roundtrip formatting contract, oracle testing, ECMA-262 byte requirements
+2. [From Multiprecision to Fixed-Width](https://lattice-substrate.github.io/blog/2026/03/05/multiprecision-to-fixed-width-schubfach/) - Schubfach replacement with identical conformance bytes
+3. [A Strict RFC 8259 JSON Parser](https://lattice-substrate.github.io/blog/2026/02/26/strict-rfc8259-json-parser/) - single-pass parser design, surrogate validation, bounds enforcement
+4. [The Small Decisions That Infrastructure Depends On](https://lattice-substrate.github.io/blog/2026/02/25/small-decisions-infrastructure-primitive/) - UTF-16 sort order, failure taxonomy, ABI contracts
+5. [Proving Determinism: Evidence-Based Release Engineering](https://lattice-substrate.github.io/blog/2026/02/24/proving-determinism-evidence-release/) - offline replay harness, SHA-256 evidence chains, release gating
+6. [IEEE 754 Compliance Does Not Mean Platform Independence](https://lattice-substrate.github.io/blog/2026/03/04/fma-go-floating-point-determinism/) - FMA instructions, Go compiler fusion policy, platform-independent digit generation
 
 ## CLI Reference
 

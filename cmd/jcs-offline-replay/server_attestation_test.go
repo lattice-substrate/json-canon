@@ -19,6 +19,9 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+var testCertificateNotBefore = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+var testCertificateNotAfter = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
 func mustTestTransportAttestationData(t *testing.T, evidence []byte, challenge, nodeID string, replayIndex int) []byte {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -62,13 +65,13 @@ func TestVerifyTransportAttestation(t *testing.T) {
 	evidence := []byte(`{"node_id":"aws-native-ubuntu","mode":"vm","distro":"ubuntu","kernel_family":"ga","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verify_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","failure_class_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","exit_code_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","discovered_cpu":"cpu","discovered_kernel":"kernel","measured_architecture":"x86_64","measured_os_id":"ubuntu","measured_os_version_id":"24.04","measured_kernel":"kernel","measured_cpu":"cpu","aws_instance_id":"i-123","aws_image_id":"ami-123"}`)
 	attestation := mustTestTransportAttestationData(t, evidence, strings.Repeat("c", 64), "aws-native-ubuntu", 1)
 
-	if _, err := verifyTransportAttestation(attestation, evidence, strings.Repeat("c", 64), "aws-native-ubuntu", 1, provisionedHost{
+	if err := verifyTransportAttestation(attestation, evidence, strings.Repeat("c", 64), "aws-native-ubuntu", 1, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
 	}, "us-east-1"); err != nil {
 		t.Fatalf("verifyTransportAttestation: %v", err)
 	}
 
-	if _, err := verifyTransportAttestation(attestation, evidence, strings.Repeat("d", 64), "aws-native-ubuntu", 1, provisionedHost{
+	if err := verifyTransportAttestation(attestation, evidence, strings.Repeat("d", 64), "aws-native-ubuntu", 1, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
 	}, "us-east-1"); err == nil || !strings.Contains(err.Error(), "challenge mismatch") {
 		t.Fatalf("verifyTransportAttestation mismatch error = %v", err)
@@ -83,7 +86,7 @@ func TestVerifyTransportAttestation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if _, err := verifyTransportAttestation(tampered, evidence, strings.Repeat("c", 64), "aws-native-ubuntu", 1, provisionedHost{
+	if err := verifyTransportAttestation(tampered, evidence, strings.Repeat("c", 64), "aws-native-ubuntu", 1, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
 	}, "us-east-1"); err == nil || !strings.Contains(err.Error(), "evidence sha256 mismatch") {
 		t.Fatalf("verifyTransportAttestation tamper error = %v", err)
@@ -95,7 +98,7 @@ func TestVerifyTransportAttestation(t *testing.T) {
 }
 
 func TestVerifyAWSInstanceIdentity(t *testing.T) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 1024)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
@@ -104,8 +107,8 @@ func TestVerifyAWSInstanceIdentity(t *testing.T) {
 		Subject: pkix.Name{
 			CommonName: "test-ec2-instance-identity",
 		},
-		NotBefore:             time.Now().Add(-time.Hour),
-		NotAfter:              time.Now().Add(time.Hour),
+		NotBefore:             testCertificateNotBefore,
+		NotAfter:              testCertificateNotAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		BasicConstraintsValid: true,
 	}

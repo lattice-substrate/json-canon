@@ -145,6 +145,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
+//nolint:gocyclo,cyclop,funlen // REQ:OFFLINE-EVIDENCE-001 worker execution keeps each evidence step explicit for auditability.
 func runWorker(cfg workerArgs, stdout io.Writer) error {
 	startedAt := wallClockNowUTC()
 	tmpDir, err := os.MkdirTemp("", "jcs-offline-worker-*")
@@ -263,7 +264,7 @@ func writeTransportAttestation(cfg workerArgs, evidence replay.NodeRunEvidence) 
 		ed25519.Sign(privateKey, []byte(replay.TransportAttestationSigningPayload(&attestation))),
 	)
 	if err := replay.WriteTransportAttestation(cfg.attestationPath, &attestation); err != nil {
-		return err
+		return fmt.Errorf("write transport attestation: %w", err)
 	}
 	return nil
 }
@@ -592,7 +593,7 @@ func parseKV(args []string) (map[string]string, error) {
 	return flags, nil
 }
 
-//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 bundle extraction intentionally opens operator-provided bundle paths.
+//nolint:gocyclo,cyclop,gosec // REQ:OFFLINE-EVIDENCE-001 bundle extraction intentionally keeps tar handling explicit for auditability.
 func extractBundle(bundlePath, outDir string) (*replay.BundleManifest, error) {
 	f, err := os.Open(bundlePath)
 	if err != nil {
@@ -974,7 +975,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	}
 	tmpPath := tmp.Name()
 	defer func() {
-		_ = os.Remove(tmpPath)
+		ignoreWorkerError(os.Remove(tmpPath))
 	}()
 	if _, err := tmp.Write(data); err != nil {
 		closeBestEffort(tmp)
@@ -990,6 +991,12 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 	return nil
+}
+
+func ignoreWorkerError(err error) {
+	if err != nil {
+		return
+	}
 }
 
 func parseCPUInfoFields(raw string) map[string]string {

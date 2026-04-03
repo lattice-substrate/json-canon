@@ -24,7 +24,12 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/runtime/libvirt"
 )
 
-const boolTrue = "true"
+const (
+	boolTrue                = "true"
+	sourceIdentityUntagged  = "untagged"
+	matrixArchitectureX8664 = "x86_64"
+	goArchitectureAMD64     = "amd64"
+)
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -668,7 +673,7 @@ func resolveSourceIdentity(flags map[string]string) (string, string, error) {
 		}
 	}
 	if sourceGitTag == "" {
-		sourceGitTag = "untagged"
+		sourceGitTag = sourceIdentityUntagged
 	}
 	return sourceGitCommit, sourceGitTag, nil
 }
@@ -746,8 +751,8 @@ func buildWorkerBinary(targetArch string) (string, error) {
 
 func goArchForMatrixArch(matrixArch string) (string, error) {
 	switch strings.TrimSpace(matrixArch) {
-	case "x86_64":
-		return "amd64", nil
+	case matrixArchitectureX8664:
+		return goArchitectureAMD64, nil
 	case matrixArchitectureARM64:
 		return matrixArchitectureARM64, nil
 	default:
@@ -780,7 +785,7 @@ func validateExecutableArchitecture(path string, matrixArch string, label string
 
 func elfMachineForMatrixArch(matrixArch string) (elf.Machine, error) {
 	switch strings.TrimSpace(matrixArch) {
-	case "x86_64":
+	case matrixArchitectureX8664:
 		return elf.EM_X86_64, nil
 	case matrixArchitectureARM64:
 		return elf.EM_AARCH64, nil

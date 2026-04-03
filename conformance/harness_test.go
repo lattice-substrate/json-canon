@@ -2659,6 +2659,7 @@ func checkOfficialAWSToolchainContract(t *testing.T, h *harness) {
 	}
 }
 
+//nolint:gocognit // REQ:AWS-AMI-001 AWS host-catalog contract checks keep every selector rule explicit for audit attribution.
 func checkOfficialAWSHostCatalogContract(t *testing.T, h *harness) {
 	t.Helper()
 	type awsReleaseHost struct {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -140,6 +141,7 @@ func TestLoadAWSReleaseHostCatalogAndRefreshLock(t *testing.T) {
 	}
 
 	var lock awsReleaseHostLock
+	//nolint:gosec // REQ:AWS-AMI-001 test reads the temp output path it just wrote.
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatalf("read output: %v", err)
@@ -158,6 +160,7 @@ func TestLoadAWSReleaseHostCatalogAndRefreshLock(t *testing.T) {
 	}
 }
 
+//nolint:gocognit // REQ:AWS-GATE-001 test keeps the full mocked execute lifecycle explicit for audit coverage.
 func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	oldBuildArtifacts := buildServerRunArtifactsFunc
 	oldCreateBucket := createStagingBucketFunc
@@ -250,8 +253,8 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		worker := filepath.Join(archDir, "jcs-offline-worker")
 		bundle := filepath.Join(archDir, "offline-bundle.tgz")
 		for _, path := range []string{control, worker, bundle} {
-			if err := os.WriteFile(path, []byte(matrixArch), 0o700); err != nil {
-				return serverBuildArtifacts{}, err
+			if err := os.WriteFile(path, []byte(matrixArch), 0o600); err != nil {
+				return serverBuildArtifacts{}, fmt.Errorf("write build artifact %s: %w", path, err)
 			}
 		}
 		return serverBuildArtifacts{
@@ -316,7 +319,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		}
 		data, err := json.Marshal(facts)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("marshal discovered remote facts: %w", err)
 		}
 		return string(data), nil
 	}

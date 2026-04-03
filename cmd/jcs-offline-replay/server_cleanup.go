@@ -22,6 +22,7 @@ func cmdServerCleanup(flags map[string]string, stdout io.Writer) error {
 	return runServerCleanup(record, stdout)
 }
 
+//nolint:gocyclo,cyclop,funlen // REQ:OFFLINE-AUTO-001 cleanup keeps each recovery branch explicit for operator audits.
 func runServerCleanup(record *serverRunRecord, stdout io.Writer) error {
 	if record == nil {
 		return fmt.Errorf("server cleanup record is nil")
@@ -44,14 +45,14 @@ func runServerCleanup(record *serverRunRecord, stdout io.Writer) error {
 	if err != nil {
 		record.DestroyStatus = serverRunStatusFailed
 		record.LastError = err.Error()
-		_ = writeServerRunRecord(record.RunRecordPath, record)
+		writeServerRunRecordBestEffort(record)
 		return err
 	}
 	awsClients, err := newServerAWSClientsFunc(context.Background(), record.AWSRegion)
 	if err != nil {
 		record.DestroyStatus = serverRunStatusFailed
 		record.LastError = err.Error()
-		_ = writeServerRunRecord(record.RunRecordPath, record)
+		writeServerRunRecordBestEffort(record)
 		return err
 	}
 	opts := serverEvidenceOptions{
@@ -71,14 +72,14 @@ func runServerCleanup(record *serverRunRecord, stdout io.Writer) error {
 	}
 
 	var errs []error
-	bucketCtx, cancelBucket := cleanupContext(context.Background(), serverProvisionTimeout)
+	bucketCtx, cancelBucket := cleanupContext(context.Background())
 	if err := deleteStagingBucketFunc(bucketCtx, awsClients, record.StagingBucket); err != nil {
 		errs = append(errs, err)
 	}
 	cancelBucket()
 
 	if strings.TrimSpace(record.InfraDir) != "" {
-		infraCtx, cancelInfra := cleanupContext(context.Background(), serverProvisionTimeout)
+		infraCtx, cancelInfra := cleanupContext(context.Background())
 		if err := destroyServerInfrastructureFunc(infraCtx, opts, toolchain, record.SourceGitCommit, record.ProviderLockSHA256); err != nil {
 			errs = append(errs, err)
 		}
@@ -89,7 +90,7 @@ func runServerCleanup(record *serverRunRecord, stdout io.Writer) error {
 		record.DestroyStatus = serverRunStatusFailed
 		record.LastError = errors.Join(errs...).Error()
 		record.CompletedAtUTC = manifestNowUTC().Format(time.RFC3339Nano)
-		_ = writeServerRunRecord(record.RunRecordPath, record)
+		writeServerRunRecordBestEffort(record)
 		return errors.Join(errs...)
 	}
 	record.DestroyStatus = serverRunStatusSucceeded
@@ -105,4 +106,13 @@ func runServerCleanup(record *serverRunRecord, stdout io.Writer) error {
 		return err
 	}
 	return writef(stdout, "cleanup complete: %s\n", record.RunRecordPath)
+}
+
+func writeServerRunRecordBestEffort(record *serverRunRecord) {
+	if record == nil {
+		return
+	}
+	if err := writeServerRunRecord(record.RunRecordPath, record); err != nil {
+		return
+	}
 }

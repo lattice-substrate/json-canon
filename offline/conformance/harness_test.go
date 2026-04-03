@@ -160,6 +160,7 @@ func TestOfflineEvidenceV1SchemaIncludesInfraAndNativeHostFields(t *testing.T) {
 func TestOfflineEvidenceV1SchemaIncludesNativeHostFields(t *testing.T) {
 	root := repoRoot(t)
 	schemaPath := filepath.Join(root, "offline", "schema", "evidence.v1.json")
+	// #nosec G304 -- conformance test intentionally reads repository schema path.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		t.Fatalf("read evidence.v1 schema: %v", err)

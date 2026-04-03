@@ -33,9 +33,34 @@ Security fixes are provided for:
 
 Older versions receive no security updates.
 
+## Scope
+
+This policy covers the repository contents used to produce and validate release
+artifacts, including:
+- core canonicalization packages and CLI binaries
+- offline replay tooling and evidence schemas
+- pinned toolchain bootstrap and lock files
+- official AWS evidence-path infrastructure code under `infra/`
+- AWS transport and storage controls used by `cmd/jcs-offline-replay`, including
+  SSM transport, staging-bucket configuration, instance-identity verification,
+  and cleanup/recovery logic
+
+Reports about the AWS-backed evidence path are in scope even when they affect
+only release-time infrastructure rather than the core library runtime.
+
 ## Disclosure Process
 
 1. Maintainers acknowledge receipt and triage severity.
 2. A fix is developed and validated in CI.
 3. A coordinated release is published with notes and upgrade guidance.
 4. Public disclosure follows release availability.
+
+## Incident Notes
+
+For issues affecting official AWS evidence generation, include whether the
+finding impacts:
+- SSM transport integrity
+- staging bucket confidentiality or tamper resistance
+- instance-identity verification
+- remote-state cleanup or recovery
+- release-gate validation of evidence artifacts

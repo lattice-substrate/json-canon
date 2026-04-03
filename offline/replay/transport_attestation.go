@@ -8,8 +8,12 @@ import (
 	"strings"
 )
 
+// TransportAttestationSchemaVersion is the schema identifier for replay
+// transport-attestation sidecars.
 const TransportAttestationSchemaVersion = "transport-attestation.v1"
 
+// TransportAttestation binds one uploaded evidence file to a challenge and the
+// worker-observed instance identity material for that replay.
 type TransportAttestation struct {
 	SchemaVersion      string `json:"schema_version"`
 	Challenge          string `json:"challenge"`
@@ -26,6 +30,7 @@ type TransportAttestation struct {
 	Signature          string `json:"signature"`
 }
 
+// WriteTransportAttestation writes a transport-attestation artifact to disk.
 func WriteTransportAttestation(path string, a *TransportAttestation) error {
 	if a == nil {
 		return fmt.Errorf("transport attestation is nil")
@@ -41,7 +46,10 @@ func WriteTransportAttestation(path string, a *TransportAttestation) error {
 	return nil
 }
 
+// LoadTransportAttestation loads and validates a transport-attestation
+// artifact from disk.
 func LoadTransportAttestation(path string) (*TransportAttestation, error) {
+	//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 transport attestation paths are explicit runtime artifacts.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read transport attestation: %w", err)
@@ -59,6 +67,8 @@ func LoadTransportAttestation(path string) (*TransportAttestation, error) {
 	return &a, nil
 }
 
+// ValidateTransportAttestation enforces the transport-attestation field
+// contract before signature verification.
 func ValidateTransportAttestation(a *TransportAttestation) error {
 	if a == nil {
 		return fmt.Errorf("transport attestation is nil")
@@ -114,6 +124,8 @@ func ValidateTransportAttestation(a *TransportAttestation) error {
 	return nil
 }
 
+// TransportAttestationSigningPayload returns the canonical signed payload for a
+// transport attestation.
 func TransportAttestationSigningPayload(a *TransportAttestation) string {
 	return strings.Join([]string{
 		strings.TrimSpace(a.Challenge),

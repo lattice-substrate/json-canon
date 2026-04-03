@@ -68,7 +68,7 @@ type serverRunRecord struct {
 }
 
 func newServerRunRecord(path string, runtimeOpts, cleanupOpts serverEvidenceOptions, gitCommit, sourceRoot, lockSHA string) serverRunRecord {
-	runID := strings.TrimSpace(os.Getenv("GITHUB_RUN_ID"))
+	runID := lookupEnvTrimmed("GITHUB_RUN_ID")
 	record := serverRunRecord{
 		SchemaVersion:       serverRunRecordSchemaVersion,
 		Tag:                 runtimeOpts.tag,
@@ -110,6 +110,7 @@ func newServerRunRecord(path string, runtimeOpts, cleanupOpts serverEvidenceOpti
 }
 
 func loadServerRunRecord(path string) (*serverRunRecord, error) {
+	//nolint:gosec // REQ:OFFLINE-AUTO-001 cleanup and audit flows load explicit run-record paths.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read server run record: %w", err)
@@ -133,7 +134,7 @@ func writeServerRunRecord(path string, record *serverRunRecord) error {
 		return fmt.Errorf("marshal server run record: %w", err)
 	}
 	data = append(data, '\n')
-	if err := atomicWriteFile(path, data, filePerm); err != nil {
+	if err := atomicWriteFile(path, data); err != nil {
 		return fmt.Errorf("write server run record: %w", err)
 	}
 	return nil

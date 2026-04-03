@@ -10,6 +10,16 @@ import (
 	"testing"
 )
 
+const testIMDSToken = "token-123"
+
+func mustWriteHTTPBody(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+	if _, err := w.Write([]byte(body)); err != nil {
+		t.Fatalf("write http response: %v", err)
+	}
+}
+
+//nolint:gocognit // REQ:AWS-GATE-001 inspect-host test fixture keeps each IMDS branch explicit.
 func TestRunInspectHostSuccess(t *testing.T) {
 	oldReadFile := readFileFunc
 	oldClient := imdsHTTPClient
@@ -39,22 +49,22 @@ func TestRunInspectHostSuccess(t *testing.T) {
 			if r.Method != http.MethodPut {
 				t.Fatalf("method for token = %s, want PUT", r.Method)
 			}
-			_, _ = w.Write([]byte("token-123"))
+			mustWriteHTTPBody(t, w, testIMDSToken)
 		case "/latest/dynamic/instance-identity/document":
-			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != "token-123" {
-				t.Fatalf("document token = %q, want token-123", got)
+			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != testIMDSToken {
+				t.Fatalf("document token = %q, want %s", got, testIMDSToken)
 			}
-			_, _ = w.Write([]byte(`{"availabilityZone":"us-east-1a","imageId":"ami-123","instanceId":"i-123","region":"us-east-1"}`))
+			mustWriteHTTPBody(t, w, `{"availabilityZone":"us-east-1a","imageId":"ami-123","instanceId":"i-123","region":"us-east-1"}`)
 		case "/latest/dynamic/instance-identity/signature":
-			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != "token-123" {
-				t.Fatalf("signature token = %q, want token-123", got)
+			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != testIMDSToken {
+				t.Fatalf("signature token = %q, want %s", got, testIMDSToken)
 			}
-			_, _ = w.Write([]byte("c2lnbmVk"))
+			mustWriteHTTPBody(t, w, "c2lnbmVk")
 		case "/latest/dynamic/instance-identity/pkcs7":
-			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != "token-123" {
-				t.Fatalf("pkcs7 token = %q, want token-123", got)
+			if got := r.Header.Get("X-aws-ec2-metadata-token"); got != testIMDSToken {
+				t.Fatalf("pkcs7 token = %q, want %s", got, testIMDSToken)
 			}
-			_, _ = w.Write([]byte("cGtjczc="))
+			mustWriteHTTPBody(t, w, "cGtjczc=")
 		default:
 			http.NotFound(w, r)
 		}

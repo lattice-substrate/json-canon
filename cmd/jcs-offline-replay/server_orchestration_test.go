@@ -14,6 +14,12 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+const (
+	testObjectURL        = "https://example.com/object"
+	testUploadURL        = "https://example.com/upload"
+	testUploadedEvidence = "uploaded_evidence=1"
+)
+
 func TestResolveServerStateConfig(t *testing.T) {
 	t.Run("default local mode", func(t *testing.T) {
 		cfg, err := resolveServerStateConfig(map[string]string{}, "us-east-1", "v1.2.3")
@@ -222,8 +228,8 @@ func TestServerEvidenceDestroyUsesCleanupContextAndContinuesAfterBucketError(t *
 	infraCalled := false
 	deleteStagingBucketFunc = func(ctx context.Context, _ serverAWSClients, bucket string) error {
 		bucketCalled = true
-		if bucket != "bucket" {
-			t.Fatalf("bucket = %q, want bucket", bucket)
+		if bucket != testRemoteStateBucket {
+			t.Fatalf("bucket = %q, want %s", bucket, testRemoteStateBucket)
 		}
 		if ctx.Err() != nil {
 			t.Fatalf("bucket cleanup context unexpectedly canceled: %v", ctx.Err())
@@ -281,17 +287,17 @@ func TestServerSSMAdapterRunReplayRejectsEvidenceSHAMismatch(t *testing.T) {
 	})
 
 	presignGetObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
-		return "https://example.com/object", nil
+		return testObjectURL, nil
 	}
 	presignPutObjectURLFunc = func(context.Context, serverAWSClients, string, string) (string, error) {
-		return "https://example.com/upload", nil
+		return testUploadURL, nil
 	}
 	verifyAWSInstanceIdentityFunc = func(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
 		return &awsInstanceIdentityDocument{Region: "us-east-1", InstanceID: host.InstanceID, ImageID: host.ImageID}, nil
 	}
 	newTransportAttestationChallenge = func() (string, error) { return strings.Repeat("d", 64), nil }
 	runSSMShellScriptFunc = func(context.Context, serverAWSClients, string, string, string, time.Duration) (string, error) {
-		return "uploaded_evidence=1", nil
+		return testUploadedEvidence, nil
 	}
 	payload := []byte(`{"node_id":"aws-native-ubuntu","mode":"vm","distro":"ubuntu","kernel_family":"ga","replay_index":1,"session_id":"s","started_at_utc":"2026-01-01T00:00:00Z","completed_at_utc":"2026-01-01T00:00:01Z","case_count":1,"passed":true,"canonical_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verify_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","failure_class_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","exit_code_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","discovered_cpu":"cpu","discovered_kernel":"kernel","measured_architecture":"x86_64","measured_os_id":"ubuntu","measured_os_version_id":"24.04","measured_kernel":"kernel","measured_cpu":"cpu","aws_instance_id":"i-123","aws_image_id":"ami-123"}`)
 	attestation := mustTestTransportAttestationData(t, payload, strings.Repeat("c", 64), "aws-native-ubuntu", 1)
@@ -385,6 +391,7 @@ func TestServerSSMAdapterRunReplayWritesVerifiedEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunReplay: %v", err)
 	}
+	//nolint:gosec // REQ:AWS-GATE-001 orchestration test reads the temp evidence path it just produced.
 	data, err := os.ReadFile(evidencePath)
 	if err != nil {
 		t.Fatalf("read evidence file: %v", err)
@@ -537,12 +544,12 @@ func TestPrepareStagingUploadsArchitectureArtifacts(t *testing.T) {
 	})
 
 	createStagingBucketFunc = func(context.Context, serverAWSClients, string) (string, error) {
-		return "bucket", nil
+		return testRemoteStateBucket, nil
 	}
 	uploads := make(map[string]string)
 	uploadStagingFileFunc = func(_ context.Context, _ serverAWSClients, bucket, key, path string) error {
-		if bucket != "bucket" {
-			t.Fatalf("upload bucket = %q, want bucket", bucket)
+		if bucket != testRemoteStateBucket {
+			t.Fatalf("upload bucket = %q, want %s", bucket, testRemoteStateBucket)
 		}
 		uploads[key] = path
 		return nil

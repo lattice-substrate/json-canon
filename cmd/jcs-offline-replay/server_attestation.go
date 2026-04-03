@@ -69,6 +69,7 @@ func strictDecodeJSON(kind string, data []byte, target any) error {
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:AWS-GATE-001 attestation verification keeps each failure mode explicit for auditability.
 func verifyTransportAttestation(
 	attestationData []byte,
 	evidenceData []byte,
@@ -77,59 +78,60 @@ func verifyTransportAttestation(
 	replayIndex int,
 	host provisionedHost,
 	expectedRegion string,
-) (*replay.TransportAttestation, error) {
+) error {
 	var attestation replay.TransportAttestation
 	if err := strictDecodeJSON("transport attestation", attestationData, &attestation); err != nil {
-		return nil, err
+		return err
 	}
 	if err := replay.ValidateTransportAttestation(&attestation); err != nil {
-		return nil, err
+		return fmt.Errorf("validate transport attestation: %w", err)
 	}
 	if attestation.Challenge != expectedChallenge {
-		return nil, fmt.Errorf("transport attestation challenge mismatch for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation challenge mismatch for %s replay %d", nodeID, replayIndex)
 	}
 	if attestation.NodeID != nodeID {
-		return nil, fmt.Errorf("transport attestation node_id mismatch: got=%s want=%s", attestation.NodeID, nodeID)
+		return fmt.Errorf("transport attestation node_id mismatch: got=%s want=%s", attestation.NodeID, nodeID)
 	}
 	if attestation.ReplayIndex != replayIndex {
-		return nil, fmt.Errorf("transport attestation replay_index mismatch: got=%d want=%d", attestation.ReplayIndex, replayIndex)
+		return fmt.Errorf("transport attestation replay_index mismatch: got=%d want=%d", attestation.ReplayIndex, replayIndex)
 	}
 	if got := sha256HexString(string(evidenceData)); got != attestation.EvidenceSHA256 {
-		return nil, fmt.Errorf("transport attestation evidence sha256 mismatch for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation evidence sha256 mismatch for %s replay %d", nodeID, replayIndex)
 	}
 	if sha256HexString(attestation.IIDDocument) != attestation.IIDDocumentSHA256 {
-		return nil, fmt.Errorf("transport attestation iid document digest mismatch for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation iid document digest mismatch for %s replay %d", nodeID, replayIndex)
 	}
 	if sha256HexString(attestation.IIDSignature) != attestation.IIDSignatureSHA256 {
-		return nil, fmt.Errorf("transport attestation iid signature digest mismatch for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation iid signature digest mismatch for %s replay %d", nodeID, replayIndex)
 	}
 	if sha256HexString(attestation.IIDPKCS7) != attestation.IIDPKCS7SHA256 {
-		return nil, fmt.Errorf("transport attestation iid pkcs7 digest mismatch for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation iid pkcs7 digest mismatch for %s replay %d", nodeID, replayIndex)
 	}
 	publicKeyBytes, err := base64.StdEncoding.DecodeString(attestation.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("decode transport attestation public key: %w", err)
+		return fmt.Errorf("decode transport attestation public key: %w", err)
 	}
 	signatureBytes, err := base64.StdEncoding.DecodeString(attestation.Signature)
 	if err != nil {
-		return nil, fmt.Errorf("decode transport attestation signature: %w", err)
+		return fmt.Errorf("decode transport attestation signature: %w", err)
 	}
 	if len(publicKeyBytes) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("transport attestation public key must be %d bytes", ed25519.PublicKeySize)
+		return fmt.Errorf("transport attestation public key must be %d bytes", ed25519.PublicKeySize)
 	}
 	if !ed25519.Verify(
 		ed25519.PublicKey(publicKeyBytes),
 		[]byte(replay.TransportAttestationSigningPayload(&attestation)),
 		signatureBytes,
 	) {
-		return nil, fmt.Errorf("transport attestation signature verification failed for %s replay %d", nodeID, replayIndex)
+		return fmt.Errorf("transport attestation signature verification failed for %s replay %d", nodeID, replayIndex)
 	}
 	if _, err := verifyAWSInstanceIdentityFunc(attestation.IIDDocument, attestation.IIDSignature, host, expectedRegion); err != nil {
-		return nil, err
+		return err
 	}
-	return &attestation, nil
+	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:AWS-GATE-001 instance identity verification keeps each trust-boundary check explicit.
 func verifyAWSInstanceIdentity(rawDocument string, rawSignature string, host provisionedHost, expectedRegion string) (*awsInstanceIdentityDocument, error) {
 	var document awsInstanceIdentityDocument
 	if err := json.Unmarshal([]byte(rawDocument), &document); err != nil {

@@ -150,6 +150,8 @@ func validateInfraManifestScalars(im *InfraManifest) error {
 
 // validateInfraManifestHost checks one host entry and records its role in seenRoles.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
+//
+//nolint:gocyclo,cyclop // REQ:OFFLINE-INFRA-001 host validation keeps each required field explicit for audit attribution.
 func validateInfraManifestHost(
 	i int,
 	h InfraManifestHost,

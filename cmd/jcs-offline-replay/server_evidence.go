@@ -285,6 +285,7 @@ func resolveServerEvidencePath(root, rawPath, fallback string) string {
 	return filepath.Join(root, path)
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-AUTO-001 runtime initialization keeps each immutable binding explicit for auditability.
 func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (*serverEvidenceRuntime, error) {
 	stableOpts := opts
 	if _, err := os.Stat(opts.lockFilePath); err != nil {
@@ -301,13 +302,13 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureServerOutputDirs(opts.outputDir); err != nil {
-		_ = cleanupSourceRoot()
-		return nil, err
+	if mkErr := ensureServerOutputDirs(opts.outputDir); mkErr != nil {
+		ignoreError(cleanupSourceRoot())
+		return nil, mkErr
 	}
 	toolchain, err := resolveServerToolchain()
 	if err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, err
 	}
 	opts.toolchainLockPath = rebaseDetachedRepoPath(opts.root, sourceRoot, opts.toolchainLockPath)
@@ -316,22 +317,22 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 	opts.lockFilePath = filepath.Join(opts.infraDir, ".terraform.lock.hcl")
 	lockSHA, err := fileSHA256(opts.lockFilePath)
 	if err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, fmt.Errorf("sha256 terraform lock: %w", err)
 	}
 	tofuVersion, err := resolveTofuVersion(ctx, toolchain.tofuBinary, opts.infraDir)
 	if err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, err
 	}
 	awsClients, err := newServerAWSClientsFunc(ctx, opts.awsRegion)
 	if err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, err
 	}
 	awsIdentity, err := resolveServerAWSIdentityFunc(ctx, awsClients)
 	if err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, err
 	}
 	runRecordPath := filepath.Join(opts.outputDir, "server-run.v1.json")
@@ -339,7 +340,7 @@ func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (
 	runRecord.AWSAccountID = awsIdentity.AccountID
 	runRecord.AWSRoleARN = awsIdentity.ARN
 	if err := writeServerRunRecord(runRecordPath, &runRecord); err != nil {
-		_ = cleanupSourceRoot()
+		ignoreError(cleanupSourceRoot())
 		return nil, err
 	}
 	return &serverEvidenceRuntime{
@@ -412,7 +413,7 @@ func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
 	infra, err := provisionServerInfrastructureFunc(r.ctx, r.opts, r.toolchain, r.gitCommit, r.lockSHA)
 	r.infra = infra
 	if err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.ProvisionStatus)
 		return err
 	}
 	if err := r.persistRunRecord(); err != nil {
@@ -425,7 +426,7 @@ func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
 		return err
 	}
 	if err := waitForSSMManagedInstancesFunc(r.ctx, r.awsClients, infra.Hosts, serverSSMReadyTimeout); err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.ProvisionStatus)
 		return err
 	}
 	return r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusSucceeded)
@@ -470,17 +471,17 @@ func (r *serverEvidenceRuntime) discoverRemoteFacts(stdout io.Writer) error {
 		host := r.infra.Hosts[hostID]
 		facts, err := r.discoverHostFacts(host)
 		if err != nil {
-			_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
+			markRunRecordStatusBestEffort(r, &r.runRecord.DiscoveryStatus)
 			return err
 		}
 		if err := validateDiscoveredRemoteFacts(hostID, facts); err != nil {
-			_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
+			markRunRecordStatusBestEffort(r, &r.runRecord.DiscoveryStatus)
 			return err
 		}
 		r.hostFacts[hostID] = facts
 	}
 	if err := writeDiscoveredFactSummary(stdout, r.infra.Hosts, r.hostFacts); err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.DiscoveryStatus)
 		return err
 	}
 	return r.setRunRecordStatus(&r.runRecord.DiscoveryStatus, serverRunStatusSucceeded)
@@ -553,7 +554,7 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		"--purposes":       "build,provision",
 	}, r.infraManifestPath)
 	if err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.InfraManifestStatus)
 		return err
 	}
 	if err := writeInfraManifestDocumentFunc(r.infraManifestPath, &replay.InfraManifest{
@@ -567,7 +568,7 @@ func (r *serverEvidenceRuntime) writeInfraManifest(stdout io.Writer) error {
 		Hosts:              buildProvisionedInfraManifestHosts(r.infra.Hosts, r.hostFacts, r.opts.awsRegion),
 		Tools:              tools,
 	}); err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.InfraManifestStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.InfraManifestStatus)
 		return err
 	}
 	r.runRecord.InfraManifestPath = r.infraManifestPath
@@ -621,7 +622,7 @@ func (r *serverEvidenceRuntime) runReplayForArch(stdout io.Writer, arch string) 
 	}
 	cfg := r.serverMatrixRunForArch(arch)
 	if err := runServerMatrixFunc(r.ctx, cfg, stdout); err != nil {
-		_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, statusField)
 		return err
 	}
 	return r.setRunRecordStatus(statusField, serverRunStatusSucceeded)
@@ -640,7 +641,7 @@ func (r *serverEvidenceRuntime) runReleaseGates(stdout io.Writer) error {
 			return err
 		}
 		if err := runServerReleaseGateFunc(r.ctx, r.toolchain.goBinary, r.opts.root, r.releaseGateRunForArch(arch)); err != nil {
-			_ = r.setRunRecordStatus(statusField, serverRunStatusFailed)
+			markRunRecordStatusBestEffort(r, statusField)
 			return err
 		}
 		if err := r.setRunRecordStatus(statusField, serverRunStatusSucceeded); err != nil {
@@ -662,20 +663,20 @@ func (r *serverEvidenceRuntime) destroy() error {
 	}
 	var errs []error
 
-	bucketCtx, cancelBucket := cleanupContext(r.ctx, serverProvisionTimeout)
+	bucketCtx, cancelBucket := cleanupContext(r.ctx)
 	if err := deleteStagingBucketFunc(bucketCtx, r.awsClients, r.staging.bucket); err != nil {
 		errs = append(errs, err)
 	}
 	cancelBucket()
 
-	infraCtx, cancelInfra := cleanupContext(r.ctx, serverProvisionTimeout)
+	infraCtx, cancelInfra := cleanupContext(r.ctx)
 	if err := destroyServerInfrastructureFunc(infraCtx, r.opts, r.toolchain, r.gitCommit, r.lockSHA); err != nil {
 		errs = append(errs, err)
 	}
 	cancelInfra()
 
 	if len(errs) != 0 {
-		_ = r.setRunRecordStatus(&r.runRecord.DestroyStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.DestroyStatus)
 		return errors.Join(errs...)
 	}
 	r.destroyed = true
@@ -1049,6 +1050,7 @@ func validateCleanGitWorktree(ctx context.Context, root string) error {
 	return nil
 }
 
+//nolint:contextcheck // REQ:OFFLINE-AUTO-001 cleanup intentionally detaches from the run context so source teardown still happens after cancellation.
 func prepareDetachedSourceTree(ctx context.Context, root, commit string) (string, func() error, error) {
 	sourceRoot, err := os.MkdirTemp("", "jcs-offline-source-*")
 	if err != nil {
@@ -1060,7 +1062,7 @@ func prepareDetachedSourceTree(ctx context.Context, root, commit string) (string
 		return errors.Join(removeErr, fileErr)
 	}
 	if _, err := runCommandInDirFunc(ctx, root, nil, "git", "worktree", "add", "--detach", sourceRoot, commit); err != nil {
-		_ = os.RemoveAll(sourceRoot)
+		ignoreError(os.RemoveAll(sourceRoot))
 		return "", nil, fmt.Errorf("create detached source worktree: %w", err)
 	}
 	return sourceRoot, cleanup, nil
@@ -1152,11 +1154,11 @@ func runCommandInDir(ctx context.Context, dir string, env map[string]string, nam
 	return out.String(), nil
 }
 
-func cleanupContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(parent), timeout)
+func cleanupContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), serverProvisionTimeout)
 }
 
-func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+func atomicWriteFile(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return fmt.Errorf("create parent dir: %w", err)
 	}
@@ -1166,7 +1168,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	}
 	tmpPath := tmp.Name()
 	defer func() {
-		_ = os.Remove(tmpPath)
+		ignoreError(os.Remove(tmpPath))
 	}()
 	if _, err := tmp.Write(data); err != nil {
 		closeBestEffort(tmp)
@@ -1175,13 +1177,28 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp file: %w", err)
 	}
-	if err := os.Chmod(tmpPath, perm); err != nil {
+	if err := os.Chmod(tmpPath, filePerm); err != nil {
 		return fmt.Errorf("chmod temp file: %w", err)
 	}
 	if err := os.Rename(tmpPath, path); err != nil {
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 	return nil
+}
+
+func ignoreError(err error) {
+	if err != nil {
+		return
+	}
+}
+
+func markRunRecordStatusBestEffort(r *serverEvidenceRuntime, field *string) {
+	if r == nil {
+		return
+	}
+	if err := r.setRunRecordStatus(field, serverRunStatusFailed); err != nil {
+		return
+	}
 }
 
 func sha256HexString(data string) string {

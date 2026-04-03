@@ -16,6 +16,11 @@ import (
 	"github.com/lattice-substrate/json-canon/offline/replay"
 )
 
+const (
+	testRemoteStateBucket = "bucket"
+	testTaggedRelease     = "v9.9.9"
+)
+
 func TestNewServerEvidenceRuntimeSuccess(t *testing.T) {
 	oldNewClients := newServerAWSClientsFunc
 	oldResolveIdentity := resolveServerAWSIdentityFunc
@@ -158,8 +163,8 @@ func TestRunRecordCompletionAndCommandHelpers(t *testing.T) {
 	if out != "set" {
 		t.Fatalf("runCommandInDir output=%q want set", out)
 	}
-	if _, err := runCommandInDir(context.Background(), root, nil, "bash", "-lc", "echo failure && exit 3"); err == nil || !strings.Contains(err.Error(), "failure") {
-		t.Fatalf("expected command failure with captured output, got %v", err)
+	if _, runErr := runCommandInDir(context.Background(), root, nil, "bash", "-lc", "echo failure && exit 3"); runErr == nil || !strings.Contains(runErr.Error(), "failure") {
+		t.Fatalf("expected command failure with captured output, got %v", runErr)
 	}
 
 	trimmedPath := filepath.Join(root, "trimmed.txt")
@@ -302,6 +307,7 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executable: %v", err)
 	}
+	//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 test reads the current executable path returned by the Go runtime.
 	controlData, err := os.ReadFile(currentExecutable)
 	if err != nil {
 		t.Fatalf("read executable: %v", err)
@@ -366,11 +372,11 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 			ExecutableRelativePath: "go/bin/go",
 		}},
 	}
-	if err := writeInfraManifestDocument(manifestPath, manifest); err != nil {
-		t.Fatalf("writeInfraManifestDocument: %v", err)
+	if writeErr := writeInfraManifestDocument(manifestPath, manifest); writeErr != nil {
+		t.Fatalf("writeInfraManifestDocument: %v", writeErr)
 	}
 
-	if _, err := replay.CreateBundle(replay.BundleOptions{
+	if _, bundleErr := replay.CreateBundle(replay.BundleOptions{
 		OutputPath:  bundlePath,
 		BinaryPath:  controlPath,
 		WorkerPath:  workerPath,
@@ -378,8 +384,8 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 		ProfilePath: profilePath,
 		VectorsGlob: vectorPath,
 		Version:     "bundle.v1",
-	}); err != nil {
-		t.Fatalf("CreateBundle: %v", err)
+	}); bundleErr != nil {
+		t.Fatalf("CreateBundle: %v", bundleErr)
 	}
 
 	bundleSHA, err := fileSHA256(bundlePath)
@@ -493,7 +499,7 @@ func TestServerEvidenceCommandWrappers(t *testing.T) {
 	remoteOpts, err := parseServerEvidenceOptions(map[string]string{
 		"--tag":              "v7.8.9",
 		"--state-mode":       serverStateModeRemote,
-		"--state-bucket":     "bucket",
+		"--state-bucket":     testRemoteStateBucket,
 		"--state-lock-table": "locks",
 		"--state-region":     "us-west-2",
 		"--state-key":        "custom.tfstate",
@@ -502,7 +508,7 @@ func TestServerEvidenceCommandWrappers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseServerEvidenceOptions remote: %v", err)
 	}
-	if remoteOpts.state.Mode != serverStateModeRemote || remoteOpts.state.Bucket != "bucket" || remoteOpts.state.Region != "us-west-2" || remoteOpts.state.Key != "custom.tfstate" {
+	if remoteOpts.state.Mode != serverStateModeRemote || remoteOpts.state.Bucket != testRemoteStateBucket || remoteOpts.state.Region != "us-west-2" || remoteOpts.state.Key != "custom.tfstate" {
 		t.Fatalf("unexpected remote state opts: %#v", remoteOpts.state)
 	}
 	if _, err := requireServerEvidenceFlags(map[string]string{}); err == nil {
@@ -580,7 +586,7 @@ func TestCmdInitInfraLockAndServerCleanup(t *testing.T) {
 		amiLockPath:  filepath.Join(outputDir, "infra", "aws_release_hosts.lock.json"),
 	}, strings.Repeat("a", 40), filepath.Join(outputDir, "source"), strings.Repeat("b", 64))
 	record.RunRecordPath = runRecordPath
-	record.StagingBucket = "bucket"
+	record.StagingBucket = testRemoteStateBucket
 	record.RunStatus = serverRunStatusRunning
 	if err := writeServerRunRecord(runRecordPath, &record); err != nil {
 		t.Fatalf("writeServerRunRecord: %v", err)
@@ -665,7 +671,7 @@ func TestRunServerCleanupBranchesAndResolveSourceIdentity(t *testing.T) {
 		amiLockPath:  filepath.Join(failingDir, "infra", "aws_release_hosts.lock.json"),
 	}, strings.Repeat("c", 40), filepath.Join(failingDir, "source"), strings.Repeat("d", 64))
 	failingRecord.RunRecordPath = filepath.Join(failingDir, "server-run.v1.json")
-	failingRecord.StagingBucket = "bucket"
+	failingRecord.StagingBucket = testRemoteStateBucket
 	if err := writeServerRunRecord(failingRecord.RunRecordPath, &failingRecord); err != nil {
 		t.Fatalf("writeServerRunRecord(failing): %v", err)
 	}
@@ -705,9 +711,10 @@ func TestRunServerCleanupBranchesAndResolveSourceIdentity(t *testing.T) {
 	}
 }
 
+//nolint:gocognit // REQ:OFFLINE-AUTO-001 test intentionally exercises multiple CLI dispatch branches in one place.
 func TestResolveSourceIdentityGitFallbacksAndDispatchSubcommand(t *testing.T) {
 	repoRoot, commit := initServerEvidenceTestRepo(t)
-	runTestCommand(t, repoRoot, "git", "tag", "v9.9.9")
+	runGitCommand(t, repoRoot, "tag", testTaggedRelease)
 
 	withWorkingDirectory(t, repoRoot, func() {
 		t.Setenv("JCS_OFFLINE_SOURCE_GIT_COMMIT", "")
@@ -717,7 +724,7 @@ func TestResolveSourceIdentityGitFallbacksAndDispatchSubcommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveSourceIdentity(git): %v", err)
 		}
-		if gotCommit != commit || gotTag != "v9.9.9" {
+		if gotCommit != commit || gotTag != testTaggedRelease {
 			t.Fatalf("unexpected git source identity: commit=%q tag=%q", gotCommit, gotTag)
 		}
 
@@ -725,7 +732,7 @@ func TestResolveSourceIdentityGitFallbacksAndDispatchSubcommand(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveOfflineSourceIdentity(git): %v", err)
 		}
-		if offlineCommit != commit || offlineTag != "v9.9.9" {
+		if offlineCommit != commit || offlineTag != testTaggedRelease {
 			t.Fatalf("unexpected offline source identity: commit=%q tag=%q", offlineCommit, offlineTag)
 		}
 	})
@@ -985,12 +992,12 @@ func initServerEvidenceTestRepo(t *testing.T) (string, string) {
 	mustWriteFile(t, filepath.Join(root, "offline", "toolchain.lock.tsv"), []byte("tool\tversion\n"), 0o600)
 	mustWriteFile(t, filepath.Join(root, "README.md"), []byte("fixture\n"), 0o600)
 
-	runTestCommand(t, root, "git", "init")
-	runTestCommand(t, root, "git", "config", "user.name", "Codex Test")
-	runTestCommand(t, root, "git", "config", "user.email", "codex@example.test")
-	runTestCommand(t, root, "git", "add", ".")
-	runTestCommand(t, root, "git", "commit", "-m", "initial")
-	commit := strings.TrimSpace(runTestCommand(t, root, "git", "rev-parse", "HEAD"))
+	runGitCommand(t, root, "init")
+	runGitCommand(t, root, "config", "user.name", "Codex Test")
+	runGitCommand(t, root, "config", "user.email", "codex@example.test")
+	runGitCommand(t, root, "add", ".")
+	runGitCommand(t, root, "commit", "-m", "initial")
+	commit := strings.TrimSpace(runGitCommand(t, root, "rev-parse", "HEAD"))
 	return root, commit
 }
 
@@ -1000,15 +1007,15 @@ func writeFakeExecutable(t *testing.T, path, script string) string {
 	return path
 }
 
-func runTestCommand(t *testing.T, dir, name string, args ...string) string {
+func runGitCommand(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("run %s %v: %v\n%s", name, args, err, out.String())
+		t.Fatalf("run git %v: %v\n%s", args, err, out.String())
 	}
 	return out.String()
 }
@@ -1017,9 +1024,9 @@ func currentMatrixArchitecture(t *testing.T) string {
 	t.Helper()
 	switch runtime.GOARCH {
 	case "amd64":
-		return "x86_64"
-	case "arm64":
-		return "arm64"
+		return matrixArchitectureX8664
+	case matrixArchitectureARM64:
+		return matrixArchitectureARM64
 	default:
 		t.Skipf("unsupported GOARCH %q for architecture-sensitive test", runtime.GOARCH)
 		return ""

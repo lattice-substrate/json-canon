@@ -98,7 +98,7 @@ func resolveToolchainHostArch(flags map[string]string) (string, error) {
 	}
 	hostArch = replay.NormalizeToolchainArch(hostArch)
 	switch hostArch {
-	case "amd64", "arm64":
+	case goArchitectureAMD64, matrixArchitectureARM64:
 		return hostArch, nil
 	default:
 		return "", fmt.Errorf("unsupported host arch %q", hostArch)
@@ -383,6 +383,7 @@ func extractZIP(archivePath, destRoot string) error {
 	return nil
 }
 
+//nolint:cyclop // REQ:OFFLINE-TOOLCHAIN-001 tar extraction keeps each entry type explicit for auditability.
 func extractTarEntry(destRoot string, header *tar.Header, reader io.Reader) error {
 	targetPath, err := safeArchivePath(destRoot, header.Name)
 	if err != nil {
@@ -418,6 +419,7 @@ func extractTarEntry(destRoot string, header *tar.Header, reader io.Reader) erro
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-TOOLCHAIN-001 zip extraction keeps each entry type explicit for auditability.
 func extractZIPEntry(destRoot string, file *zip.File) error {
 	if file.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("unsupported zip symlink entry %q", file.Name)

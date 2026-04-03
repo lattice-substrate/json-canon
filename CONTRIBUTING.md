@@ -294,6 +294,18 @@ Interrupted or failed AWS runs are recovered with:
   --run-record ./offline/runs/releases/<tag>/server-run.v1.json
 ```
 
+If the operator loses power or the controlling shell exits during the billed
+AWS run, recovery is:
+- conformant remote-state mode: rerun `server-cleanup` with the recorded
+  `server-run.v1.json`; it uses the persisted backend coordinates to delete the
+  staging bucket and destroy infrastructure
+- debug-only local-state mode: not recoverable through the supported release
+  workflow; destroy remaining AWS resources manually or rerun from a preserved
+  local state directory
+
+`./scripts/release-server.sh` always enforces conformant remote-state mode, so
+the supported release path remains recoverable after operator interruption.
+
 Refresh the committed AWS AMI lock whenever the official host selectors need to move:
 
 ```bash

@@ -28,7 +28,7 @@ func (r *serverEvidenceRuntime) prepareStaging(stdout io.Writer) error {
 	}
 	bucket, err := createStagingBucketFunc(r.ctx, r.awsClients, r.opts.tag)
 	if err != nil {
-		_ = r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusFailed)
+		markRunRecordStatusBestEffort(r, &r.runRecord.StagingStatus)
 		return err
 	}
 	x86 := stagedServerArtifacts{
@@ -49,7 +49,7 @@ func (r *serverEvidenceRuntime) prepareStaging(stdout io.Writer) error {
 		{arm.workerKey, r.armArtifacts.workerPath},
 	} {
 		if err := uploadStagingFileFunc(r.ctx, r.awsClients, bucket, item.key, item.path); err != nil {
-			_ = r.setRunRecordStatus(&r.runRecord.StagingStatus, serverRunStatusFailed)
+			markRunRecordStatusBestEffort(r, &r.runRecord.StagingStatus)
 			return err
 		}
 	}
@@ -129,6 +129,7 @@ func (a *serverSSMAdapter) Cleanup(_ context.Context, _ replay.NodeSpec, _ int) 
 	return nil
 }
 
+//nolint:gocyclo,cyclop // REQ:AWS-GATE-001 remote replay flow keeps each transport step explicit for auditability.
 func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, _ string, evidencePath string, replayIndex int) error {
 	host, ok := a.hosts[node.ID]
 	if !ok {
@@ -160,8 +161,8 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	if err != nil {
 		return err
 	}
-	if _, err := runSSMShellScriptFunc(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute); err != nil {
-		return err
+	if _, runErr := runSSMShellScriptFunc(ctx, a.aws, host.InstanceID, "jcs replay "+node.ID, runCmd, 30*time.Minute); runErr != nil {
+		return runErr
 	}
 	data, err := downloadStagingObjectFunc(ctx, a.aws, a.bucket, evidenceKey)
 	if err != nil {
@@ -171,12 +172,12 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	if err != nil {
 		return err
 	}
-	if _, err := verifyTransportAttestation(attestationData, data, challenge, node.ID, replayIndex, host, a.aws.config.Region); err != nil {
-		return err
+	if verifyErr := verifyTransportAttestation(attestationData, data, challenge, node.ID, replayIndex, host, a.aws.config.Region); verifyErr != nil {
+		return verifyErr
 	}
 	runEvidence, err := replay.LoadNodeRunEvidenceFromBytes(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("load verified node evidence: %w", err)
 	}
 	runEvidence.TransportAttestationSHA256 = sha256HexString(string(attestationData))
 	encodedEvidence, err := json.MarshalIndent(runEvidence, "", "  ")
@@ -185,10 +186,10 @@ func (a *serverSSMAdapter) RunReplay(ctx context.Context, node replay.NodeSpec, 
 	}
 	encodedEvidence = append(encodedEvidence, '\n')
 	attestationPath := strings.TrimSuffix(evidencePath, filepath.Ext(evidencePath)) + ".transport-attestation.v1.json"
-	if err := atomicWriteFile(attestationPath, attestationData, filePerm); err != nil {
+	if err := atomicWriteFile(attestationPath, attestationData); err != nil {
 		return err
 	}
-	if err := atomicWriteFile(evidencePath, encodedEvidence, filePerm); err != nil {
+	if err := atomicWriteFile(evidencePath, encodedEvidence); err != nil {
 		return err
 	}
 	return nil
