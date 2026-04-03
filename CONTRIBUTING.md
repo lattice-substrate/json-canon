@@ -31,6 +31,19 @@ Lint is a required gate and must pass before merge.
 Any `//nolint` change must also update `conformance/nolint_inventory.tsv` through
 the Go-native conformance inventory flow.
 
+Traceability artifacts are governed outputs, not hand-edited documents. When
+implementation symbols move or `//nolint` directives change, regenerate:
+
+```bash
+go run ./cmd/jcs-gate sync-traceability
+```
+
+This command refreshes:
+- `REQ_ENFORCEMENT_MATRIX.jsonl`
+- `REQ_ENFORCEMENT_MATRIX.csv`
+- `REQ_ENFORCEMENT_MATRIX.md`
+- `conformance/nolint_inventory.tsv`
+
 ## Pre-Push Hook (Optional)
 
 To catch vet and lint failures before pushing release tags:

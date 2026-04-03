@@ -2,19 +2,19 @@
   "repositories": {
     "jcs-spec": {
       "url": "https://github.com/lattice-substrate/jcs-spec.git",
-      "commit": "79da602fefa7d1bab31a622811bae74d1dc20dc8"
+      "commit": "fb3c6bde6047df3f50ae3c70d58708efb74e2a94"
     },
     "jcs-contracts": {
       "url": "https://github.com/lattice-substrate/jcs-contracts.git",
-      "commit": "2bc1818f0d172a320a903555eb2d4c8292ce2fa0"
+      "commit": "6457c5a6b8e4ef03c7c7eab7affa81f4a475cd7a"
     },
     "jcs-conformance-harness": {
       "url": "https://github.com/lattice-substrate/jcs-conformance-harness.git",
-      "commit": "24d400c0fc8577832332cee22df4de76d74e2eff"
+      "commit": "c9086b738c8b0c97afda64ab8bbfd2d6b5a332b6"
     },
     "jcs-integration-tests": {
       "url": "https://github.com/lattice-substrate/jcs-integration-tests.git",
-      "commit": "23213c953453dca0da5377e44fbf6cfab4fd4393"
+      "commit": "f77212a2dc8a9d1aa62e5c4a1a26b4c2862ecd99"
     }
   }
 }

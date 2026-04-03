@@ -7,6 +7,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
+
+	"github.com/lattice-substrate/json-canon/internal/traceability"
 )
 
 type gateStep struct {
@@ -19,6 +23,8 @@ type commandRunner interface {
 }
 
 type realRunner struct{}
+
+var syncTraceabilityFunc = traceability.Sync
 
 var requiredGateSteps = []gateStep{
 	{label: "go vet", args: []string{"vet", "./..."}},
@@ -39,6 +45,27 @@ func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 		switch args[0] {
 		case "--help", "-h":
 			if err := writeUsage(stdout); err != nil {
+				return 1
+			}
+			return 0
+		case "sync-traceability":
+			root, err := parseSyncTraceabilityArgs(args[1:])
+			if err != nil {
+				if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+					return 1
+				}
+				if writeErr := writeUsage(stderr); writeErr != nil {
+					return 1
+				}
+				return 2
+			}
+			if err := syncTraceabilityFunc(root); err != nil {
+				if writeErr := writef(stderr, "sync-traceability failed: %v\n", err); writeErr != nil {
+					return 1
+				}
+				return 1
+			}
+			if err := writef(stdout, "traceability artifacts synced under %s\n", root); err != nil {
 				return 1
 			}
 			return 0
@@ -72,6 +99,16 @@ func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	return 0
 }
 
+func parseSyncTraceabilityArgs(args []string) (string, error) {
+	if len(args) == 0 {
+		return ".", nil
+	}
+	if len(args) == 2 && args[0] == "--root" && strings.TrimSpace(args[1]) != "" {
+		return filepath.Clean(args[1]), nil
+	}
+	return "", fmt.Errorf("sync-traceability accepts no arguments or --root <path>")
+}
+
 func (realRunner) Run(ctx context.Context, name string, args []string, stdout io.Writer, stderr io.Writer) error {
 	// #nosec G204 -- command and args are fixed repository gate invocations.
 	cmd := exec.CommandContext(ctx, name, args...)
@@ -84,13 +121,16 @@ func (realRunner) Run(ctx context.Context, name string, args []string, stdout io
 }
 
 func writeUsage(w io.Writer) error {
-	if err := writeLine(w, "usage: go run ./cmd/jcs-gate [--help]"); err != nil {
+	if err := writeLine(w, "usage: go run ./cmd/jcs-gate [--help] | sync-traceability [--root <path>]"); err != nil {
 		return err
 	}
 	if err := writeLine(w, "runs: vet, golangci-lint, tests, race, conformance, offline evidence gate"); err != nil {
 		return err
 	}
-	return writeLine(w, "offline gate uses current JCS_OFFLINE_* env vars (and may skip if unset)")
+	if err := writeLine(w, "offline gate uses current JCS_OFFLINE_* env vars (and may skip if unset)"); err != nil {
+		return err
+	}
+	return writeLine(w, "sync-traceability regenerates matrix mirrors, symbol anchors, and nolint inventory from live source")
 }
 
 func writeLine(w io.Writer, msg string) error {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lattice-substrate.github.io/json-canon/offline/schema/infra-manifest.v1.json",
+  "$id": "https://lattice-substrate.github.io/jcs/schemas/infra.manifest.v1",
   "title": "json-canon infrastructure manifest v1",
   "type": "object",
   "additionalProperties": false,

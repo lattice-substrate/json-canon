@@ -73,3 +73,27 @@ func TestRunUnknownArgument(t *testing.T) {
 		t.Fatalf("expected no command invocations, got %d", len(fr.calls))
 	}
 }
+
+func TestRunSyncTraceability(t *testing.T) {
+	orig := syncTraceabilityFunc
+	called := ""
+	syncTraceabilityFunc = func(root string) error {
+		called = root
+		return nil
+	}
+	defer func() { syncTraceabilityFunc = orig }()
+
+	fr := &fakeRunner{}
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	code := run([]string{"sync-traceability", "--root", "/tmp/traceability"}, &out, &errOut, fr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, errOut.String())
+	}
+	if called != "/tmp/traceability" {
+		t.Fatalf("expected sync root to be propagated, got %q", called)
+	}
+	if len(fr.calls) != 0 {
+		t.Fatalf("expected no gate invocations, got %d", len(fr.calls))
+	}
+}

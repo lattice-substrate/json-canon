@@ -342,6 +342,7 @@ jobs:
             --contracts "${gov_root}/jcs-contracts" \
             --conformance "${gov_root}/jcs-conformance-harness" \
             --integration "${gov_root}/jcs-integration-tests" \
+            --required-profile "official-cloud-measured-release" \
             --evidence-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-evidence.json" \
             --bundle-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/offline-bundle.tgz" \
             --control-binary-x86 "${GITHUB_WORKSPACE}/.tmp/release-offline-control/jcs-canon-x86_64" \
