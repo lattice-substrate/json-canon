@@ -47,6 +47,8 @@ type BundleManifest struct {
 	VectorSetSHA256 string            `json:"vector_set_sha256"`
 }
 
+const deterministicBundleCreatedAtUTC = "1970-01-01T00:00:00Z"
+
 type bundleEntry struct {
 	path string
 	data []byte
@@ -97,7 +99,7 @@ func CreateBundle(opts BundleOptions) (*BundleManifest, error) {
 
 	manifest := &BundleManifest{
 		Version:       opts.Version,
-		CreatedAtUTC:  wallClockNowUTC().Format(time.RFC3339Nano),
+		CreatedAtUTC:  deterministicBundleCreatedAtUTC,
 		BinaryPath:    "bundle/jcs-canon",
 		BinarySHA256:  sha256Hex(binaryBytes),
 		WorkerPath:    "bundle/jcs-offline-worker",
@@ -274,9 +276,4 @@ func writeBundleTarGz(path string, entries []bundleEntry) error {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-//nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 bundle creation records an actual creation timestamp in manifest metadata.
-func wallClockNowUTC() time.Time {
-	return time.Now().UTC()
 }

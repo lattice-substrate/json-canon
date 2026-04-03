@@ -156,6 +156,9 @@ the pinned toolchain under `offline/runs/releases/<tag>/toolchain/` and then inv
 `jcs-offline-replay server-evidence`, which performs the billed native-AWS orchestration in Go.
 The wrapper requires remote OpenTofu state for conformant release runs; `STATE_MODE=local`
 is reserved for debug-only invocations outside the supported release path.
+After both per-architecture release gates pass, `server-evidence` also writes
+`cross-arch-compare.json` and `cross-arch-compare.md` and fails closed on any
+x86_64 vs arm64 aggregate digest mismatch.
 
 Shared-CI conformance mode requires remote OpenTofu state:
 - `STATE_MODE=remote`
@@ -183,12 +186,22 @@ the orchestrator verifies the IID signature before accepting the host facts. The
 resulting manifest requires `iid_verified=true`, and replay evidence records only the
 SHA-256 of each verified transport-attestation sidecar.
 
+Current IID verification support is scoped to `us-east-1`. The orchestrator pins the
+AWS instance-identity certificate for that region and fails closed in other regions
+until additional certificates are committed and validated.
+
+When `iid_verified=true`, the manifest's `instance_id`, `image_id`, `region`, and IID
+digest fields are covered by the verified AWS instance-identity document. The
+`availability_zone`, `os_id`, `os_version_id`, `cpu`, and `kernel` fields remain
+worker-discovered measurements and are therefore self-reported substrate metadata.
+
 ## Outputs to Audit
 
 Each full run emits an `offline/runs/...` directory containing:
 
 - immutable bundle (`offline-bundle.tgz`)
 - replay evidence (`offline-evidence.json`)
+- cross-arch parity reports (`cross-arch-compare.json`, `cross-arch-compare.md`) for server-backed release runs
 - run record (`server-run.v1.json`)
 - controller logs (`logs/*.log`)
 - audit summaries (`audit/audit-summary.md`, `audit/audit-summary.json`)

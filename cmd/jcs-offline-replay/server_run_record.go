@@ -22,49 +22,52 @@ const (
 )
 
 type serverRunRecord struct {
-	SchemaVersion       string `json:"schema_version"`
-	Tag                 string `json:"tag"`
-	SourceGitCommit     string `json:"source_git_commit"`
-	SourceGitTag        string `json:"source_git_tag"`
-	RepoRoot            string `json:"repo_root"`
-	SourceRoot          string `json:"source_root"`
-	OutputDir           string `json:"output_dir"`
-	RunRecordPath       string `json:"run_record_path"`
-	AWSRegion           string `json:"aws_region"`
-	StateMode           string `json:"state_mode"`
-	StateBucket         string `json:"state_bucket,omitempty"`
-	StateRegion         string `json:"state_region,omitempty"`
-	StateLockTable      string `json:"state_lock_table,omitempty"`
-	StateKey            string `json:"state_key,omitempty"`
-	InfraDir            string `json:"infra_dir"`
-	ProviderLockPath    string `json:"provider_lock_path"`
-	ProviderLockSHA256  string `json:"provider_lock_sha256"`
-	AMILockPath         string `json:"ami_lock_path"`
-	StagingBucket       string `json:"staging_bucket,omitempty"`
-	InfraManifestPath   string `json:"infra_manifest_path,omitempty"`
-	X86EvidencePath     string `json:"x86_evidence_path,omitempty"`
-	ArmEvidencePath     string `json:"arm64_evidence_path,omitempty"`
-	X86BundlePath       string `json:"x86_bundle_path,omitempty"`
-	ArmBundlePath       string `json:"arm64_bundle_path,omitempty"`
-	X86ControlPath      string `json:"x86_control_binary_path,omitempty"`
-	ArmControlPath      string `json:"arm64_control_binary_path,omitempty"`
-	WorkflowRunID       string `json:"workflow_run_id,omitempty"`
-	WorkflowRunURL      string `json:"workflow_run_url,omitempty"`
-	AWSAccountID        string `json:"aws_account_id,omitempty"`
-	AWSRoleARN          string `json:"aws_role_arn,omitempty"`
-	ProvisionStatus     string `json:"provision_status"`
-	StagingStatus       string `json:"staging_status"`
-	DiscoveryStatus     string `json:"discovery_status"`
-	InfraManifestStatus string `json:"infra_manifest_status"`
-	X86ReplayStatus     string `json:"x86_replay_status"`
-	ArmReplayStatus     string `json:"arm64_replay_status"`
-	X86GateStatus       string `json:"x86_gate_status"`
-	ArmGateStatus       string `json:"arm64_gate_status"`
-	DestroyStatus       string `json:"destroy_status"`
-	RunStatus           string `json:"run_status"`
-	LastError           string `json:"last_error,omitempty"`
-	StartedAtUTC        string `json:"started_at_utc"`
-	CompletedAtUTC      string `json:"completed_at_utc,omitempty"`
+	SchemaVersion            string `json:"schema_version"`
+	Tag                      string `json:"tag"`
+	SourceGitCommit          string `json:"source_git_commit"`
+	SourceGitTag             string `json:"source_git_tag"`
+	RepoRoot                 string `json:"repo_root"`
+	SourceRoot               string `json:"source_root"`
+	OutputDir                string `json:"output_dir"`
+	RunRecordPath            string `json:"run_record_path"`
+	AWSRegion                string `json:"aws_region"`
+	StateMode                string `json:"state_mode"`
+	StateBucket              string `json:"state_bucket,omitempty"`
+	StateRegion              string `json:"state_region,omitempty"`
+	StateLockTable           string `json:"state_lock_table,omitempty"`
+	StateKey                 string `json:"state_key,omitempty"`
+	InfraDir                 string `json:"infra_dir"`
+	ProviderLockPath         string `json:"provider_lock_path"`
+	ProviderLockSHA256       string `json:"provider_lock_sha256"`
+	AMILockPath              string `json:"ami_lock_path"`
+	StagingBucket            string `json:"staging_bucket,omitempty"`
+	InfraManifestPath        string `json:"infra_manifest_path,omitempty"`
+	CrossArchCompareJSONPath string `json:"cross_arch_compare_json_path,omitempty"`
+	CrossArchCompareMDPath   string `json:"cross_arch_compare_markdown_path,omitempty"`
+	X86EvidencePath          string `json:"x86_evidence_path,omitempty"`
+	ArmEvidencePath          string `json:"arm64_evidence_path,omitempty"`
+	X86BundlePath            string `json:"x86_bundle_path,omitempty"`
+	ArmBundlePath            string `json:"arm64_bundle_path,omitempty"`
+	X86ControlPath           string `json:"x86_control_binary_path,omitempty"`
+	ArmControlPath           string `json:"arm64_control_binary_path,omitempty"`
+	WorkflowRunID            string `json:"workflow_run_id,omitempty"`
+	WorkflowRunURL           string `json:"workflow_run_url,omitempty"`
+	AWSAccountID             string `json:"aws_account_id,omitempty"`
+	AWSRoleARN               string `json:"aws_role_arn,omitempty"`
+	ProvisionStatus          string `json:"provision_status"`
+	StagingStatus            string `json:"staging_status"`
+	DiscoveryStatus          string `json:"discovery_status"`
+	InfraManifestStatus      string `json:"infra_manifest_status"`
+	X86ReplayStatus          string `json:"x86_replay_status"`
+	ArmReplayStatus          string `json:"arm64_replay_status"`
+	X86GateStatus            string `json:"x86_gate_status"`
+	ArmGateStatus            string `json:"arm64_gate_status"`
+	CrossArchStatus          string `json:"cross_arch_status"`
+	DestroyStatus            string `json:"destroy_status"`
+	RunStatus                string `json:"run_status"`
+	LastError                string `json:"last_error,omitempty"`
+	StartedAtUTC             string `json:"started_at_utc"`
+	CompletedAtUTC           string `json:"completed_at_utc,omitempty"`
 }
 
 func newServerRunRecord(path string, runtimeOpts, cleanupOpts serverEvidenceOptions, gitCommit, sourceRoot, lockSHA string) serverRunRecord {
@@ -99,6 +102,7 @@ func newServerRunRecord(path string, runtimeOpts, cleanupOpts serverEvidenceOpti
 		ArmReplayStatus:     serverRunStatusPending,
 		X86GateStatus:       serverRunStatusPending,
 		ArmGateStatus:       serverRunStatusPending,
+		CrossArchStatus:     serverRunStatusPending,
 		DestroyStatus:       serverRunStatusPending,
 		RunStatus:           serverRunStatusRunning,
 		WorkflowRunID:       runID,

@@ -30,6 +30,19 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | CI conformance gates MUST validate the official deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
 | OFFICIAL-VEC-004 | CONTRIBUTING.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
 
+## CONF-VEC: Conformance Vector Corpus
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| CONF-VEC-001 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | Every executable conformance vector MUST declare an explicit `intent` classification. |
+| CONF-VEC-002 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | Conformance vector `intent` MUST be one of `positive`, `negative`, or `adversarial`. |
+| CONF-VEC-003 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | `positive` conformance vectors MUST assert successful execution (`want_exit = 0`) and MUST assert exact success-channel output. |
+| CONF-VEC-004 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | `negative` conformance vectors MUST assert fail-closed execution (`want_exit != 0`) and MUST assert stderr diagnostic evidence. |
+| CONF-VEC-005 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | `adversarial` conformance vectors MUST assert fail-closed execution (`want_exit != 0`) and MUST assert root-cause or byte-offset stderr diagnostics. |
+| CONF-VEC-006 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | Every CLI command represented in the conformance vector corpus MUST have at least one `positive` vector. |
+| CONF-VEC-007 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | Every CLI command represented in the conformance vector corpus MUST have at least one `negative` vector. |
+| CONF-VEC-008 | CONFORMANCE.md + docs/VECTOR_FORMAT.md | vector corpus contract | MUST | Every CLI command represented in the conformance vector corpus MUST have at least one `adversarial` vector. |
+
 ## PROF-NUM: Number Profile Restrictions
 
 | ID | Spec | Section | Level | Requirement |
@@ -95,6 +108,9 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
 | TRACE-LINK-001 | docs/TRACEABILITY_MODEL.md | Required Mapping | MUST | Behavior tests in runtime packages MUST be linked from `REQ_ENFORCEMENT_MATRIX.md`. |
+| TRACE-LINK-002 | REQ_ENFORCEMENT_MATRIX.md + REQ_ENFORCEMENT_MATRIX.csv | Machine-Readable Mirrors | MUST | The committed CSV enforcement-matrix artifact MUST remain row-identical to the markdown enforcement matrix. |
+| TRACE-LINK-003 | REQ_ENFORCEMENT_MATRIX.md + REQ_ENFORCEMENT_MATRIX.jsonl | Machine-Readable Mirrors | MUST | The committed JSONL enforcement-matrix artifact MUST remain row-identical to the markdown enforcement matrix. |
+| TRACE-LINK-004 | CONFORMANCE.md + conformance/harness_test.go | Machine-Readable Mirrors | MUST | Conformance gates MUST fail closed when registry IDs, markdown matrix rows, CSV matrix rows, JSONL matrix rows, or linked code/test symbols drift from each other or from the committed source tree. |
 
 ## LINT: Lint Governance
 
@@ -112,15 +128,22 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 |----|------|---------|-------|-------------|
 | OFFLINE-MATRIX-001 | offline/README.md | Contracts | MUST | Offline replay matrix manifest (`offline/matrix.yaml`) MUST exist, parse, and include both `container` and `vm` lanes. |
 | OFFLINE-COLD-001 | offline/README.md | Contracts | MUST | Maximal offline profile (`offline/profiles/maximal.yaml`) MUST enforce at least 5 cold replays per required lane and `hard_release_gate: true`. |
+| OFFLINE-BUNDLE-001 | offline/README.md + offline/replay/bundle.go | Contracts | MUST | Offline replay bundle creation MUST remain byte-deterministic for identical inputs. |
 | OFFLINE-EVIDENCE-001 | offline/README.md | Contracts | MUST | Offline evidence schema v1 (`offline/schema/evidence.v1.json`) and `verify-evidence` validation path MUST exist and remain executable, including source binding fields (`source_git_commit`, `source_git_tag`). |
 | OFFLINE-EVIDENCE-002 | offline/README.md | Contracts | MUST | Offline evidence schema v1 (`offline/schema/evidence.v1.json`) MUST remain the only evidence schema and MUST carry the full conformance DAG binding surface: optional infrastructure manifest binding fields (`infra_manifest_sha256`, `infra_repo_url`, `infra_repo_commit`), optional discovered substrate fields (`discovered_cpu`, `discovered_kernel`, `image_digest`), and optional native-host measurement fields (`measured_architecture`, `measured_os_id`, `measured_os_version_id`, `measured_kernel`, `measured_cpu`, `aws_instance_id`, `aws_image_id`, `transport_attestation_sha256`). Validation MUST enforce those fields fail-closed when the selected profile/matrix requires infra-substrate-binding or native-host attestation. |
 | OFFLINE-INFRA-001 | offline/README.md | Contracts | MUST | Infrastructure manifest schema (`offline/schema/infra-manifest.v1.json`) MUST exist and validate IaC repo identity (`infra_repo_url`, `infra_repo_commit`), provider lock digest (`provider_lock_sha256`), per-host substrate records (`role`, `cloud_provider`, `region`, `instance_type`, `image_id`), verified native-host attestation fields (`iid_document_sha256`, `iid_signature_sha256`, `iid_pkcs7_sha256`, `iid_verified`), and the pinned tool artifacts used to build/provision/run the server-backed evidence path. |
+| OFFLINE-INFRA-002 | offline/README.md + offline/schema/infra-manifest.v1.json | Contracts | MUST | `infra-manifest.v1` documentation and schema annotations MUST distinguish AWS-IID-backed identity fields from self-reported host measurements. |
 | OFFLINE-TOOLCHAIN-001 | offline/README.md + docs/adr/ADR-0006-pinned-toolchain-evidence.md | Contracts | MUST | Server-backed offline evidence generation and release validation MUST consume `offline/toolchain.lock.tsv`, download each referenced tool artifact from its pinned URL, verify its SHA-256, and record the exact verified artifacts in `infra-manifest.v1.json`. |
 | OFFLINE-AUTO-001 | CONTRIBUTING.md + docs/OFFLINE_REPLAY_HARNESS.md + docs/adr/ADR-0007-go-native-server-evidence-orchestration.md | Contracts | MUST | After pinned Go bootstrap, release-critical server-backed automation MUST execute through Go-native `jcs-offline-replay` subcommands (`init-infra-lock`, `server-evidence`). Shell entrypoints are limited to pinned-Go bootstrap and invoking those Go subcommands. |
+| OFFLINE-SOURCE-001 | CONTRIBUTING.md + cmd/jcs-offline-replay/server_evidence.go | Contracts | MUST | Server-backed evidence generation MUST reject dirty source trees before billed orchestration begins. |
+| OFFLINE-SOURCE-002 | CONTRIBUTING.md + cmd/jcs-offline-replay/server_evidence.go | Contracts | MUST | Server-backed evidence generation MUST build from a detached source worktree at an exact recorded commit. |
+| OFFLINE-SOURCE-003 | cmd/jcs-offline-replay/server_evidence.go | Contracts | MUST | Server-backed evidence generation MUST fail closed if the detached source worktree HEAD does not match the recorded source commit. |
 | OFFLINE-SERVER-001 | offline/README.md | Contracts | MUST | Server-backed offline profiles (`offline/profiles/server-linux-x86_64.yaml`, `offline/profiles/server-linux-arm64.yaml`) MUST include `infra-substrate-binding` in `required_suites`, MUST enforce `hard_release_gate: true` and `min_cold_replays >= 5`, and validation MUST reject any evidence artifact that omits the required v1 infra-binding, native-host measurement, or transport-attestation fields for those profiles. |
 | OFFLINE-GATE-001 | CONTRIBUTING.md | Release Process | MUST | Release process MUST include explicit offline replay evidence gate execution via `go test ./offline/conformance` for both `x86_64` and `arm64` matrix/profile contracts and MUST bind evidence to the expected release commit/tag. |
 | OFFLINE-ARCH-001 | offline/matrix.yaml + offline/matrix.arm64.yaml | Profile | MUST | Release architecture scope MUST be explicit and constrained to the supported set: `x86_64` and `arm64`. |
 | OFFLINE-LOCAL-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Local operators MUST have a Go-native `jcs-offline-replay cross-arch` workflow that can execute offline vector gates, including the optional official ES6 100,000,000-line gate. |
+| OFFLINE-RECOVERY-001 | CONTRIBUTING.md + offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Server-backed evidence runs MUST emit `server-run.v1.json` as the recovery/audit anchor. |
+| OFFLINE-RECOVERY-002 | CONTRIBUTING.md + offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Server-backed evidence runs MUST provide a Go-native `jcs-offline-replay server-cleanup --run-record <path>` recovery path. |
 
 ## AWS: Official Release Evidence
 
@@ -128,9 +151,28 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 |----|------|---------|-------|-------------|
 | AWS-RELEASE-001 | offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Contracts | MUST | Official AWS release matrices (`offline/matrix.server-x86_64.yaml`, `offline/matrix.server-arm64.yaml`) and profiles (`offline/profiles/server-linux-x86_64.yaml`, `offline/profiles/server-linux-arm64.yaml`) MUST be vm-only native-host contracts, MUST schedule 12 lanes / 60 total replays per architecture, MUST enforce `hard_release_gate: true`, and MUST include `infra-substrate-binding` in `required_suites`. |
 | AWS-AMI-001 | infra/aws_release_hosts.json + infra/aws_release_hosts.lock.json + infra/instances.tf | Infrastructure Selectors | MUST | Official AWS release host selectors MUST remain explicit in `infra/aws_release_hosts.json`, and the release path MUST provision only pinned AMI IDs from `infra/aws_release_hosts.lock.json`. Ubuntu selector entries MUST resolve through Canonical public SSM parameter paths instead of brittle name globs, and the catalog MUST NOT declare unsupported Ubuntu 20.04 minimal ARM64 lanes. |
+| AWS-NET-001 | infra/instances.tf | Infrastructure Isolation | MUST | Official AWS evidence instances MUST launch without public IP assignment. |
+| AWS-NET-002 | infra/main.tf | Infrastructure Isolation | MUST | Official AWS evidence networking MUST not include an internet-gateway or NAT-gateway egress path. |
+| AWS-NET-003 | infra/main.tf | Infrastructure Isolation | MUST | Official AWS evidence networking MUST expose only the required VPC endpoint / S3 prefix-list reachability for SSM-managed replay traffic. |
 | AWS-OUTPUT-001 | infra/outputs.tf + cmd/jcs-offline-replay/server_evidence.go | Infrastructure Outputs | MUST | Official AWS infrastructure outputs consumed by the release evidence path MUST explicitly mark `provisioned_hosts` as `sensitive = true` when they transit provider-sensitive values, and the Go orchestrator MUST continue consuming the named JSON output contract directly. |
+| AWS-STATE-001 | scripts/release-server.sh + CONTRIBUTING.md | Release State | MUST | The supported official AWS release wrapper MUST enforce remote OpenTofu state for conformant runs. |
+| AWS-STATE-002 | scripts/release-server.sh + CONTRIBUTING.md | Release State | MUST | The supported official AWS release wrapper MUST require explicit remote backend coordinates before billed orchestration starts. |
+| AWS-STAGING-001 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket MUST enable SSE-S3 encryption before use. |
+| AWS-STAGING-002 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket MUST enable versioning before use. |
+| AWS-STAGING-003 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket MUST enable full public-access blocking before use. |
+| AWS-STAGING-004 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket MUST enforce bucket-owner object ownership before use. |
+| AWS-STAGING-005 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket MUST enforce an HTTPS-only bucket policy before use. |
+| AWS-STAGING-006 | cmd/jcs-offline-replay/server_aws.go | Artifact Transit | MUST | The official AWS staging bucket teardown MUST delete object versions and delete markers before bucket deletion. |
 | AWS-TOOLCHAIN-001 | offline/toolchain.lock.tsv + offline/README.md | Supply Chain | MUST | The official AWS release toolchain lock MUST contain only the pinned host-side artifacts actually executed by the official AWS release path (`go`, `opentofu`, `jq`) and MUST NOT require remote container-runtime artifacts. |
+| AWS-ATTEST-001 | cmd/jcs-offline-replay/server_attestation.go | Native-Host Attestation | MUST | Official AWS native-host evidence acceptance MUST verify transport attestation before evidence is accepted. |
+| AWS-ATTEST-002 | cmd/jcs-offline-replay/server_attestation.go | Native-Host Attestation | MUST | Official AWS native-host evidence acceptance MUST verify AWS instance-identity signatures against committed pinned certificates. |
+| AWS-ATTEST-003 | cmd/jcs-offline-replay/server_attestation.go | Native-Host Attestation | MUST | Official AWS native-host evidence acceptance MUST fail closed when the AWS region has no committed pinned instance-identity certificate. |
+| AWS-ATTEST-004 | CONTRIBUTING.md + offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Native-Host Attestation | MUST | Operator-facing docs MUST state the currently supported pinned-region scope for AWS instance-identity verification. |
 | AWS-GATE-001 | CONTRIBUTING.md + .github/workflows/release.yml | Release Process | MUST | Official release gating MUST require `evidence.v1` plus `infra-manifest.v1` for both x86_64 and arm64 AWS evidence artifacts, MUST bind `JCS_OFFLINE_INFRA_MANIFEST`, and MUST fail closed unless the full deterministic conformance DAG is present: pinned toolchain, offline harness evidence, infra binding, verified native-host measurement, transport-attestation digest binding, and release-gate verification bound to the expected source commit/tag. |
+| AWS-XARCH-001 | cmd/jcs-offline-replay/server_evidence.go | Cross-Architecture Parity | MUST | The official AWS server-backed release path MUST mechanically compare x86_64 and arm64 aggregate evidence digests after both per-architecture release gates pass. |
+| AWS-XARCH-002 | cmd/jcs-offline-replay/server_evidence.go + offline/README.md | Cross-Architecture Parity | MUST | The official AWS server-backed release path MUST emit a machine-readable cross-arch comparison report. |
+| AWS-XARCH-003 | cmd/jcs-offline-replay/server_evidence.go + offline/README.md | Cross-Architecture Parity | MUST | The official AWS server-backed release path MUST emit a human-readable cross-arch comparison report. |
+| AWS-XARCH-004 | cmd/jcs-offline-replay/server_evidence.go | Cross-Architecture Parity | MUST | The official AWS server-backed release path MUST fail closed on cross-arch aggregate digest mismatch. |
 
 ## API: Library Public API
 

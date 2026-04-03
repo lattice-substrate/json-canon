@@ -27,6 +27,10 @@ type InfraManifest struct {
 }
 
 // InfraManifestHost describes one provisioned cloud host.
+// The IID digest fields, plus InstanceID/ImageID/Region when IIDVerified is true,
+// are bound to the verified AWS instance-identity document. AvailabilityZone and
+// all OS/CPU/kernel fields remain host-discovered measurements reported by the
+// worker process and are not cryptographically attested by AWS.
 type InfraManifestHost struct {
 	Architecture       string   `json:"architecture"`
 	NodeIDs            []string `json:"node_ids"`

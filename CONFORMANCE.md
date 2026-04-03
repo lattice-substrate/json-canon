@@ -32,7 +32,8 @@ proves requirement-to-test mappings remain complete.
 4. Every mapped test symbol exists.
 5. Every normative requirement has citation index coverage.
 6. ABI manifest is schema-valid and behavior-consistent.
-7. Vector corpus files are schema-valid and executable.
+7. Vector corpus files are schema-valid, triad-classified, and executable.
+8. Requirement-matrix machine-readable mirrors stay row-identical to the committed markdown matrix and fail closed on drift.
 
 ## Mandatory Validation Gates
 

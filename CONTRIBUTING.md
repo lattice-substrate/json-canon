@@ -245,6 +245,16 @@ lane-to-host binding, `iid_pkcs7_sha256`, `iid_verified`, and the exact pinned t
 artifacts used for the run. Each replay also records `transport_attestation_sha256`
 inside `evidence.v1`.
 
+Current attestation support is scoped to `us-east-1`. The IID verifier pins the
+AWS instance-identity certificate for `us-east-1` and fails closed in any other
+region until additional regional certificates are committed and tested.
+
+Within `infra-manifest.v1`, `instance_id`, `image_id`, `region`, and the IID digest
+fields are covered by the verified AWS instance-identity document when
+`iid_verified=true`. `availability_zone`, `os_id`, `os_version_id`, `cpu`, and
+`kernel` remain worker-discovered host measurements and are not cryptographically
+attested by AWS.
+
 This does not replace the offline harness. Following the Lattice Substrate / ProveMark
 methodology, the full deterministic conformance DAG remains the product: pinned toolchain,
 lint/vet/tests, offline replay proof, infra binding, verified native-host measurement,
@@ -340,8 +350,10 @@ commit, provisions the committed official AWS host fleet, runs the native vm-onl
 release matrices over private SSM/S3 transport, verifies AWS instance-identity
 signatures against pinned regional certificates, emits `evidence.v1`, runs
 `TestOfflineReplayEvidenceReleaseGate` with `JCS_OFFLINE_INFRA_MANIFEST` set,
-then destroys the instances. The official AWS matrices are vm-only and schedule
-12 native lanes / 60 total replays per architecture.
+mechanically compares the resulting x86_64 and arm64 aggregate digests, writes
+`cross-arch-compare.json` and `cross-arch-compare.md`, then destroys the
+instances. The official AWS matrices are vm-only and schedule 12 native lanes /
+60 total replays per architecture.
 
 **Output:** `offline/runs/releases/<tag>/`
 
@@ -351,6 +363,8 @@ x86_64/offline-bundle.tgz
 arm64/offline-evidence.json    (evidence.v1, schema_version: evidence.v1)
 arm64/offline-bundle.tgz
 infra-manifest.v1.json         (shared across both arches)
+cross-arch-compare.json        (machine-readable x86_64 vs arm64 aggregate parity report)
+cross-arch-compare.md          (human-readable x86_64 vs arm64 aggregate parity report)
 toolchain/                     (verified pinned tool artifacts used for the run)
 ```
 

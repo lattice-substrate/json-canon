@@ -47,19 +47,66 @@
           },
           "role": { "type": "string", "minLength": 1 },
           "cloud_provider": { "type": "string", "minLength": 1 },
-          "region": { "type": "string", "minLength": 1 },
-          "availability_zone": { "type": "string", "minLength": 1 },
+          "region": {
+            "type": "string",
+            "minLength": 1,
+            "description": "AWS region. When iid_verified=true this value is expected to match the verified instance-identity document."
+          },
+          "availability_zone": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Availability zone discovered from IMDS. This field is host-reported and not covered by the verified AWS instance-identity document."
+          },
           "instance_type": { "type": "string", "minLength": 1 },
-          "instance_id": { "type": "string", "minLength": 1 },
-          "image_id": { "type": "string", "minLength": 1 },
-          "os_id": { "type": "string", "minLength": 1 },
-          "os_version_id": { "type": "string", "minLength": 1 },
-          "cpu": { "type": "string", "minLength": 1 },
-          "kernel": { "type": "string", "minLength": 1 },
-          "iid_document_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
-          "iid_signature_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
-          "iid_pkcs7_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
-          "iid_verified": { "type": "boolean" },
+          "instance_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "EC2 instance ID. When iid_verified=true this value is bound to the verified AWS instance-identity document."
+          },
+          "image_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "AMI ID. When iid_verified=true this value is bound to the verified AWS instance-identity document."
+          },
+          "os_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Host-discovered operating-system identifier from /etc/os-release. Self-reported by the worker."
+          },
+          "os_version_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Host-discovered operating-system version from /etc/os-release. Self-reported by the worker."
+          },
+          "cpu": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Host-discovered CPU model string from /proc/cpuinfo. Self-reported by the worker."
+          },
+          "kernel": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Host-discovered kernel string from /proc/version. Self-reported by the worker."
+          },
+          "iid_document_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "description": "SHA-256 of the raw AWS instance-identity document retrieved from IMDS."
+          },
+          "iid_signature_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "description": "SHA-256 of the raw base64 IID RSA signature retrieved from IMDS."
+          },
+          "iid_pkcs7_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$",
+            "description": "SHA-256 of the raw IID PKCS7 blob retrieved from IMDS."
+          },
+          "iid_verified": {
+            "type": "boolean",
+            "description": "True when the orchestrator verified the AWS instance-identity signature and matched the IID-backed identity fields against the provisioned host."
+          },
           "transport": { "type": "string", "enum": ["ssh", "ssm"] },
           "subnet_visibility": { "type": "string", "enum": ["public", "private"] },
           "discovered_cpu": { "type": "string", "minLength": 1 },

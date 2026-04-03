@@ -1,19 +1,3 @@
-# Requirement Enforcement Matrix
-
-Machine-readable mapping from requirement IDs to their enforcement artifacts.
-
-## Format
-
-```
-requirement_id,domain,level,impl_file,impl_symbol,impl_line,test_file,test_function,gate
-```
-
-- **level**: L1 = unit test, L3 = conformance/integration test
-- **gate**: TEST = `go test`, CONFORMANCE = conformance harness
-
-## Matrix
-
-```csv
 requirement_id,domain,level,impl_file,impl_symbol,impl_line,test_file,test_function,gate
 BOUND-DEPTH-001,policy,L1,jcstoken/token.go,ParseWithOptions,150,jcstoken/token_test.go,TestParse_BOUND_DEPTH_001,TEST
 BOUND-DEPTH-001,policy,L3,jcstoken/token.go,ParseWithOptions,150,conformance/harness_test.go,TestConformanceRequirements/BOUND-DEPTH-001,CONFORMANCE
@@ -342,4 +326,3 @@ API-CANON-001,policy,L1,jcs/serialize.go,Canonicalize,25,jcs/serialize_test.go,T
 API-CANON-001,policy,L3,jcs/serialize.go,Canonicalize,25,conformance/harness_test.go,TestConformanceRequirements/API-CANON-001,CONFORMANCE
 API-CANON-002,policy,L1,jcs/serialize.go,CanonicalizeWithOptions,37,jcs/serialize_test.go,TestCanonicalizeWithOptions_API_CANON_002,TEST
 API-CANON-002,policy,L3,jcs/serialize.go,CanonicalizeWithOptions,37,conformance/harness_test.go,TestConformanceRequirements/API-CANON-002,CONFORMANCE
-```

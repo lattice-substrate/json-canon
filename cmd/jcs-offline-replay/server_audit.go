@@ -10,53 +10,57 @@ import (
 )
 
 type serverEvidenceSummary struct {
-	SchemaVersion     string `json:"schema_version"`
-	Tag               string `json:"tag"`
-	SourceGitCommit   string `json:"source_git_commit"`
-	SourceGitTag      string `json:"source_git_tag"`
-	InfraManifestPath string `json:"infra_manifest_path"`
-	InfraManifestSHA  string `json:"infra_manifest_sha256,omitempty"`
-	X86EvidencePath   string `json:"x86_evidence_path"`
-	X86EvidenceSHA    string `json:"x86_evidence_sha256,omitempty"`
-	ArmEvidencePath   string `json:"arm64_evidence_path"`
-	ArmEvidenceSHA    string `json:"arm64_evidence_sha256,omitempty"`
-	X86BundlePath     string `json:"x86_bundle_path,omitempty"`
-	ArmBundlePath     string `json:"arm64_bundle_path,omitempty"`
-	WorkflowRunID     string `json:"workflow_run_id,omitempty"`
-	WorkflowRunURL    string `json:"workflow_run_url,omitempty"`
-	AWSAccountID      string `json:"aws_account_id,omitempty"`
-	AWSRoleARN        string `json:"aws_role_arn,omitempty"`
-	StateMode         string `json:"state_mode"`
-	StateBucket       string `json:"state_bucket,omitempty"`
-	StateRegion       string `json:"state_region,omitempty"`
-	StateLockTable    string `json:"state_lock_table,omitempty"`
-	StateKey          string `json:"state_key,omitempty"`
-	DestroyStatus     string `json:"destroy_status"`
+	SchemaVersion            string `json:"schema_version"`
+	Tag                      string `json:"tag"`
+	SourceGitCommit          string `json:"source_git_commit"`
+	SourceGitTag             string `json:"source_git_tag"`
+	InfraManifestPath        string `json:"infra_manifest_path"`
+	InfraManifestSHA         string `json:"infra_manifest_sha256,omitempty"`
+	CrossArchCompareJSONPath string `json:"cross_arch_compare_json_path,omitempty"`
+	CrossArchCompareMDPath   string `json:"cross_arch_compare_markdown_path,omitempty"`
+	X86EvidencePath          string `json:"x86_evidence_path"`
+	X86EvidenceSHA           string `json:"x86_evidence_sha256,omitempty"`
+	ArmEvidencePath          string `json:"arm64_evidence_path"`
+	ArmEvidenceSHA           string `json:"arm64_evidence_sha256,omitempty"`
+	X86BundlePath            string `json:"x86_bundle_path,omitempty"`
+	ArmBundlePath            string `json:"arm64_bundle_path,omitempty"`
+	WorkflowRunID            string `json:"workflow_run_id,omitempty"`
+	WorkflowRunURL           string `json:"workflow_run_url,omitempty"`
+	AWSAccountID             string `json:"aws_account_id,omitempty"`
+	AWSRoleARN               string `json:"aws_role_arn,omitempty"`
+	StateMode                string `json:"state_mode"`
+	StateBucket              string `json:"state_bucket,omitempty"`
+	StateRegion              string `json:"state_region,omitempty"`
+	StateLockTable           string `json:"state_lock_table,omitempty"`
+	StateKey                 string `json:"state_key,omitempty"`
+	DestroyStatus            string `json:"destroy_status"`
 }
 
 //nolint:gocyclo,cyclop // REQ:OFFLINE-AUTO-001 audit summary emission keeps each artifact binding explicit.
 func writeServerAuditSummaries(record serverRunRecord) error {
 	auditDir := filepath.Join(record.OutputDir, "audit")
 	summary := serverEvidenceSummary{
-		SchemaVersion:     "server-evidence-summary.v1",
-		Tag:               record.Tag,
-		SourceGitCommit:   record.SourceGitCommit,
-		SourceGitTag:      record.SourceGitTag,
-		InfraManifestPath: record.InfraManifestPath,
-		X86EvidencePath:   record.X86EvidencePath,
-		ArmEvidencePath:   record.ArmEvidencePath,
-		X86BundlePath:     record.X86BundlePath,
-		ArmBundlePath:     record.ArmBundlePath,
-		WorkflowRunID:     record.WorkflowRunID,
-		WorkflowRunURL:    record.WorkflowRunURL,
-		AWSAccountID:      record.AWSAccountID,
-		AWSRoleARN:        record.AWSRoleARN,
-		StateMode:         record.StateMode,
-		StateBucket:       record.StateBucket,
-		StateRegion:       record.StateRegion,
-		StateLockTable:    record.StateLockTable,
-		StateKey:          record.StateKey,
-		DestroyStatus:     record.DestroyStatus,
+		SchemaVersion:            "server-evidence-summary.v1",
+		Tag:                      record.Tag,
+		SourceGitCommit:          record.SourceGitCommit,
+		SourceGitTag:             record.SourceGitTag,
+		InfraManifestPath:        record.InfraManifestPath,
+		CrossArchCompareJSONPath: record.CrossArchCompareJSONPath,
+		CrossArchCompareMDPath:   record.CrossArchCompareMDPath,
+		X86EvidencePath:          record.X86EvidencePath,
+		ArmEvidencePath:          record.ArmEvidencePath,
+		X86BundlePath:            record.X86BundlePath,
+		ArmBundlePath:            record.ArmBundlePath,
+		WorkflowRunID:            record.WorkflowRunID,
+		WorkflowRunURL:           record.WorkflowRunURL,
+		AWSAccountID:             record.AWSAccountID,
+		AWSRoleARN:               record.AWSRoleARN,
+		StateMode:                record.StateMode,
+		StateBucket:              record.StateBucket,
+		StateRegion:              record.StateRegion,
+		StateLockTable:           record.StateLockTable,
+		StateKey:                 record.StateKey,
+		DestroyStatus:            record.DestroyStatus,
 	}
 	if strings.TrimSpace(record.InfraManifestPath) != "" {
 		sha, ok, err := optionalFileSHA256(record.InfraManifestPath)
@@ -126,6 +130,8 @@ func buildServerEvidenceSummaryMarkdown(summary serverEvidenceSummary) string {
 		"## Paths",
 		"",
 		"- infra manifest: `" + summary.InfraManifestPath + "`",
+		"- cross-arch compare json: `" + summary.CrossArchCompareJSONPath + "`",
+		"- cross-arch compare markdown: `" + summary.CrossArchCompareMDPath + "`",
 		"- x86_64 evidence: `" + summary.X86EvidencePath + "`",
 		"- arm64 evidence: `" + summary.ArmEvidencePath + "`",
 		"- x86_64 bundle: `" + summary.X86BundlePath + "`",

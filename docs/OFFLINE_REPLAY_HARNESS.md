@@ -218,6 +218,15 @@ source ./.tmp/pinned-toolchain/env.sh
   --run-record ./offline/runs/releases/<tag>/server-run.v1.json
 ```
 
+The server-backed `server-evidence` path mechanically compares the resulting
+`x86_64` and `arm64` aggregate digests after both release gates pass. It emits
+`cross-arch-compare.json` and `cross-arch-compare.md` at the release output root
+and fails closed on any mismatch.
+
+Current native-AWS attestation support is scoped to `us-east-1`. The orchestrator
+pins the AWS instance-identity certificate for `us-east-1` and rejects other regions
+until their certificates are added explicitly.
+
 ## 7. Cross-Arch Proof Procedure
 
 Use this exact sequence for formal parity proof:

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -532,6 +533,153 @@ func TestProvisionRetainsAppliedInfrastructureOnOutputFailure(t *testing.T) {
 	}
 	if runtimeState.runRecord.ProvisionStatus != serverRunStatusFailed {
 		t.Fatalf("provision status = %q, want %q", runtimeState.runRecord.ProvisionStatus, serverRunStatusFailed)
+	}
+}
+
+func TestProvisionSuccessPersistsInfraAndWaitsForSSM(t *testing.T) {
+	oldProvision := provisionServerInfrastructureFunc
+	oldWait := waitForSSMManagedInstancesFunc
+	t.Cleanup(func() {
+		provisionServerInfrastructureFunc = oldProvision
+		waitForSSMManagedInstancesFunc = oldWait
+	})
+
+	recordPath := filepath.Join(t.TempDir(), "server-run.v1.json")
+	runtimeState := &serverEvidenceRuntime{
+		ctx:           context.Background(),
+		runRecordPath: recordPath,
+		runRecord: serverRunRecord{
+			SchemaVersion:   serverRunRecordSchemaVersion,
+			ProvisionStatus: serverRunStatusPending,
+		},
+		opts:      serverEvidenceOptions{tag: "v0.0.0-dev"},
+		gitCommit: strings.Repeat("a", 40),
+		lockSHA:   strings.Repeat("b", 64),
+	}
+
+	expectedHosts := map[string]provisionedHost{
+		"host-x86": {
+			HostID:       "host-x86",
+			NodeID:       "aws-native-x86",
+			Architecture: "x86_64",
+			InstanceID:   "i-123",
+			ImageID:      "ami-123",
+		},
+	}
+	provisionCalled := false
+	provisionServerInfrastructureFunc = func(context.Context, serverEvidenceOptions, serverToolchain, string, string) (provisionedInfra, error) {
+		provisionCalled = true
+		return provisionedInfra{Applied: true, Hosts: expectedHosts}, nil
+	}
+	waitCalled := false
+	waitForSSMManagedInstancesFunc = func(_ context.Context, _ serverAWSClients, hosts map[string]provisionedHost, timeout time.Duration) error {
+		waitCalled = true
+		if timeout != serverSSMReadyTimeout {
+			t.Fatalf("wait timeout = %s, want %s", timeout, serverSSMReadyTimeout)
+		}
+		if len(hosts) != 1 || hosts["host-x86"].InstanceID != "i-123" {
+			t.Fatalf("unexpected hosts passed to wait: %#v", hosts)
+		}
+		return nil
+	}
+
+	var stdout bytes.Buffer
+	if err := runtimeState.provision(&stdout); err != nil {
+		t.Fatalf("provision: %v", err)
+	}
+	if !provisionCalled {
+		t.Fatal("provisionServerInfrastructureFunc was not called")
+	}
+	if !waitCalled {
+		t.Fatal("waitForSSMManagedInstancesFunc was not called")
+	}
+	if !runtimeState.infra.Applied {
+		t.Fatal("runtime did not retain applied infrastructure state")
+	}
+	if len(runtimeState.infra.Hosts) != 1 {
+		t.Fatalf("infra hosts len = %d, want 1", len(runtimeState.infra.Hosts))
+	}
+	if runtimeState.runRecord.ProvisionStatus != serverRunStatusSucceeded {
+		t.Fatalf("provision status = %q, want %q", runtimeState.runRecord.ProvisionStatus, serverRunStatusSucceeded)
+	}
+	record, err := loadServerRunRecord(recordPath)
+	if err != nil {
+		t.Fatalf("loadServerRunRecord: %v", err)
+	}
+	if record.ProvisionStatus != serverRunStatusSucceeded {
+		t.Fatalf("persisted provision status = %q, want %q", record.ProvisionStatus, serverRunStatusSucceeded)
+	}
+	if !strings.Contains(stdout.String(), "instances ready: 1 official AWS hosts") {
+		t.Fatalf("stdout = %q, want instance-ready summary", stdout.String())
+	}
+}
+
+func TestMarkRunRecordStatusBestEffortSwallowsPersistenceFailure(t *testing.T) {
+	runtimeState := &serverEvidenceRuntime{
+		runRecordPath: filepath.Join(t.TempDir(), "missing", "server-run.v1.json"),
+		runRecord: serverRunRecord{
+			SchemaVersion:   serverRunRecordSchemaVersion,
+			ProvisionStatus: serverRunStatusRunning,
+		},
+	}
+
+	markRunRecordStatusBestEffort(runtimeState, &runtimeState.runRecord.ProvisionStatus)
+
+	if runtimeState.runRecord.ProvisionStatus != serverRunStatusFailed {
+		t.Fatalf("provision status = %q, want %q", runtimeState.runRecord.ProvisionStatus, serverRunStatusFailed)
+	}
+}
+
+func TestRunCrossArchComparisonMarksFailureOnMismatch(t *testing.T) {
+	oldCompare := compareCrossArchEvidenceFunc
+	t.Cleanup(func() {
+		compareCrossArchEvidenceFunc = oldCompare
+	})
+
+	tempDir := t.TempDir()
+	recordPath := filepath.Join(tempDir, "server-run.v1.json")
+	runtimeState := &serverEvidenceRuntime{
+		opts: serverEvidenceOptions{
+			root:      tempDir,
+			outputDir: tempDir,
+		},
+		runRecordPath: recordPath,
+		runRecord: serverRunRecord{
+			SchemaVersion:   serverRunRecordSchemaVersion,
+			CrossArchStatus: serverRunStatusPending,
+			X86EvidencePath: filepath.Join(tempDir, "x86_64", "offline-evidence.json"),
+			ArmEvidencePath: filepath.Join(tempDir, "arm64", "offline-evidence.json"),
+		},
+	}
+	if err := writeServerRunRecord(recordPath, &runtimeState.runRecord); err != nil {
+		t.Fatalf("writeServerRunRecord: %v", err)
+	}
+	compareCrossArchEvidenceFunc = func(_, _, jsonPath, mdPath, _ string) (*crossArchReport, error) {
+		if err := os.WriteFile(jsonPath, []byte("{}\n"), filePerm); err != nil {
+			return nil, fmt.Errorf("write cross-arch json: %w", err)
+		}
+		if err := os.WriteFile(mdPath, []byte("# compare\n"), filePerm); err != nil {
+			return nil, fmt.Errorf("write cross-arch markdown: %w", err)
+		}
+		return nil, errors.New("cross-arch digest comparison failed")
+	}
+
+	err := runtimeState.runCrossArchComparison(io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "cross-arch digest comparison failed") {
+		t.Fatalf("runCrossArchComparison error = %v", err)
+	}
+	if runtimeState.runRecord.CrossArchStatus != serverRunStatusFailed {
+		t.Fatalf("cross-arch status = %q, want %q", runtimeState.runRecord.CrossArchStatus, serverRunStatusFailed)
+	}
+	record, err := loadServerRunRecord(recordPath)
+	if err != nil {
+		t.Fatalf("loadServerRunRecord: %v", err)
+	}
+	if record.CrossArchStatus != serverRunStatusFailed {
+		t.Fatalf("persisted cross-arch status = %q, want %q", record.CrossArchStatus, serverRunStatusFailed)
+	}
+	if strings.TrimSpace(record.CrossArchCompareJSONPath) == "" || strings.TrimSpace(record.CrossArchCompareMDPath) == "" {
+		t.Fatalf("cross-arch report paths not persisted: %+v", record)
 	}
 }
 

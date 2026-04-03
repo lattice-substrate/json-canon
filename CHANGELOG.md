@@ -54,7 +54,8 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   orchestrator. It provisions the official AWS host fleet via pinned OpenTofu,
   manages native replay execution over private SSM/S3 transport, writes the infra manifest
   through the Go CLI, validates both release gates with `JCS_OFFLINE_INFRA_MANIFEST`,
-  and destroys instances on exit.
+  mechanically compares x86_64 vs arm64 aggregate digests with
+  `cross-arch-compare.{json,md}` outputs, and destroys instances on exit.
 - `infra/aws_release_hosts.lock.json`: committed AMI lock document for official AWS
   release runs, plus `jcs-offline-replay refresh-aws-ami-lock` to refresh it from the
   mutable selector catalog under review.
@@ -73,6 +74,18 @@ This project follows strict [Semantic Versioning](https://semver.org/).
   evidenced run via the `tools` array.
 - Requirements OFFLINE-EVIDENCE-002, OFFLINE-INFRA-001, OFFLINE-TOOLCHAIN-001, and
   OFFLINE-SERVER-001 added to `REQ_REGISTRY_POLICY.md` with full enforcement matrix coverage.
+- Requirements OFFLINE-BUNDLE-001, OFFLINE-INFRA-002, OFFLINE-SOURCE-001 through
+  OFFLINE-SOURCE-003, OFFLINE-RECOVERY-001, OFFLINE-RECOVERY-002, AWS-NET-001 through
+  AWS-NET-003, AWS-STATE-001, AWS-STATE-002, AWS-STAGING-001 through AWS-STAGING-006,
+  AWS-ATTEST-001 through AWS-ATTEST-004, and AWS-XARCH-001 through AWS-XARCH-004 added
+  to `REQ_REGISTRY_POLICY.md` with explicit conformance coverage and enforcement-matrix
+  linkage.
+- Requirements CONF-VEC-001 through CONF-VEC-008 added to `REQ_REGISTRY_POLICY.md` to make
+  the conformance vector corpus explicitly triad-classified (`positive`, `negative`,
+  `adversarial`) with fail-closed per-intent semantics and per-command coverage.
+- Machine-readable traceability artifacts `REQ_ENFORCEMENT_MATRIX.csv` and
+  `REQ_ENFORCEMENT_MATRIX.jsonl` added alongside the markdown enforcement matrix, with
+  conformance gates that fail closed on parity drift.
 - Requirement LINT-NOLINT-002 added to `REQ_REGISTRY_POLICY.md` to require
   mechanically gathered suppression evidence in conformance.
 - Requirements AWS-RELEASE-001, AWS-TOOLCHAIN-001, and AWS-GATE-001 added to

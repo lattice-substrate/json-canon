@@ -47,6 +47,7 @@ var (
 	writeInfraManifestDocumentFunc    = writeInfraManifestDocument
 	runServerMatrixFunc               = runServerMatrix
 	runServerReleaseGateFunc          = runServerReleaseGate
+	compareCrossArchEvidenceFunc      = compareCrossArchEvidence
 	loadInfraManifestFunc             = replay.LoadInfraManifest
 	runReplayMatrixFunc               = replay.RunMatrix
 	writeEvidenceBundleFunc           = replay.WriteEvidence
@@ -285,20 +286,36 @@ func resolveServerEvidencePath(root, rawPath, fallback string) string {
 	return filepath.Join(root, path)
 }
 
-//nolint:gocyclo,cyclop // REQ:OFFLINE-AUTO-001 runtime initialization keeps each immutable binding explicit for auditability.
+func prepareServerEvidenceSource(ctx context.Context, root string) (string, func() error, string, error) {
+	if err := validateCleanGitWorktree(ctx, root); err != nil {
+		return "", nil, "", err
+	}
+	gitCommit, err := resolveGitHeadCommit(root)
+	if err != nil {
+		return "", nil, "", err
+	}
+	sourceRoot, cleanupSourceRoot, err := prepareDetachedSourceTree(ctx, root, gitCommit)
+	if err != nil {
+		return "", nil, "", err
+	}
+	detachedCommit, err := resolveGitHeadCommit(sourceRoot)
+	if err != nil {
+		ignoreError(cleanupSourceRoot())
+		return "", nil, "", fmt.Errorf("resolve detached source commit: %w", err)
+	}
+	if detachedCommit != gitCommit {
+		ignoreError(cleanupSourceRoot())
+		return "", nil, "", fmt.Errorf("detached source commit mismatch: got=%s want=%s", detachedCommit, gitCommit)
+	}
+	return sourceRoot, cleanupSourceRoot, detachedCommit, nil
+}
+
 func newServerEvidenceRuntime(ctx context.Context, opts serverEvidenceOptions) (*serverEvidenceRuntime, error) {
 	stableOpts := opts
 	if _, err := os.Stat(opts.lockFilePath); err != nil {
 		return nil, fmt.Errorf("stat %s: %w", opts.lockFilePath, err)
 	}
-	if err := validateCleanGitWorktree(ctx, opts.root); err != nil {
-		return nil, err
-	}
-	gitCommit, err := resolveGitHeadCommit(opts.root)
-	if err != nil {
-		return nil, err
-	}
-	sourceRoot, cleanupSourceRoot, err := prepareDetachedSourceTree(ctx, opts.root, gitCommit)
+	sourceRoot, cleanupSourceRoot, gitCommit, err := prepareServerEvidenceSource(ctx, opts.root)
 	if err != nil {
 		return nil, err
 	}
@@ -454,10 +471,40 @@ func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
 	if err := r.runReleaseGates(stdout); err != nil {
 		return err
 	}
+	if err := r.runCrossArchComparison(stdout); err != nil {
+		return err
+	}
 	if err := r.destroy(); err != nil {
 		return err
 	}
 	return r.writeSuccess(stdout)
+}
+
+func (r *serverEvidenceRuntime) runCrossArchComparison(stdout io.Writer) error {
+	if err := r.setRunRecordStatus(&r.runRecord.CrossArchStatus, serverRunStatusRunning); err != nil {
+		return err
+	}
+	jsonPath := filepath.Join(r.opts.outputDir, "cross-arch-compare.json")
+	mdPath := filepath.Join(r.opts.outputDir, "cross-arch-compare.md")
+	r.runRecord.CrossArchCompareJSONPath = jsonPath
+	r.runRecord.CrossArchCompareMDPath = mdPath
+	if err := r.persistRunRecord(); err != nil {
+		return err
+	}
+	if err := writeLine(stdout, "==> comparing x86_64 and arm64 aggregate digests"); err != nil {
+		return err
+	}
+	if _, err := compareCrossArchEvidenceFunc(
+		filepath.Join(r.opts.outputDir, "x86_64", "offline-evidence.json"),
+		filepath.Join(r.opts.outputDir, "arm64", "offline-evidence.json"),
+		jsonPath,
+		mdPath,
+		r.opts.root,
+	); err != nil {
+		markRunRecordStatusBestEffort(r, &r.runRecord.CrossArchStatus)
+		return err
+	}
+	return r.setRunRecordStatus(&r.runRecord.CrossArchStatus, serverRunStatusSucceeded)
 }
 
 func (r *serverEvidenceRuntime) discoverRemoteFacts(stdout io.Writer) error {
@@ -699,7 +746,10 @@ func (r *serverEvidenceRuntime) writeSuccess(stdout io.Writer) error {
 	if err := writef(stdout, "    arm64 evidence:  %s\n", filepath.Join(r.opts.outputDir, "arm64", "offline-evidence.json")); err != nil {
 		return err
 	}
-	return writef(stdout, "    infra manifest:  %s\n", r.infraManifestPath)
+	if err := writef(stdout, "    infra manifest:  %s\n", r.infraManifestPath); err != nil {
+		return err
+	}
+	return writef(stdout, "    cross-arch:      %s\n", r.runRecord.CrossArchCompareMDPath)
 }
 
 func (r *serverEvidenceRuntime) serverMatrixRunForArch(arch string) serverMatrixRun {

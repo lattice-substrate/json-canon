@@ -131,24 +131,35 @@ func TestVerifyAWSInstanceIdentity(t *testing.T) {
 		t.Fatalf("SignPKCS1v15: %v", err)
 	}
 	rawSignature := base64.StdEncoding.EncodeToString(signature)
-	if _, err := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
+	if _, verifyErr := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
-	}, "us-east-1"); err != nil {
-		t.Fatalf("verifyAWSInstanceIdentity: %v", err)
+	}, "us-east-1"); verifyErr != nil {
+		t.Fatalf("verifyAWSInstanceIdentity: %v", verifyErr)
 	}
-	if _, err := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
+	if _, verifyErr := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-wrong", ImageID: "ami-123",
-	}, "us-east-1"); err == nil || !strings.Contains(err.Error(), "instance_id mismatch") {
-		t.Fatalf("verifyAWSInstanceIdentity mismatch error = %v", err)
+	}, "us-east-1"); verifyErr == nil || !strings.Contains(verifyErr.Error(), "instance_id mismatch") {
+		t.Fatalf("verifyAWSInstanceIdentity mismatch error = %v", verifyErr)
 	}
-	if _, err := verifyAWSInstanceIdentity(document, "!!!", provisionedHost{
+	if _, verifyErr := verifyAWSInstanceIdentity(document, "!!!", provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
-	}, "us-east-1"); err == nil || !strings.Contains(err.Error(), "decode instance identity signature") {
-		t.Fatalf("verifyAWSInstanceIdentity base64 error = %v", err)
+	}, "us-east-1"); verifyErr == nil || !strings.Contains(verifyErr.Error(), "decode instance identity signature") {
+		t.Fatalf("verifyAWSInstanceIdentity base64 error = %v", verifyErr)
 	}
-	if _, err := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
+	if _, verifyErr := verifyAWSInstanceIdentity(document, rawSignature, provisionedHost{
 		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
-	}, "us-west-2"); err == nil || !strings.Contains(err.Error(), "region mismatch") {
-		t.Fatalf("verifyAWSInstanceIdentity region error = %v", err)
+	}, "us-west-2"); verifyErr == nil || !strings.Contains(verifyErr.Error(), "region mismatch") {
+		t.Fatalf("verifyAWSInstanceIdentity region error = %v", verifyErr)
+	}
+	unsupportedRegionDocument := `{"availabilityZone":"eu-west-1a","imageId":"ami-123","instanceId":"i-123","region":"eu-west-1"}`
+	unsupportedDigest := sha256.Sum256([]byte(unsupportedRegionDocument))
+	unsupportedSignature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, unsupportedDigest[:])
+	if err != nil {
+		t.Fatalf("SignPKCS1v15 unsupported region: %v", err)
+	}
+	if _, verifyErr := verifyAWSInstanceIdentity(unsupportedRegionDocument, base64.StdEncoding.EncodeToString(unsupportedSignature), provisionedHost{
+		HostID: "aws-native-ubuntu", InstanceID: "i-123", ImageID: "ami-123",
+	}, "eu-west-1"); verifyErr == nil || !strings.Contains(verifyErr.Error(), "unsupported aws instance identity certificate region") {
+		t.Fatalf("verifyAWSInstanceIdentity unsupported-region error = %v", verifyErr)
 	}
 }

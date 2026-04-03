@@ -171,6 +171,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	oldWriteManifest := writeInfraManifestDocumentFunc
 	oldRunMatrix := runServerMatrixFunc
 	oldRunReleaseGate := runServerReleaseGateFunc
+	oldCompareCrossArch := compareCrossArchEvidenceFunc
 	oldDeleteBucket := deleteStagingBucketFunc
 	oldDestroyInfra := destroyServerInfrastructureFunc
 	oldVerifyIID := verifyAWSInstanceIdentityFunc
@@ -184,6 +185,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		writeInfraManifestDocumentFunc = oldWriteManifest
 		runServerMatrixFunc = oldRunMatrix
 		runServerReleaseGateFunc = oldRunReleaseGate
+		compareCrossArchEvidenceFunc = oldCompareCrossArch
 		deleteStagingBucketFunc = oldDeleteBucket
 		destroyServerInfrastructureFunc = oldDestroyInfra
 		verifyAWSInstanceIdentityFunc = oldVerifyIID
@@ -358,6 +360,26 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		}
 		return nil
 	}
+	crossArchCompareCalled := false
+	compareCrossArchEvidenceFunc = func(x86EvidencePath, armEvidencePath, jsonPath, mdPath, repoRoot string) (*crossArchReport, error) {
+		crossArchCompareCalled = true
+		if repoRoot != root {
+			t.Fatalf("repoRoot = %q, want %q", repoRoot, root)
+		}
+		if !strings.HasSuffix(x86EvidencePath, filepath.Join("x86_64", "offline-evidence.json")) {
+			t.Fatalf("unexpected x86 evidence path: %q", x86EvidencePath)
+		}
+		if !strings.HasSuffix(armEvidencePath, filepath.Join("arm64", "offline-evidence.json")) {
+			t.Fatalf("unexpected arm evidence path: %q", armEvidencePath)
+		}
+		if err := os.WriteFile(jsonPath, []byte("{}\n"), 0o600); err != nil {
+			return nil, fmt.Errorf("write cross-arch json: %w", err)
+		}
+		if err := os.WriteFile(mdPath, []byte("# compare\n"), 0o600); err != nil {
+			return nil, fmt.Errorf("write cross-arch markdown: %w", err)
+		}
+		return &crossArchReport{Result: resultPass}, nil
+	}
 	deleteStagingBucketFunc = func(context.Context, serverAWSClients, string) error { return nil }
 	destroyServerInfrastructureFunc = func(context.Context, serverEvidenceOptions, serverToolchain, string, string) error {
 		return nil
@@ -378,6 +400,12 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	if strings.Join(releaseGates, ",") != "matrix.server-arm64.yaml,matrix.server-x86_64.yaml" {
 		t.Fatalf("unexpected release gates: %#v", releaseGates)
 	}
+	if !crossArchCompareCalled {
+		t.Fatal("cross-arch compare not called")
+	}
+	if runtimeState.runRecord.CrossArchStatus != serverRunStatusSucceeded {
+		t.Fatalf("cross-arch status = %q", runtimeState.runRecord.CrossArchStatus)
+	}
 	if runtimeState.runRecord.DestroyStatus != serverRunStatusSucceeded {
 		t.Fatalf("destroy status = %q", runtimeState.runRecord.DestroyStatus)
 	}
@@ -389,6 +417,9 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "SUCCESS: server evidence written") {
 		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "cross-arch:") {
+		t.Fatalf("missing cross-arch summary in stdout: %q", stdout.String())
 	}
 }
 
@@ -664,11 +695,24 @@ func TestGitReferenceAndAdapterHelpers(t *testing.T) {
 	if err := os.MkdirAll(gitDir, 0o750); err != nil {
 		t.Fatalf("mkdir git dir: %v", err)
 	}
+	refsHeads := filepath.Join(gitDir, "refs", "heads")
+	if err := os.MkdirAll(refsHeads, 0o750); err != nil {
+		t.Fatalf("mkdir refs heads: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(refsHeads, "main"), []byte(strings.Repeat("c", 40)+"\n"), 0o600); err != nil {
+		t.Fatalf("write loose ref: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(gitDir, "packed-refs"), []byte(strings.Repeat("a", 40)+" refs/tags/v1.2.3\n"), 0o600); err != nil {
 		t.Fatalf("write packed-refs: %v", err)
 	}
+	if got, err := resolveGitRefCommit(gitDir, "refs/heads/main"); err != nil || got != strings.Repeat("c", 40) {
+		t.Fatalf("resolveGitRefCommit loose got=%q err=%v", got, err)
+	}
 	if got, err := resolvePackedGitRef(gitDir, "refs/tags/v1.2.3"); err != nil || got != strings.Repeat("a", 40) {
 		t.Fatalf("resolvePackedGitRef got=%q err=%v", got, err)
+	}
+	if got, err := resolveGitRefCommit(gitDir, "refs/tags/v1.2.3"); err != nil || got != strings.Repeat("a", 40) {
+		t.Fatalf("resolveGitRefCommit packed got=%q err=%v", got, err)
 	}
 	if _, err := resolveDetachedHeadCommit("not-a-sha"); err == nil {
 		t.Fatal("expected detached head validation error")

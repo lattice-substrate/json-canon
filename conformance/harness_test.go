@@ -47,6 +47,7 @@ type cliResult struct {
 
 type vectorCase struct {
 	ID                 string   `json:"id"`
+	Intent             string   `json:"intent"`
 	Mode               string   `json:"mode,omitempty"`
 	Args               []string `json:"args,omitempty"`
 	Input              string   `json:"input"`
@@ -54,6 +55,13 @@ type vectorCase struct {
 	WantStderr         *string  `json:"want_stderr,omitempty"`
 	WantStderrContains *string  `json:"want_stderr_contains,omitempty"`
 	WantExit           int      `json:"want_exit"`
+}
+
+type vectorRecord struct {
+	file string
+	line int
+	raw  map[string]json.RawMessage
+	spec vectorCase
 }
 
 type nolintDirectiveRecord struct {
@@ -75,6 +83,11 @@ const (
 	canonicalObjectA1         = `{"a":1}`
 	nolintInventoryHeaderLine = "path\tline\tlinters\trequirement_ids\trationale\tdirective"
 	nolintInventoryPath       = "conformance/nolint_inventory.tsv"
+	vectorIntentPositive      = "positive"
+	vectorIntentNegative      = "negative"
+	vectorIntentAdversarial   = "adversarial"
+	vectorCommandCanonicalize = "canonicalize"
+	vectorCommandVerify       = "verify"
 )
 
 // TestConformanceRequirements runs all requirement checks.
@@ -97,77 +110,40 @@ func TestConformanceRequirements(t *testing.T) {
 
 // TestConformanceVectors executes JSONL vectors under conformance/vectors.
 //
-//nolint:gocognit,gosec // REQ:CLI-CMD-001 vector harness intentionally executes binaries and opens repository vector files.
+//nolint:gocognit // REQ:CLI-CMD-001 vector harness intentionally executes binaries and validates the repository vector corpus.
 func TestConformanceVectors(t *testing.T) {
 	h := testHarness(t)
-	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
-	files, err := filepath.Glob(pattern)
-	if err != nil {
-		t.Fatalf("glob vectors: %v", err)
-	}
-	if len(files) == 0 {
-		t.Fatalf("no vector files found for pattern %q", pattern)
-	}
-
+	records := loadVectorRecords(t, h)
 	executed := 0
-	for _, f := range files {
-		file := f
-		t.Run(filepath.Base(file), func(t *testing.T) {
-			fd, err := os.Open(file)
-			if err != nil {
-				t.Fatalf("open vector file: %v", err)
-			}
-			defer func() {
-				if closeErr := fd.Close(); closeErr != nil {
-					t.Errorf("close vector file %s: %v", file, closeErr)
-				}
-			}()
+	for _, record := range records {
+		if err := validateVectorRequiredFields(record); err != nil {
+			t.Fatalf("%s:%d %v", record.file, record.line, err)
+		}
+		if err := validateVectorIntentEnum(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+		if err := validateVectorIntentContract(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+		args, err := vectorArgs(record.spec)
+		if err != nil {
+			t.Fatalf("%s:%d id=%s resolve args: %v", record.file, record.line, record.spec.ID, err)
+		}
 
-			sc := bufio.NewScanner(fd)
-			sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-			lineNo := 0
-			for sc.Scan() {
-				lineNo++
-				line := strings.TrimSpace(sc.Text())
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
-
-				var v vectorCase
-				if err := json.Unmarshal([]byte(line), &v); err != nil {
-					t.Fatalf("%s:%d decode vector: %v", file, lineNo, err)
-				}
-				if v.ID == "" {
-					t.Fatalf("%s:%d vector missing id", file, lineNo)
-				}
-
-				args := v.Args
-				if len(args) == 0 {
-					if v.Mode == "" {
-						t.Fatalf("%s:%d id=%s requires mode or args", file, lineNo, v.ID)
-					}
-					args = []string{v.Mode, "-"}
-				}
-
-				res := runCLI(t, h, args, []byte(v.Input))
-				if res.exitCode != v.WantExit {
-					t.Fatalf("%s:%d id=%s exit mismatch got=%d want=%d stdout=%q stderr=%q", file, lineNo, v.ID, res.exitCode, v.WantExit, res.stdout, res.stderr)
-				}
-				if v.WantStdout != nil && res.stdout != *v.WantStdout {
-					t.Fatalf("%s:%d id=%s stdout mismatch got=%q want=%q", file, lineNo, v.ID, res.stdout, *v.WantStdout)
-				}
-				if v.WantStderr != nil && res.stderr != *v.WantStderr {
-					t.Fatalf("%s:%d id=%s stderr mismatch got=%q want=%q", file, lineNo, v.ID, res.stderr, *v.WantStderr)
-				}
-				if v.WantStderrContains != nil && !strings.Contains(res.stderr, *v.WantStderrContains) {
-					t.Fatalf("%s:%d id=%s stderr missing substring %q in %q", file, lineNo, v.ID, *v.WantStderrContains, res.stderr)
-				}
-				executed++
-			}
-			if err := sc.Err(); err != nil {
-				t.Fatalf("%s scan error: %v", file, err)
-			}
-		})
+		res := runCLI(t, h, args, []byte(record.spec.Input))
+		if res.exitCode != record.spec.WantExit {
+			t.Fatalf("%s:%d id=%s exit mismatch got=%d want=%d stdout=%q stderr=%q", record.file, record.line, record.spec.ID, res.exitCode, record.spec.WantExit, res.stdout, res.stderr)
+		}
+		if record.spec.WantStdout != nil && res.stdout != *record.spec.WantStdout {
+			t.Fatalf("%s:%d id=%s stdout mismatch got=%q want=%q", record.file, record.line, record.spec.ID, res.stdout, *record.spec.WantStdout)
+		}
+		if record.spec.WantStderr != nil && res.stderr != *record.spec.WantStderr {
+			t.Fatalf("%s:%d id=%s stderr mismatch got=%q want=%q", record.file, record.line, record.spec.ID, res.stderr, *record.spec.WantStderr)
+		}
+		if record.spec.WantStderrContains != nil && !strings.Contains(res.stderr, *record.spec.WantStderrContains) {
+			t.Fatalf("%s:%d id=%s stderr missing substring %q in %q", record.file, record.line, record.spec.ID, *record.spec.WantStderrContains, res.stderr)
+		}
+		executed++
 	}
 	if executed == 0 {
 		t.Fatal("no vectors executed")
@@ -249,6 +225,15 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFICIAL-VEC-002": checkOfficialRFC8785Vectors,
 		"OFFICIAL-VEC-003": checkOfficialES6Corpus10K,
 		"OFFICIAL-VEC-004": checkOfficialES6100MReleaseGatePolicy,
+		// CONF-VEC
+		"CONF-VEC-001": checkConformanceVectorIntentRequired,
+		"CONF-VEC-002": checkConformanceVectorIntentEnum,
+		"CONF-VEC-003": checkConformanceVectorPositiveSemantics,
+		"CONF-VEC-004": checkConformanceVectorNegativeSemantics,
+		"CONF-VEC-005": checkConformanceVectorAdversarialSemantics,
+		"CONF-VEC-006": checkConformanceVectorPositiveCoverage,
+		"CONF-VEC-007": checkConformanceVectorNegativeCoverage,
+		"CONF-VEC-008": checkConformanceVectorAdversarialCoverage,
 		// PROF-NUM
 		"PROF-NEGZ-001":  checkNegativeZeroRejected,
 		"PROF-OFLOW-001": checkNumberOverflowRejected,
@@ -284,6 +269,9 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"SUPPLY-PROV-001":       checkReleaseWorkflowVerificationArtifacts,
 		"GOV-DUR-001":           checkGovernanceDurabilityClausesPresent,
 		"TRACE-LINK-001":        checkBehaviorTestsLinkedToRequirements,
+		"TRACE-LINK-002":        checkMatrixCSVMirrorParity,
+		"TRACE-LINK-003":        checkMatrixJSONLMirrorParity,
+		"TRACE-LINK-004":        checkTraceabilityArtifactsFailClosed,
 		"LINT-CI-001":           checkCILintGateEnforced,
 		"LINT-GATE-001":         checkLocalMandatoryLintGate,
 		"LINT-CONFIG-001":       checkGolangCILintConfigStrict,
@@ -291,20 +279,46 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"LINT-NOLINT-002":       checkNolintInventoryArtifact,
 		"OFFLINE-MATRIX-001":    checkOfflineMatrixManifestPresent,
 		"OFFLINE-COLD-001":      checkOfflineProfileColdReplayPolicy,
+		"OFFLINE-BUNDLE-001":    checkOfflineBundleByteDeterminism,
 		"OFFLINE-EVIDENCE-001":  checkOfflineEvidenceSchemaAndVerifyCLI,
 		"OFFLINE-GATE-001":      checkOfflineReleaseGatePolicy,
 		"OFFLINE-ARCH-001":      checkOfflineArchScopeDualArch,
 		"OFFLINE-LOCAL-001":     checkOfflineLocalProofCLI,
 		"OFFLINE-EVIDENCE-002":  checkOfflineEvidenceV1InfraSchemaPresent,
 		"OFFLINE-INFRA-001":     checkOfflineInfraManifestSchemaPresent,
+		"OFFLINE-INFRA-002":     checkOfflineInfraManifestFieldProvenanceDocs,
 		"OFFLINE-TOOLCHAIN-001": checkOfflineToolchainLockPresent,
+		"OFFLINE-SOURCE-001":    checkOfflineSourceRequiresCleanWorktree,
+		"OFFLINE-SOURCE-002":    checkOfflineSourceUsesDetachedWorktree,
+		"OFFLINE-SOURCE-003":    checkOfflineSourceCommitParityGuard,
 		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
 		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
+		"OFFLINE-RECOVERY-001":  checkOfflineServerRunRecordRecoveryAnchor,
+		"OFFLINE-RECOVERY-002":  checkOfflineServerCleanupRecoveryPath,
 		"AWS-RELEASE-001":       checkOfflineServerProfileContract,
 		"AWS-AMI-001":           checkOfficialAWSHostCatalogContract,
+		"AWS-NET-001":           checkOfficialAWSNoPublicIPs,
+		"AWS-NET-002":           checkOfficialAWSNoInternetEgressPath,
+		"AWS-NET-003":           checkOfficialAWSEndpointOnlyReachability,
 		"AWS-OUTPUT-001":        checkOfficialAWSInfraOutputContract,
+		"AWS-STATE-001":         checkOfficialAWSRemoteStateOnlyWrapper,
+		"AWS-STATE-002":         checkOfficialAWSRemoteBackendCoordinatesRequired,
+		"AWS-STAGING-001":       checkOfficialAWSStagingBucketSSE,
+		"AWS-STAGING-002":       checkOfficialAWSStagingBucketVersioning,
+		"AWS-STAGING-003":       checkOfficialAWSStagingBucketPublicAccessBlock,
+		"AWS-STAGING-004":       checkOfficialAWSStagingBucketOwnershipControls,
+		"AWS-STAGING-005":       checkOfficialAWSStagingBucketTLSPolicy,
+		"AWS-STAGING-006":       checkOfficialAWSStagingBucketVersionAwareDelete,
 		"AWS-TOOLCHAIN-001":     checkOfficialAWSToolchainContract,
+		"AWS-ATTEST-001":        checkOfficialAWSTransportAttestationVerification,
+		"AWS-ATTEST-002":        checkOfficialAWSIIDCertificateVerification,
+		"AWS-ATTEST-003":        checkOfficialAWSUnsupportedAttestationRegionFailsClosed,
+		"AWS-ATTEST-004":        checkOfficialAWSAttestationRegionDocs,
 		"AWS-GATE-001":          checkOfflineReleaseGatePolicy,
+		"AWS-XARCH-001":         checkOfficialAWSCrossArchDigestComparison,
+		"AWS-XARCH-002":         checkOfficialAWSCrossArchJSONReport,
+		"AWS-XARCH-003":         checkOfficialAWSCrossArchMarkdownReport,
+		"AWS-XARCH-004":         checkOfficialAWSCrossArchMismatchFailsClosed,
 		// VERIFY
 		"VERIFY-ORDER-001": checkVerifyRejectsNonCanonicalOrder,
 		"VERIFY-WS-001":    checkVerifyRejectsNonCanonicalWhitespace,
@@ -1671,7 +1685,26 @@ func isMapInitializer(expr ast.Expr) bool {
 // registries appears in the enforcement matrix, and vice versa.
 func TestMatrixRegistryParity(t *testing.T) {
 	h := testHarness(t)
+	checkMatrixRegistryParity(t, h)
+}
 
+func TestMatrixCSVMirrorParity(t *testing.T) {
+	h := testHarness(t)
+	checkMatrixCSVMirrorParity(t, h)
+}
+
+func TestMatrixJSONLMirrorParity(t *testing.T) {
+	h := testHarness(t)
+	checkMatrixJSONLMirrorParity(t, h)
+}
+
+func TestTraceabilityArtifactsFailClosed(t *testing.T) {
+	h := testHarness(t)
+	checkTraceabilityArtifactsFailClosed(t, h)
+}
+
+func checkMatrixRegistryParity(t *testing.T, h *harness) {
+	t.Helper()
 	regIDs := loadRequirementIDs(
 		t,
 		filepath.Join(h.root, "REQ_REGISTRY_NORMATIVE.md"),
@@ -1706,10 +1739,14 @@ func TestMatrixRegistryParity(t *testing.T) {
 
 // TestMatrixImplSymbolsExist verifies that every impl_file+impl_symbol
 // referenced in the enforcement matrix exists in the source tree.
-//
-//nolint:gocognit // REQ:TRACE-LINK-001 matrix symbol validation is intentionally explicit for actionable diagnostics.
 func TestMatrixImplSymbolsExist(t *testing.T) {
 	h := testHarness(t)
+	checkMatrixImplSymbolsExist(t, h)
+}
+
+//nolint:gocognit // REQ:TRACE-LINK-001 matrix symbol validation is intentionally explicit for actionable diagnostics.
+func checkMatrixImplSymbolsExist(t *testing.T, h *harness) {
+	t.Helper()
 	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
 
 	symbolsCache := make(map[string]map[string]symbolRange)
@@ -1761,6 +1798,11 @@ func TestMatrixImplSymbolsExist(t *testing.T) {
 // referenced in the enforcement matrix exists in the source tree.
 func TestMatrixTestSymbolsExist(t *testing.T) {
 	h := testHarness(t)
+	checkMatrixTestSymbolsExist(t, h)
+}
+
+func checkMatrixTestSymbolsExist(t *testing.T, h *harness) {
+	t.Helper()
 	rows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
 
 	funcsCache := make(map[string]map[string]struct{})
@@ -1848,6 +1890,30 @@ func checkBehaviorTestsLinkedToRequirements(t *testing.T, h *harness) {
 	}
 }
 
+func checkMatrixCSVMirrorParity(t *testing.T, h *harness) {
+	t.Helper()
+	markdownRows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+	csvRows := loadMatrixCSVRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.csv"))
+	assertMatrixRowParity(t, markdownRows, csvRows, "markdown", "csv")
+}
+
+func checkMatrixJSONLMirrorParity(t *testing.T, h *harness) {
+	t.Helper()
+	markdownRows := loadMatrixRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.md"))
+	jsonlRows := loadMatrixJSONLRows(t, filepath.Join(h.root, "REQ_ENFORCEMENT_MATRIX.jsonl"))
+	assertMatrixRowParity(t, markdownRows, jsonlRows, "markdown", "jsonl")
+}
+
+func checkTraceabilityArtifactsFailClosed(t *testing.T, h *harness) {
+	t.Helper()
+	checkMatrixRegistryParity(t, h)
+	checkMatrixImplSymbolsExist(t, h)
+	checkMatrixTestSymbolsExist(t, h)
+	checkBehaviorTestsLinkedToRequirements(t, h)
+	checkMatrixCSVMirrorParity(t, h)
+	checkMatrixJSONLMirrorParity(t, h)
+}
+
 // TestRegistryIDFormat verifies all requirement IDs conform to the
 // DOMAIN-NAME-NNN pattern.
 func TestRegistryIDFormat(t *testing.T) {
@@ -1868,77 +1934,350 @@ func TestRegistryIDFormat(t *testing.T) {
 }
 
 // TestVectorSchemaValid verifies all JSONL vector files conform to the
-// expected schema: required fields id, mode/args, want_exit.
-//
-//nolint:gocognit,gosec // REQ:CLI-CMD-001 vector schema validation reads repository fixture files by design.
+// expected schema and triad contract.
 func TestVectorSchemaValid(t *testing.T) {
 	h := testHarness(t)
+	records := loadVectorRecords(t, h)
+	seenIDs := make(map[string]string) // id → file
+	for _, record := range records {
+		if err := validateVectorRequiredFields(record); err != nil {
+			t.Errorf("%s:%d %v", record.file, record.line, err)
+			continue
+		}
+		if err := validateVectorIntentEnum(record.spec); err != nil {
+			t.Errorf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+			continue
+		}
+		if err := validateVectorIntentContract(record.spec); err != nil {
+			t.Errorf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+			continue
+		}
+
+		if prev, dup := seenIDs[record.spec.ID]; dup {
+			t.Errorf("%s:%d duplicate vector ID %q (first in %s)", record.file, record.line, record.spec.ID, prev)
+		}
+		seenIDs[record.spec.ID] = record.file
+	}
+	if len(records) == 0 {
+		t.Fatal("no vectors validated")
+	}
+	t.Logf("validated %d vectors, %d unique IDs", len(records), len(seenIDs))
+}
+
+func loadVectorRecords(t *testing.T, h *harness) []vectorRecord {
+	t.Helper()
 	pattern := filepath.Join(h.root, "conformance", "vectors", "*.jsonl")
 	files, err := filepath.Glob(pattern)
 	if err != nil {
 		t.Fatalf("glob vectors: %v", err)
 	}
 	if len(files) == 0 {
-		t.Fatalf("no vector files found")
+		t.Fatalf("no vector files found for pattern %q", pattern)
 	}
 
-	seenIDs := make(map[string]string) // id → file
-	totalVectors := 0
+	records := make([]vectorRecord, 0, 128)
+	for _, file := range files {
+		records = append(records, loadVectorFileRecords(t, file)...)
+	}
 
-	for _, f := range files {
-		data, err := os.ReadFile(f)
+	return records
+}
+
+//nolint:gosec // REQ:CLI-CMD-001 vector loader reads repository-controlled vector files by path.
+func loadVectorFileRecords(t *testing.T, file string) []vectorRecord {
+	t.Helper()
+	fd, err := os.Open(file)
+	if err != nil {
+		t.Fatalf("open vector file: %v", err)
+	}
+	defer func() {
+		if closeErr := fd.Close(); closeErr != nil {
+			t.Fatalf("close vector file %s: %v", file, closeErr)
+		}
+	}()
+
+	records := make([]vectorRecord, 0, 32)
+	sc := bufio.NewScanner(fd)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	lineNo := 0
+	for sc.Scan() {
+		lineNo++
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		record, err := decodeVectorRecord(filepath.Base(file), lineNo, line)
 		if err != nil {
-			t.Fatalf("read %s: %v", f, err)
+			t.Fatalf("%s:%d decode vector: %v", filepath.Base(file), lineNo, err)
 		}
-		lines := strings.Split(string(data), "\n")
-		for lineNo, line := range lines {
-			line = strings.TrimSpace(line)
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
+		records = append(records, record)
+	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("%s scan error: %v", file, err)
+	}
+	return records
+}
 
-			var raw map[string]json.RawMessage
-			if err := json.Unmarshal([]byte(line), &raw); err != nil {
-				t.Errorf("%s:%d invalid JSON: %v", filepath.Base(f), lineNo+1, err)
-				continue
-			}
+func decodeVectorRecord(file string, line int, text string) (vectorRecord, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &raw); err != nil {
+		return vectorRecord{}, fmt.Errorf("invalid JSON: %w", err)
+	}
 
-			// Required: id
-			if _, ok := raw["id"]; !ok {
-				t.Errorf("%s:%d missing required field 'id'", filepath.Base(f), lineNo+1)
-				continue
-			}
-			var id string
-			if err := json.Unmarshal(raw["id"], &id); err != nil {
-				t.Errorf("%s:%d 'id' is not a string: %v", filepath.Base(f), lineNo+1, err)
-				continue
-			}
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.DisallowUnknownFields()
+	var spec vectorCase
+	if err := dec.Decode(&spec); err != nil {
+		return vectorRecord{}, fmt.Errorf("invalid vector fields: %w", err)
+	}
+	if dec.More() {
+		return vectorRecord{}, errors.New("unexpected trailing JSON content")
+	}
 
-			// Unique ID across all files
-			if prev, dup := seenIDs[id]; dup {
-				t.Errorf("%s:%d duplicate vector ID %q (first in %s)", filepath.Base(f), lineNo+1, id, prev)
-			}
-			seenIDs[id] = filepath.Base(f)
+	return vectorRecord{
+		file: file,
+		line: line,
+		raw:  raw,
+		spec: spec,
+	}, nil
+}
 
-			// Required: mode or args
-			_, hasMode := raw["mode"]
-			_, hasArgs := raw["args"]
-			if !hasMode && !hasArgs {
-				t.Errorf("%s:%d id=%s requires 'mode' or 'args'", filepath.Base(f), lineNo+1, id)
-			}
-
-			// Required: want_exit
-			if _, ok := raw["want_exit"]; !ok {
-				t.Errorf("%s:%d id=%s missing required field 'want_exit'", filepath.Base(f), lineNo+1, id)
-			}
-
-			totalVectors++
+func validateVectorRequiredFields(record vectorRecord) error {
+	requiredFields := []string{"id", "intent", "want_exit"}
+	for _, field := range requiredFields {
+		if _, ok := record.raw[field]; !ok {
+			return fmt.Errorf("missing required field %q", field)
 		}
 	}
-	if totalVectors == 0 {
-		t.Fatal("no vectors validated")
+
+	_, hasMode := record.raw["mode"]
+	_, hasArgs := record.raw["args"]
+	if !hasMode && !hasArgs {
+		return errors.New("requires 'mode' or 'args'")
 	}
-	t.Logf("validated %d vectors across %d files, %d unique IDs", totalVectors, len(files), len(seenIDs))
+	if strings.TrimSpace(record.spec.ID) == "" {
+		return errors.New("'id' must be a non-empty string")
+	}
+
+	return nil
+}
+
+func validateVectorIntentEnum(spec vectorCase) error {
+	switch spec.Intent {
+	case vectorIntentPositive, vectorIntentNegative, vectorIntentAdversarial:
+		return nil
+	default:
+		return fmt.Errorf("invalid intent %q", spec.Intent)
+	}
+}
+
+func validateVectorIntentContract(spec vectorCase) error {
+	if _, err := vectorArgs(spec); err != nil {
+		return err
+	}
+
+	switch spec.Intent {
+	case vectorIntentPositive:
+		if spec.WantExit != 0 {
+			return fmt.Errorf("positive vectors must exit 0, got %d", spec.WantExit)
+		}
+		if spec.WantStdout == nil && spec.WantStderr == nil {
+			return errors.New("positive vectors must assert exact stdout or exact stderr")
+		}
+		if spec.WantStderrContains != nil {
+			return errors.New("positive vectors must not use stderr substring expectations")
+		}
+	case vectorIntentNegative:
+		if spec.WantExit == 0 {
+			return errors.New("negative vectors must fail closed with non-zero exit")
+		}
+		if !hasVectorDiagnosticExpectation(spec) {
+			return errors.New("negative vectors must assert stderr evidence")
+		}
+	case vectorIntentAdversarial:
+		if spec.WantExit == 0 {
+			return errors.New("adversarial vectors must fail closed with non-zero exit")
+		}
+		if !hasVectorDiagnosticExpectation(spec) {
+			return errors.New("adversarial vectors must assert stderr evidence")
+		}
+		if !hasAdversarialDiagnosticExpectation(spec) {
+			return errors.New("adversarial vectors must assert root-cause or byte-offset diagnostics")
+		}
+	default:
+		return fmt.Errorf("invalid intent %q", spec.Intent)
+	}
+
+	return nil
+}
+
+func vectorArgs(spec vectorCase) ([]string, error) {
+	if len(spec.Args) > 0 {
+		command := strings.TrimSpace(spec.Args[0])
+		if command == "" {
+			return nil, errors.New("args[0] must name the command")
+		}
+		return spec.Args, nil
+	}
+
+	command := strings.TrimSpace(spec.Mode)
+	if command == "" {
+		return nil, errors.New("requires mode or args")
+	}
+
+	return []string{command, "-"}, nil
+}
+
+func vectorCommand(spec vectorCase) (string, error) {
+	args, err := vectorArgs(spec)
+	if err != nil {
+		return "", err
+	}
+	return args[0], nil
+}
+
+func hasVectorDiagnosticExpectation(spec vectorCase) bool {
+	return spec.WantStderr != nil || spec.WantStderrContains != nil
+}
+
+func hasAdversarialDiagnosticExpectation(spec vectorCase) bool {
+	signals := []string{
+		"at byte ",
+		"DUPLICATE_KEY",
+		"LONE_SURROGATE",
+		"NONCHARACTER",
+		"INVALID_UTF8",
+		"NUMBER_NEGZERO",
+		"NUMBER_OVERFLOW",
+		"NUMBER_UNDERFLOW",
+	}
+	for _, value := range []string{dereferenceString(spec.WantStderr), dereferenceString(spec.WantStderrContains)} {
+		for _, signal := range signals {
+			if strings.Contains(value, signal) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func dereferenceString(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
+}
+
+func missingVectorIntentCoverage(records []vectorRecord, intent string) []string {
+	counts := make(map[string]int)
+	for _, record := range records {
+		command, err := vectorCommand(record.spec)
+		if err != nil {
+			continue
+		}
+		if record.spec.Intent == intent {
+			counts[command]++
+		}
+	}
+
+	commands := make(map[string]struct{})
+	for _, record := range records {
+		command, err := vectorCommand(record.spec)
+		if err != nil {
+			continue
+		}
+		commands[command] = struct{}{}
+	}
+
+	missing := make([]string, 0, len(commands))
+	for command := range commands {
+		if counts[command] == 0 {
+			missing = append(missing, command)
+		}
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+func checkConformanceVectorIntentRequired(t *testing.T, h *harness) {
+	t.Helper()
+	for _, record := range loadVectorRecords(t, h) {
+		if err := validateVectorRequiredFields(record); err != nil {
+			t.Fatalf("%s:%d %v", record.file, record.line, err)
+		}
+	}
+}
+
+func checkConformanceVectorIntentEnum(t *testing.T, h *harness) {
+	t.Helper()
+	for _, record := range loadVectorRecords(t, h) {
+		if err := validateVectorRequiredFields(record); err != nil {
+			t.Fatalf("%s:%d %v", record.file, record.line, err)
+		}
+		if err := validateVectorIntentEnum(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+	}
+}
+
+func checkConformanceVectorPositiveSemantics(t *testing.T, h *harness) {
+	t.Helper()
+	for _, record := range loadVectorRecords(t, h) {
+		if record.spec.Intent != vectorIntentPositive {
+			continue
+		}
+		if err := validateVectorIntentContract(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+	}
+}
+
+func checkConformanceVectorNegativeSemantics(t *testing.T, h *harness) {
+	t.Helper()
+	for _, record := range loadVectorRecords(t, h) {
+		if record.spec.Intent != vectorIntentNegative {
+			continue
+		}
+		if err := validateVectorIntentContract(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+	}
+}
+
+func checkConformanceVectorAdversarialSemantics(t *testing.T, h *harness) {
+	t.Helper()
+	for _, record := range loadVectorRecords(t, h) {
+		if record.spec.Intent != vectorIntentAdversarial {
+			continue
+		}
+		if err := validateVectorIntentContract(record.spec); err != nil {
+			t.Fatalf("%s:%d id=%s %v", record.file, record.line, record.spec.ID, err)
+		}
+	}
+}
+
+func checkConformanceVectorPositiveCoverage(t *testing.T, h *harness) {
+	t.Helper()
+	missing := missingVectorIntentCoverage(loadVectorRecords(t, h), vectorIntentPositive)
+	if len(missing) > 0 {
+		t.Fatalf("commands missing positive vectors: %s", strings.Join(missing, ", "))
+	}
+}
+
+func checkConformanceVectorNegativeCoverage(t *testing.T, h *harness) {
+	t.Helper()
+	missing := missingVectorIntentCoverage(loadVectorRecords(t, h), vectorIntentNegative)
+	if len(missing) > 0 {
+		t.Fatalf("commands missing negative vectors: %s", strings.Join(missing, ", "))
+	}
+}
+
+func checkConformanceVectorAdversarialCoverage(t *testing.T, h *harness) {
+	t.Helper()
+	missing := missingVectorIntentCoverage(loadVectorRecords(t, h), vectorIntentAdversarial)
+	if len(missing) > 0 {
+		t.Fatalf("commands missing adversarial vectors: %s", strings.Join(missing, ", "))
+	}
 }
 
 // TestABIManifestValid verifies the ABI manifest is valid JSON and contains
@@ -2466,6 +2805,69 @@ func checkOfflineProfileColdReplayPolicy(t *testing.T, h *harness) {
 	}
 }
 
+func checkOfflineBundleByteDeterminism(t *testing.T, _ *harness) {
+	t.Helper()
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "jcs-canon")
+	worker := filepath.Join(dir, "jcs-offline-worker")
+	matrix := filepath.Join(dir, "matrix.yaml")
+	profile := filepath.Join(dir, "profile.yaml")
+	vectorsDir := filepath.Join(dir, "vectors")
+	if err := os.MkdirAll(vectorsDir, 0o750); err != nil {
+		t.Fatalf("mkdir vectors: %v", err)
+	}
+	for _, file := range []struct {
+		path string
+		data []byte
+		mode os.FileMode
+	}{
+		{path: bin, data: []byte("binary"), mode: 0o755},
+		{path: worker, data: []byte("worker"), mode: 0o755},
+		{path: matrix, data: []byte("version: v1\narchitecture: x86_64\nnodes: []\n"), mode: 0o644},
+		{path: profile, data: []byte("version: v1\nname: p\nrequired_suites: [a]\nmin_cold_replays: 1\nhard_release_gate: true\nevidence_required: true\n"), mode: 0o644},
+		{path: filepath.Join(vectorsDir, "core.jsonl"), data: []byte("{}\n"), mode: 0o644},
+	} {
+		if err := os.WriteFile(file.path, file.data, file.mode); err != nil {
+			t.Fatalf("write %s: %v", file.path, err)
+		}
+	}
+
+	firstPath := filepath.Join(dir, "bundle-first.tgz")
+	secondPath := filepath.Join(dir, "bundle-second.tgz")
+	opts := replay.BundleOptions{
+		OutputPath:  firstPath,
+		BinaryPath:  bin,
+		WorkerPath:  worker,
+		MatrixPath:  matrix,
+		ProfilePath: profile,
+		VectorsGlob: filepath.Join(vectorsDir, "*.jsonl"),
+	}
+	firstManifest, err := replay.CreateBundle(opts)
+	if err != nil {
+		t.Fatalf("create first bundle: %v", err)
+	}
+	if firstManifest.CreatedAtUTC != "1970-01-01T00:00:00Z" {
+		t.Fatalf("created_at_utc = %q, want deterministic epoch timestamp", firstManifest.CreatedAtUTC)
+	}
+	opts.OutputPath = secondPath
+	if _, createErr := replay.CreateBundle(opts); createErr != nil {
+		t.Fatalf("create second bundle: %v", createErr)
+	}
+	//nolint:gosec // REQ:OFFLINE-BUNDLE-001 conformance reads the temp bundle path it just wrote.
+	firstBytes, err := os.ReadFile(firstPath)
+	if err != nil {
+		t.Fatalf("read first bundle: %v", err)
+	}
+	//nolint:gosec // REQ:OFFLINE-BUNDLE-001 conformance reads the temp bundle path it just wrote.
+	secondBytes, err := os.ReadFile(secondPath)
+	if err != nil {
+		t.Fatalf("read second bundle: %v", err)
+	}
+	if !bytes.Equal(firstBytes, secondBytes) {
+		t.Fatal("bundle bytes differ for identical inputs")
+	}
+}
+
 // TestOfflineEvidenceSchemaAndVerifyCLI verifies schema and CLI verifier command exist.
 func TestOfflineEvidenceSchemaAndVerifyCLI(t *testing.T) {
 	h := testHarness(t)
@@ -2603,6 +3005,23 @@ func checkOfflineInfraManifestSchemaPresent(t *testing.T, h *harness) {
 	}
 }
 
+func checkOfflineInfraManifestFieldProvenanceDocs(t *testing.T, h *harness) {
+	t.Helper()
+	schemaPath := filepath.Join(h.root, "offline", "schema", "infra-manifest.v1.json")
+	data := mustReadText(t, schemaPath)
+	for _, needle := range []string{
+		"When iid_verified=true this value is bound to the verified AWS instance-identity document.",
+		"Self-reported by the worker.",
+		"host-reported and not covered by the verified AWS instance-identity document.",
+	} {
+		assertContains(t, data, needle, "infra-manifest.v1 provenance description")
+	}
+
+	readme := mustReadText(t, filepath.Join(h.root, "offline", "README.md"))
+	assertContains(t, readme, "self-reported substrate metadata", "offline readme provenance boundary")
+	assertContains(t, readme, "iid_verified=true", "offline readme iid boundary")
+}
+
 func checkOfflineToolchainLockPresent(t *testing.T, h *harness) {
 	t.Helper()
 	lockPath := filepath.Join(h.root, "offline", "toolchain.lock.tsv")
@@ -2624,6 +3043,65 @@ func checkOfflineToolchainLockPresent(t *testing.T, h *harness) {
 		"jq-linux-arm64",
 	} {
 		assertContains(t, lockRaw, needle, "toolchain lock artifact")
+	}
+}
+
+func checkOfflineSourceRequiresCleanWorktree(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `prepareServerEvidenceSource(ctx, opts.root)`, "server evidence source preparation")
+	assertContains(t, serverEvidence, `validateCleanGitWorktree(ctx, root)`, "server evidence clean-worktree guard")
+
+	contrib := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, contrib, "requires a clean git worktree", "contributing clean-worktree requirement")
+}
+
+func checkOfflineSourceUsesDetachedWorktree(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `prepareDetachedSourceTree(ctx, root, gitCommit)`, "server evidence detached worktree creation")
+
+	contrib := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, contrib, "creates a detached worktree at the recorded source", "contributing detached worktree wording")
+}
+
+func checkOfflineSourceCommitParityGuard(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `resolveGitHeadCommit(sourceRoot)`, "server evidence detached head resolution")
+	assertContains(t, serverEvidence, `detached source commit mismatch`, "server evidence detached commit parity failure")
+}
+
+func checkOfflineServerRunRecordRecoveryAnchor(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `server-run.v1.json`, "server evidence run-record path")
+
+	for _, doc := range []string{
+		filepath.Join(h.root, "CONTRIBUTING.md"),
+		filepath.Join(h.root, "offline", "README.md"),
+		filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"),
+	} {
+		assertContains(t, mustReadText(t, doc), "server-run.v1.json", "server run-record recovery anchor")
+	}
+}
+
+func checkOfflineServerCleanupRecoveryPath(t *testing.T, h *harness) {
+	t.Helper()
+	mainCLI := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "main.go"))
+	assertContains(t, mainCLI, "server-cleanup", "offline replay cli server-cleanup subcommand")
+
+	cleanupImpl := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_cleanup.go"))
+	assertContains(t, cleanupImpl, "runServerCleanup", "server cleanup implementation")
+
+	for _, doc := range []string{
+		filepath.Join(h.root, "CONTRIBUTING.md"),
+		filepath.Join(h.root, "offline", "README.md"),
+		filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"),
+	} {
+		text := mustReadText(t, doc)
+		assertContains(t, text, "server-cleanup", "server cleanup recovery documentation")
+		assertContains(t, text, "--run-record", "server cleanup recovery documentation")
 	}
 }
 
@@ -2745,6 +3223,181 @@ func checkOfficialAWSInfraOutputContract(t *testing.T, h *harness) {
 
 	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
 	assertContains(t, serverEvidence, `tofuOutputHosts(ctx, toolchain.tofuBinary, opts.infraDir, "provisioned_hosts")`, "official aws provisioned host output consumer")
+}
+
+func checkOfficialAWSNoPublicIPs(t *testing.T, h *harness) {
+	t.Helper()
+	instancesTF := mustReadText(t, filepath.Join(h.root, "infra", "instances.tf"))
+	assertContains(t, instancesTF, `associate_public_ip_address = false`, "official aws no-public-ip launch")
+}
+
+func checkOfficialAWSNoInternetEgressPath(t *testing.T, h *harness) {
+	t.Helper()
+	mainTF := mustReadText(t, filepath.Join(h.root, "infra", "main.tf"))
+	if strings.Contains(mainTF, `resource "aws_internet_gateway"`) {
+		t.Fatal("official aws infra must not declare an internet gateway")
+	}
+	if strings.Contains(mainTF, `resource "aws_nat_gateway"`) {
+		t.Fatal("official aws infra must not declare a nat gateway")
+	}
+	if strings.Contains(mainTF, `cidr_block = "0.0.0.0/0"`) {
+		t.Fatal("official aws infra must not declare a 0.0.0.0/0 route")
+	}
+}
+
+func checkOfficialAWSEndpointOnlyReachability(t *testing.T, h *harness) {
+	t.Helper()
+	mainTF := mustReadText(t, filepath.Join(h.root, "infra", "main.tf"))
+	for _, needle := range []string{
+		`resource "aws_vpc_endpoint" "ssm"`,
+		`resource "aws_vpc_endpoint" "ssmmessages"`,
+		`resource "aws_vpc_endpoint" "ec2messages"`,
+		`resource "aws_vpc_endpoint" "s3"`,
+		`prefix_list_ids = [data.aws_prefix_list.s3.id]`,
+	} {
+		assertContains(t, mainTF, needle, "official aws endpoint-only reachability")
+	}
+}
+
+func checkOfficialAWSRemoteStateOnlyWrapper(t *testing.T, h *harness) {
+	t.Helper()
+	releaseScript := mustReadText(t, filepath.Join(h.root, "scripts", "release-server.sh"))
+	assertContains(t, releaseScript, `STATE_MODE="${STATE_MODE:-remote}"`, "release wrapper remote default")
+	assertContains(t, releaseScript, `only supports STATE_MODE=remote`, "release wrapper remote-only enforcement")
+
+	contrib := mustReadText(t, filepath.Join(h.root, "CONTRIBUTING.md"))
+	assertContains(t, contrib, "enforces `STATE_MODE=remote`", "contributing remote-state-only release mode")
+}
+
+func checkOfficialAWSRemoteBackendCoordinatesRequired(t *testing.T, h *harness) {
+	t.Helper()
+	releaseScript := mustReadText(t, filepath.Join(h.root, "scripts", "release-server.sh"))
+	assertContains(t, releaseScript, `STATE_BUCKET`, "release wrapper state bucket requirement")
+	assertContains(t, releaseScript, `STATE_LOCK_TABLE`, "release wrapper state lock-table requirement")
+	assertContains(t, releaseScript, `remote state requires STATE_BUCKET and STATE_LOCK_TABLE`, "release wrapper backend-coordinate failure")
+}
+
+func checkOfficialAWSStagingBucketSSE(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	assertContains(t, serverAWS, `PutBucketEncryption`, "staging bucket encryption hardening")
+	assertContains(t, serverAWS, `ServerSideEncryptionAes256`, "staging bucket aes256 encryption")
+}
+
+func checkOfficialAWSStagingBucketVersioning(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	assertContains(t, serverAWS, `PutBucketVersioning`, "staging bucket versioning hardening")
+	assertContains(t, serverAWS, `BucketVersioningStatusEnabled`, "staging bucket enabled versioning")
+}
+
+func checkOfficialAWSStagingBucketPublicAccessBlock(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	for _, needle := range []string{
+		`PutPublicAccessBlock`,
+		`BlockPublicAcls:       aws.Bool(true)`,
+		`IgnorePublicAcls:      aws.Bool(true)`,
+		`BlockPublicPolicy:     aws.Bool(true)`,
+		`RestrictPublicBuckets: aws.Bool(true)`,
+	} {
+		assertContains(t, serverAWS, needle, "staging bucket public access block")
+	}
+}
+
+func checkOfficialAWSStagingBucketOwnershipControls(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	assertContains(t, serverAWS, `PutBucketOwnershipControls`, "staging bucket ownership controls")
+	assertContains(t, serverAWS, `ObjectOwnershipBucketOwnerEnforced`, "staging bucket owner enforced")
+}
+
+func checkOfficialAWSStagingBucketTLSPolicy(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	assertContains(t, serverAWS, `DenyInsecureTransport`, "staging bucket tls-only policy")
+}
+
+func checkOfficialAWSStagingBucketVersionAwareDelete(t *testing.T, h *harness) {
+	t.Helper()
+	serverAWS := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_aws.go"))
+	for _, needle := range []string{
+		`NewListObjectVersionsPaginator`,
+		`DeleteObjects`,
+		`DeleteBucket`,
+	} {
+		assertContains(t, serverAWS, needle, "staging bucket version-aware teardown")
+	}
+}
+
+func checkOfficialAWSTransportAttestationVerification(t *testing.T, h *harness) {
+	t.Helper()
+	serverSSM := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_ssm.go"))
+	assertContains(t, serverSSM, `verifyTransportAttestation(attestationData, data, challenge, node.ID, replayIndex, host, a.aws.config.Region)`, "ssm replay attestation verification")
+
+	serverAttestation := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_attestation.go"))
+	assertContains(t, serverAttestation, `ed25519.Verify(`, "transport attestation signature verification")
+	assertContains(t, serverAttestation, `transport attestation evidence sha256 mismatch`, "transport attestation evidence digest binding")
+}
+
+func checkOfficialAWSIIDCertificateVerification(t *testing.T, h *harness) {
+	t.Helper()
+	serverAttestation := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_attestation.go"))
+	assertContains(t, serverAttestation, `rsa.VerifyPKCS1v15`, "aws iid rsa verification")
+	assertContains(t, serverAttestation, `awsInstanceIdentityRSACertByRegion`, "aws iid pinned certificate map")
+}
+
+func checkOfficialAWSUnsupportedAttestationRegionFailsClosed(t *testing.T, h *harness) {
+	t.Helper()
+	serverAttestation := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_attestation.go"))
+	assertContains(t, serverAttestation, `unsupported aws instance identity certificate region`, "aws iid unsupported-region failure")
+}
+
+func checkOfficialAWSAttestationRegionDocs(t *testing.T, h *harness) {
+	t.Helper()
+	for _, doc := range []string{
+		filepath.Join(h.root, "CONTRIBUTING.md"),
+		filepath.Join(h.root, "offline", "README.md"),
+		filepath.Join(h.root, "docs", "OFFLINE_REPLAY_HARNESS.md"),
+	} {
+		text := mustReadText(t, doc)
+		assertContains(t, text, "`us-east-1`", "attestation region scope docs")
+		assertContains(t, text, "fails closed", "attestation region fail-closed docs")
+	}
+}
+
+func checkOfficialAWSCrossArchDigestComparison(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `r.runCrossArchComparison(stdout)`, "server evidence cross-arch stage")
+	assertContains(t, serverEvidence, `compareCrossArchEvidenceFunc(`, "server evidence cross-arch compare invocation")
+}
+
+func checkOfficialAWSCrossArchJSONReport(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `cross-arch-compare.json`, "server evidence cross-arch json report")
+
+	offlineReadme := mustReadText(t, filepath.Join(h.root, "offline", "README.md"))
+	assertContains(t, offlineReadme, "cross-arch-compare.json", "offline readme cross-arch json report")
+}
+
+func checkOfficialAWSCrossArchMarkdownReport(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `cross-arch-compare.md`, "server evidence cross-arch markdown report")
+
+	offlineReadme := mustReadText(t, filepath.Join(h.root, "offline", "README.md"))
+	assertContains(t, offlineReadme, "cross-arch-compare.md", "offline readme cross-arch markdown report")
+}
+
+func checkOfficialAWSCrossArchMismatchFailsClosed(t *testing.T, h *harness) {
+	t.Helper()
+	serverEvidence := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "server_evidence.go"))
+	assertContains(t, serverEvidence, `if err := r.runCrossArchComparison(stdout); err != nil {`, "server evidence cross-arch fail-closed gate")
+
+	offlineHarness := mustReadText(t, filepath.Join(h.root, "cmd", "jcs-offline-replay", "offline_harness.go"))
+	assertContains(t, offlineHarness, `return report, fmt.Errorf("cross-arch digest comparison failed")`, "cross-arch mismatch failure")
 }
 
 func checkOfflineServerProfileContract(t *testing.T, h *harness) {
@@ -3070,6 +3723,18 @@ type symbolRange struct {
 	end   int
 }
 
+type matrixJSONLRow struct {
+	RequirementID string `json:"requirement_id"`
+	Domain        string `json:"domain"`
+	Level         string `json:"level"`
+	ImplFile      string `json:"impl_file"`
+	ImplSymbol    string `json:"impl_symbol"`
+	ImplLine      string `json:"impl_line"`
+	TestFile      string `json:"test_file"`
+	TestFunc      string `json:"test_function"`
+	Gate          string `json:"gate"`
+}
+
 func loadMatrixIDs(t *testing.T, path string) map[string]struct{} {
 	t.Helper()
 	rows := loadMatrixRows(t, path)
@@ -3100,6 +3765,59 @@ func loadMatrixRows(t *testing.T, path string) []matrixRow {
 		t.Fatalf("unterminated ```csv block in matrix file")
 	}
 	csvBlock := content[csvStart : csvStart+csvEnd]
+
+	return parseMatrixCSVRows(t, csvBlock)
+}
+
+//nolint:gosec // REQ:TRACE-LINK-002 matrix loader reads repository-controlled traceability artifacts.
+func loadMatrixCSVRows(t *testing.T, path string) []matrixRow {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read matrix csv: %v", err)
+	}
+
+	return parseMatrixCSVRows(t, string(data))
+}
+
+//nolint:gosec // REQ:TRACE-LINK-003 matrix loader reads repository-controlled traceability artifacts.
+func loadMatrixJSONLRows(t *testing.T, path string) []matrixRow {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read matrix jsonl: %v", err)
+	}
+
+	rows := make([]matrixRow, 0, strings.Count(string(data), "\n"))
+	for i, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var record matrixJSONLRow
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("jsonl line %d invalid: %v", i+1, err)
+		}
+		rows = append(rows, matrixRow{
+			reqID:      record.RequirementID,
+			domain:     record.Domain,
+			level:      record.Level,
+			implFile:   record.ImplFile,
+			implSymbol: record.ImplSymbol,
+			implLine:   record.ImplLine,
+			testFile:   record.TestFile,
+			testFunc:   record.TestFunc,
+			gate:       record.Gate,
+		})
+	}
+	if len(rows) == 0 {
+		t.Fatal("no jsonl matrix rows found")
+	}
+	return rows
+}
+
+func parseMatrixCSVRows(t *testing.T, csvBlock string) []matrixRow {
+	t.Helper()
 
 	rows := make([]matrixRow, 0, strings.Count(csvBlock, "\n"))
 	for i, line := range strings.Split(csvBlock, "\n") {
@@ -3140,6 +3858,38 @@ func loadMatrixRows(t *testing.T, path string) []matrixRow {
 		t.Fatal("no matrix rows found")
 	}
 	return rows
+}
+
+func assertMatrixRowParity(t *testing.T, left []matrixRow, right []matrixRow, leftName string, rightName string) {
+	t.Helper()
+	leftLines := normalizeMatrixRows(left)
+	rightLines := normalizeMatrixRows(right)
+	if len(leftLines) != len(rightLines) {
+		t.Fatalf("%s/%s matrix row count mismatch: %d vs %d", leftName, rightName, len(leftLines), len(rightLines))
+	}
+	for i := range leftLines {
+		if leftLines[i] != rightLines[i] {
+			t.Fatalf("%s/%s matrix mismatch at row %d:\n%s\n%s", leftName, rightName, i+1, leftLines[i], rightLines[i])
+		}
+	}
+}
+
+func normalizeMatrixRows(rows []matrixRow) []string {
+	normalized := make([]string, 0, len(rows))
+	for _, row := range rows {
+		normalized = append(normalized, strings.Join([]string{
+			row.reqID,
+			row.domain,
+			row.level,
+			row.implFile,
+			row.implSymbol,
+			row.implLine,
+			row.testFile,
+			row.testFunc,
+			row.gate,
+		}, ","))
+	}
+	return normalized
 }
 
 //nolint:gosec // REQ:TRACE-LINK-001 symbol loader parses repository source files by path.
