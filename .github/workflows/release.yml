@@ -312,11 +312,27 @@ jobs:
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
           JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-arm64.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
+      - name: fetch governance lock from jcs-governance
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The governance lock is owned by jcs-governance, not json-canon.
+          # Clone the governance umbrella at HEAD main to get the authoritative lock file.
+          gov_umbrella="${GITHUB_WORKSPACE}/.tmp/jcs-governance-lock"
+          rm -rf "${gov_umbrella}"
+          git clone --no-tags --depth=1 \
+            https://github.com/lattice-substrate/jcs-governance.git \
+            "${gov_umbrella}"
+          if [[ ! -f "${gov_umbrella}/governance.lock.json" ]]; then
+            echo "::error::governance.lock.json not found in jcs-governance"
+            exit 1
+          fi
+          echo "GOV_LOCK_FILE=${gov_umbrella}/governance.lock.json" >> "$GITHUB_ENV"
       - name: checkout pinned governance repos
         shell: bash
         run: |
           set -euo pipefail
-          lock_file="${GITHUB_WORKSPACE}/governance.lock.json"
+          lock_file="${GOV_LOCK_FILE}"
           gov_root="${GITHUB_WORKSPACE}/.tmp/governance"
           mkdir -p "${gov_root}"
           for repo in jcs-spec jcs-contracts jcs-conformance-harness jcs-integration-tests; do
@@ -331,6 +347,17 @@ jobs:
               git checkout --detach "${commit}"
             )
           done
+      - name: spec implementation parity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          gov_root="${GITHUB_WORKSPACE}/.tmp/governance"
+          # Independently verify that jcs-spec's positive vector expectations match
+          # this implementation as a black-box oracle. This is the governance layer
+          # certifying semantic correctness, not implementation-private test coverage.
+          "$JCS_TOOL_GO" run "${gov_root}/jcs-spec/go/cmd/jcs-spec" validate-implementation \
+            --spec-root "${gov_root}/jcs-spec" \
+            --impl-root "${GITHUB_WORKSPACE}"
       - name: governed release gate
         shell: bash
         run: |
