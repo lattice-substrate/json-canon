@@ -32,6 +32,9 @@ jcs-offline-replay cross-arch
 
 ### 4) Cross-architecture + full offline official vectors (including ES6 100M)
 
+This step expects a governed `jcs-conformance-harness` checkout adjacent to this
+repo at `../jcs-conformance-harness`, or the `JCS_CONFORMANCE_REPO` override.
+
 ```bash
 jcs-offline-replay cross-arch \
   --run-official-vectors \

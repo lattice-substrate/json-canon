@@ -352,18 +352,21 @@ func TestOfflineReplayEvidenceReleaseGate(t *testing.T) {
 	infraManifestPath := lookupEnvTrimmed("JCS_OFFLINE_INFRA_MANIFEST")
 	expectedInfraManifestSHA256, expectedInfraManifest := validateInfraManifestForGate(t, infraManifestPath, evidence, profile)
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
-		ExpectedBundleSHA256:        mustFileSHA256(t, bundlePath),
-		ExpectedControlBinarySHA256: mustFileSHA256(t, controlBinaryPath),
-		ExpectedMatrixSHA256:        mustFileSHA256(t, matrixPath),
-		ExpectedProfileSHA256:       mustFileSHA256(t, profilePath),
-		ExpectedVectorSetSHA256:     evidence.VectorSetSHA256,
+		ExpectedBundleSHA256:             mustFileSHA256(t, bundlePath),
+		ExpectedControlBinarySHA256:      mustFileSHA256(t, controlBinaryPath),
+		ExpectedMatrixSHA256:             mustFileSHA256(t, matrixPath),
+		ExpectedProfileSHA256:            mustFileSHA256(t, profilePath),
+		ExpectedVectorSetSHA256:          evidence.VectorSetSHA256,
 		ExpectedGovernanceUmbrellaCommit: lookupEnvTrimmed("JCS_OFFLINE_GOVERNANCE_UMBRELLA_COMMIT"),
-		ExpectedGovernanceLockSHA256: lookupEnvTrimmed("JCS_OFFLINE_GOVERNANCE_LOCK_SHA256"),
-		ExpectedArchitecture:        matrix.Architecture,
-		ExpectedSourceGitCommit:     lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
-		ExpectedSourceGitTag:        lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),
-		ExpectedInfraManifestSHA256: expectedInfraManifestSHA256,
-		ExpectedInfraManifest:       expectedInfraManifest,
+		ExpectedGovernanceLockSHA256:     lookupEnvTrimmed("JCS_OFFLINE_GOVERNANCE_LOCK_SHA256"),
+		ExpectedArchitecture:             matrix.Architecture,
+		ExpectedSourceGitCommit:          lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_COMMIT"),
+		ExpectedSourceGitTag:             lookupEnvTrimmed("JCS_OFFLINE_EXPECTED_GIT_TAG"),
+		ExpectedInfraManifestSHA256:      expectedInfraManifestSHA256,
+		ExpectedInfraManifest:            expectedInfraManifest,
+		RequireOfficialES6Proof:          replay.ProfileRequiresOfficialES6NumberCorpus(profile),
+		ExpectedOfficialES6CorpusLines:   replay.OfficialES6CorpusFullLines,
+		ExpectedOfficialES6CorpusSHA256:  replay.OfficialES6CorpusFullSHA256,
 	}); err != nil {
 		t.Fatalf("offline evidence gate failed: %v", err)
 	}

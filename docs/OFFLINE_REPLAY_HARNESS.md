@@ -140,6 +140,9 @@ jcs-offline-replay audit-summary \
 
 ### Cross-arch full local vector proof (includes official ES6 100M gate)
 
+This command consumes the harness-owned official suite package from the adjacent
+`jcs-conformance-harness` checkout, or from `JCS_CONFORMANCE_REPO` when set.
+
 ```bash
 jcs-offline-replay cross-arch \
   --run-official-vectors \

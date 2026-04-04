@@ -18,28 +18,38 @@ const EvidenceSchemaVersion = "evidence.v1"
 // by evidence.v1 aggregate_* fields.
 const ReplayAggregateMethod = "replay-aggregate.v1"
 
+// Official ES6 number-corpus proof constants are the governed full-release checksum
+// targets already exercised by json-canon's official conformance tests.
+const (
+	OfficialES6NumberCorpusSuite = "official-es6-number-corpus"
+	OfficialES6CorpusFullLines   = 100_000_000
+	OfficialES6CorpusFullSHA256  = "0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272"
+)
+
 var errNilManifestIndex = errors.New("infra manifest not provided")
 
 // EvidenceBundle is the machine-consumed replay output artifact.
 type EvidenceBundle struct {
-	SchemaVersion    string   `json:"schema_version"`
-	BundleSHA256     string   `json:"bundle_sha256"`
-	ControlBinarySHA string   `json:"control_binary_sha256"`
-	MatrixSHA256     string   `json:"matrix_sha256"`
-	ProfileSHA256    string   `json:"profile_sha256"`
-	VectorSetSHA256  string   `json:"vector_set_sha256"`
-	GovernanceUmbrellaCommit string `json:"governance_umbrella_commit"`
-	GovernanceLockSHA256 string `json:"governance_lock_sha256"`
-	SourceGitCommit  string   `json:"source_git_commit"`
-	SourceGitTag     string   `json:"source_git_tag"`
-	GeneratedAtUTC   string   `json:"generated_at_utc"`
-	Orchestrator     string   `json:"orchestrator"`
-	ProfileID        string   `json:"profile_id"`
-	ProfileName      string   `json:"profile_name"`
-	Architecture     string   `json:"architecture"`
-	AggregateMethod  string   `json:"aggregate_method"`
-	RequiredSuites   []string `json:"required_suites"`
-	HardReleaseGate  bool     `json:"hard_release_gate"`
+	SchemaVersion            string   `json:"schema_version"`
+	BundleSHA256             string   `json:"bundle_sha256"`
+	ControlBinarySHA         string   `json:"control_binary_sha256"`
+	MatrixSHA256             string   `json:"matrix_sha256"`
+	ProfileSHA256            string   `json:"profile_sha256"`
+	VectorSetSHA256          string   `json:"vector_set_sha256"`
+	GovernanceUmbrellaCommit string   `json:"governance_umbrella_commit"`
+	GovernanceLockSHA256     string   `json:"governance_lock_sha256"`
+	SourceGitCommit          string   `json:"source_git_commit"`
+	SourceGitTag             string   `json:"source_git_tag"`
+	GeneratedAtUTC           string   `json:"generated_at_utc"`
+	Orchestrator             string   `json:"orchestrator"`
+	ProfileID                string   `json:"profile_id"`
+	ProfileName              string   `json:"profile_name"`
+	Architecture             string   `json:"architecture"`
+	AggregateMethod          string   `json:"aggregate_method"`
+	RequiredSuites           []string `json:"required_suites"`
+	HardReleaseGate          bool     `json:"hard_release_gate"`
+	OfficialES6CorpusLines   int      `json:"official_es6_corpus_lines,omitempty"`
+	OfficialES6CorpusSHA256  string   `json:"official_es6_corpus_sha256,omitempty"`
 	// Infra-manifest binding for infra-backed/native-host evidence flows.
 	InfraManifestSHA256 string            `json:"infra_manifest_sha256,omitempty"`
 	InfraRepoURL        string            `json:"infra_repo_url,omitempty"`
@@ -85,20 +95,23 @@ type NodeRunEvidence struct {
 
 // EvidenceValidationOptions binds evidence metadata to expected immutable inputs.
 type EvidenceValidationOptions struct {
-	ExpectedBundleSHA256        string
-	ExpectedControlBinarySHA256 string
-	ExpectedMatrixSHA256        string
-	ExpectedProfileSHA256       string
-	ExpectedVectorSetSHA256     string
+	ExpectedBundleSHA256             string
+	ExpectedControlBinarySHA256      string
+	ExpectedMatrixSHA256             string
+	ExpectedProfileSHA256            string
+	ExpectedVectorSetSHA256          string
 	ExpectedGovernanceUmbrellaCommit string
-	ExpectedGovernanceLockSHA256 string
-	ExpectedArchitecture        string
-	ExpectedSourceGitCommit     string
-	ExpectedSourceGitTag        string
-	ExpectedInfraManifestSHA256 string
-	ExpectedInfraRepoURL        string
-	ExpectedInfraRepoCommit     string
-	ExpectedInfraManifest       *InfraManifest
+	ExpectedGovernanceLockSHA256     string
+	ExpectedArchitecture             string
+	ExpectedSourceGitCommit          string
+	ExpectedSourceGitTag             string
+	ExpectedInfraManifestSHA256      string
+	ExpectedInfraRepoURL             string
+	ExpectedInfraRepoCommit          string
+	ExpectedInfraManifest            *InfraManifest
+	RequireOfficialES6Proof          bool
+	ExpectedOfficialES6CorpusLines   int
+	ExpectedOfficialES6CorpusSHA256  string
 }
 
 // WriteEvidence writes a canonical JSON evidence bundle to disk.
@@ -162,16 +175,16 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	for _, field := range []struct {
 		name  string
 		value string
-		}{
-			{name: "bundle_sha256", value: e.BundleSHA256},
-			{name: "control_binary_sha256", value: e.ControlBinarySHA},
-			{name: "matrix_sha256", value: e.MatrixSHA256},
-			{name: "profile_sha256", value: e.ProfileSHA256},
-			{name: "vector_set_sha256", value: e.VectorSetSHA256},
-			{name: "governance_lock_sha256", value: e.GovernanceLockSHA256},
-			{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
-			{name: "aggregate_verify_sha256", value: e.AggregateVerify},
-			{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
+	}{
+		{name: "bundle_sha256", value: e.BundleSHA256},
+		{name: "control_binary_sha256", value: e.ControlBinarySHA},
+		{name: "matrix_sha256", value: e.MatrixSHA256},
+		{name: "profile_sha256", value: e.ProfileSHA256},
+		{name: "vector_set_sha256", value: e.VectorSetSHA256},
+		{name: "governance_lock_sha256", value: e.GovernanceLockSHA256},
+		{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
+		{name: "aggregate_verify_sha256", value: e.AggregateVerify},
+		{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
 		{name: "aggregate_exit_code_sha256", value: e.AggregateExitCode},
 	} {
 		if err := validateSHA256Token(field.name, field.value); err != nil {
@@ -229,6 +242,9 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		return fmt.Errorf("aggregate_method mismatch: evidence=%q expected=%q", e.AggregateMethod, ReplayAggregateMethod)
 	}
 	if err := validateEvidenceInfraFields(e, opts, requiresInfraBinding); err != nil {
+		return err
+	}
+	if err := validateOfficialES6Evidence(e, opts); err != nil {
 		return err
 	}
 	if requiresNativeHostBinding || requiresInfraBinding {
@@ -333,11 +349,11 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 			return fmt.Errorf("node %s has %d replays, want at least %d", id, len(runs), wantReplays)
 		}
 		seenReplay := make(map[int]struct{}, len(runs))
-			for _, run := range runs {
-				seenReplay[run.ReplayIndex] = struct{}{}
-			}
-			for i := 1; i <= wantReplays; i++ {
-				if _, ok := seenReplay[i]; !ok {
+		for _, run := range runs {
+			seenReplay[run.ReplayIndex] = struct{}{}
+		}
+		for i := 1; i <= wantReplays; i++ {
+			if _, ok := seenReplay[i]; !ok {
 				return fmt.Errorf("node %s missing replay index %d", id, i)
 			}
 		}
@@ -702,6 +718,20 @@ func profileRequiresInfraBinding(profile *Profile) bool {
 	return false
 }
 
+// ProfileRequiresOfficialES6NumberCorpus reports whether a replay profile binds the
+// governed full official ES6 checksum proof into release evidence.
+func ProfileRequiresOfficialES6NumberCorpus(profile *Profile) bool {
+	if profile == nil {
+		return false
+	}
+	for _, suite := range profile.RequiredSuites {
+		if suite == OfficialES6NumberCorpusSuite {
+			return true
+		}
+	}
+	return false
+}
+
 func profileRequiresNativeHostBinding(matrix *Matrix, profile *Profile) bool {
 	if !profileRequiresInfraBinding(profile) {
 		return false
@@ -735,6 +765,38 @@ func validateSHA256Token(name, value string) error {
 	}
 	if _, err := hex.DecodeString(token); err != nil {
 		return fmt.Errorf("%s must be valid hex: %w", name, err)
+	}
+	return nil
+}
+
+func validateOfficialES6Evidence(e *EvidenceBundle, opts EvidenceValidationOptions) error {
+	if e == nil {
+		return fmt.Errorf("evidence bundle is nil")
+	}
+	if e.OfficialES6CorpusLines < 0 {
+		return fmt.Errorf("official_es6_corpus_lines must be >= 0")
+	}
+	if strings.TrimSpace(e.OfficialES6CorpusSHA256) != "" {
+		if err := validateSHA256Token("official_es6_corpus_sha256", e.OfficialES6CorpusSHA256); err != nil {
+			return err
+		}
+	}
+	if !opts.RequireOfficialES6Proof {
+		return nil
+	}
+	if e.OfficialES6CorpusLines != opts.ExpectedOfficialES6CorpusLines {
+		return fmt.Errorf(
+			"official_es6_corpus_lines mismatch: evidence=%d expected=%d",
+			e.OfficialES6CorpusLines,
+			opts.ExpectedOfficialES6CorpusLines,
+		)
+	}
+	if e.OfficialES6CorpusSHA256 != opts.ExpectedOfficialES6CorpusSHA256 {
+		return fmt.Errorf(
+			"official_es6_corpus_sha256 mismatch: evidence=%q expected=%q",
+			e.OfficialES6CorpusSHA256,
+			opts.ExpectedOfficialES6CorpusSHA256,
+		)
 	}
 	return nil
 }

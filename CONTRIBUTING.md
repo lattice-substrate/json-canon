@@ -21,6 +21,10 @@ go test ./... -race -count=1 -timeout=25m
 go test ./conformance -count=1 -timeout=10m -v
 ```
 
+Official conformance reference suites are owned by the adjacent
+`jcs-conformance-harness` checkout. Set `JCS_CONFORMANCE_REPO` if that repo is
+not available at `../jcs-conformance-harness`.
+
 Single-command Go harness (includes offline evidence gate):
 
 ```bash
@@ -235,7 +239,8 @@ Validate the official ES6 100M checksum gate:
 
 ```bash
 JCS_OFFICIAL_ES6_ENABLE_100M=1 \
-go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
+go -C ../jcs-conformance-harness test ./official \
+  -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
 Expected checksum: `0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272`.

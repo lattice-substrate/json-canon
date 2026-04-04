@@ -206,20 +206,19 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 
 	compareJSON := filepath.Join(outDirAbs, "cross-arch-compare.json")
 	compareMD := filepath.Join(outDirAbs, "cross-arch-compare.md")
-	report, err := compareCrossArchEvidence(x86Run.EvidencePath, armRun.EvidencePath, compareJSON, compareMD, repoRoot)
-	if err != nil {
-		return err
-	}
-
 	if runOfficialVectors {
 		if err := runOfficialVectorGates(outDirAbs, stdout); err != nil {
 			return err
 		}
 	}
 	if runOfficialES6100M {
-		if err := runOfficialES6100MGate(outDirAbs, stdout); err != nil {
+		if _, err := bindOfficialES6ProofFunc(outDirAbs, stdout, x86Run.EvidencePath, armRun.EvidencePath); err != nil {
 			return err
 		}
+	}
+	report, err := compareCrossArchEvidence(x86Run.EvidencePath, armRun.EvidencePath, compareJSON, compareMD, repoRoot)
+	if err != nil {
+		return err
 	}
 
 	if writeErr := writef(stdout, "[cross-arch] compare report: %s\n", compareMD); writeErr != nil {
@@ -378,6 +377,10 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	if err != nil {
 		return nil, fmt.Errorf("load matrix: %w", err)
 	}
+	profileContract, err := replay.LoadProfile(opts.ProfilePath)
+	if err != nil {
+		return nil, fmt.Errorf("load profile: %w", err)
+	}
 
 	canonBin := filepath.Join(outDirAbs, "bin", "jcs-canon")
 	controllerBin := filepath.Join(outDirAbs, "bin", "jcs-offline-replay")
@@ -472,6 +475,11 @@ func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error
 	}); stepErr != nil {
 		return nil, stepErr
 	}
+	if !opts.SkipReleaseGate && replay.ProfileRequiresOfficialES6NumberCorpus(profileContract) {
+		if _, err := bindOfficialES6ProofFunc(outDirAbs, stdout, evidencePath); err != nil {
+			return nil, err
+		}
+	}
 
 	if !opts.SkipReleaseGate {
 		if gateErr := runOfflineReleaseGate(matrixAbs, profileAbs, evidencePath, sourceGitCommit, sourceGitTag, opts.InfraManifestPath, filepath.Join(outDirAbs, "logs", "release-gate.log"), stdout); gateErr != nil {
@@ -550,9 +558,9 @@ func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSource
 		return fmt.Errorf("load evidence for release gate: %w", err)
 	}
 	env := map[string]string{
-		"JCS_OFFLINE_EVIDENCE": evidencePath,
-		"JCS_OFFLINE_MATRIX":   matrixPath,
-		"JCS_OFFLINE_PROFILE":  profilePath,
+		"JCS_OFFLINE_EVIDENCE":                   evidencePath,
+		"JCS_OFFLINE_MATRIX":                     matrixPath,
+		"JCS_OFFLINE_PROFILE":                    profilePath,
 		"JCS_OFFLINE_GOVERNANCE_UMBRELLA_COMMIT": evidence.GovernanceUmbrellaCommit,
 		"JCS_OFFLINE_GOVERNANCE_LOCK_SHA256":     evidence.GovernanceLockSHA256,
 	}
@@ -595,8 +603,14 @@ func runOfficialVectorGates(outputDir string, stdout io.Writer) error {
 		return err
 	}
 	logPath := filepath.Join(outputDir, "logs", "official-vectors.log")
-	return runGoCommandLoggedFunc(logPath, stdout, nil,
-		"test", "./conformance", "-run", "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K", "-count=1", "-timeout=30m")
+	repoRoot := resolveRepoRoot()
+	harnessRoot, err := resolveGovernedRepoRoot(repoRoot, "jcs-conformance-harness", "JCS_CONFORMANCE_REPO")
+	if err != nil {
+		return err
+	}
+	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{
+		"JCS_CONFORMANCE_JSON_CANON_REPO": repoRoot,
+	}, "-C", harnessRoot, "test", "./official", "-run", "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K", "-count=1", "-timeout=30m")
 }
 
 func runOfficialES6100MGate(outputDir string, stdout io.Writer) error {
@@ -604,8 +618,15 @@ func runOfficialES6100MGate(outputDir string, stdout io.Writer) error {
 		return err
 	}
 	logPath := filepath.Join(outputDir, "logs", "official-es6-100m.log")
-	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{"JCS_OFFICIAL_ES6_ENABLE_100M": "1"},
-		"test", "./conformance", "-run", "TestOfficialES6CorpusChecksums100M", "-count=1", "-timeout=6h")
+	repoRoot := resolveRepoRoot()
+	harnessRoot, err := resolveGovernedRepoRoot(repoRoot, "jcs-conformance-harness", "JCS_CONFORMANCE_REPO")
+	if err != nil {
+		return err
+	}
+	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{
+		"JCS_OFFICIAL_ES6_ENABLE_100M":    "1",
+		"JCS_CONFORMANCE_JSON_CANON_REPO": repoRoot,
+	}, "-C", harnessRoot, "test", "./official", "-run", "TestOfficialES6CorpusChecksums100M", "-count=1", "-timeout=6h")
 }
 
 //nolint:gocyclo,cyclop // REQ:OFFLINE-LOCAL-001 preflight keeps per-dependency diagnostics explicit for offline operators.
@@ -797,6 +818,20 @@ func resolveRepoRoot() string {
 		return cwd
 	}
 	return strings.TrimSpace(out)
+}
+
+func resolveGovernedRepoRoot(repoRoot, repoName, envVar string) (string, error) {
+	if root := lookupEnvTrimmed(envVar); root != "" {
+		if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+			return "", fmt.Errorf("resolve %s via %s: %w", repoName, envVar, err)
+		}
+		return root, nil
+	}
+	root := filepath.Clean(filepath.Join(repoRoot, "..", repoName))
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		return "", fmt.Errorf("resolve %s repo root: %w", repoName, err)
+	}
+	return root, nil
 }
 
 func toRepoRelative(repoRoot, absPath string) string {
@@ -1112,6 +1147,22 @@ func buildCrossArchReport(x86Evidence, armEvidence *replay.EvidenceBundle, x86Pa
 		{Field: "aggregate_verify_sha256", Label: "verify", X86: x86Evidence.AggregateVerify, Arm64: armEvidence.AggregateVerify},
 		{Field: "aggregate_failure_class_sha256", Label: "failure_class", X86: x86Evidence.AggregateClass, Arm64: armEvidence.AggregateClass},
 		{Field: "aggregate_exit_code_sha256", Label: "exit_code", X86: x86Evidence.AggregateExitCode, Arm64: armEvidence.AggregateExitCode},
+	}
+	if x86Evidence.OfficialES6CorpusLines != 0 || armEvidence.OfficialES6CorpusLines != 0 {
+		checks = append(checks, crossArchCheck{
+			Field: "official_es6_corpus_lines",
+			Label: "official_es6_lines",
+			X86:   fmt.Sprintf("%d", x86Evidence.OfficialES6CorpusLines),
+			Arm64: fmt.Sprintf("%d", armEvidence.OfficialES6CorpusLines),
+		})
+	}
+	if x86Evidence.OfficialES6CorpusSHA256 != "" || armEvidence.OfficialES6CorpusSHA256 != "" {
+		checks = append(checks, crossArchCheck{
+			Field: "official_es6_corpus_sha256",
+			Label: "official_es6_sha256",
+			X86:   x86Evidence.OfficialES6CorpusSHA256,
+			Arm64: armEvidence.OfficialES6CorpusSHA256,
+		})
 	}
 	allMatch := true
 	for i := range checks {

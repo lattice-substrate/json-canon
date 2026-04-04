@@ -25,9 +25,9 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
-| OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | Vendored official Cyberphone canonicalization fixtures MUST pass byte-identical canonicalization checks. |
-| OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | Vendored RFC 8785 example fixtures (sorting example and finite Appendix B number mappings) MUST match canonical output/format results. |
-| OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | CI conformance gates MUST validate the official deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
+| OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | The governed `jcs-conformance-harness` official suite MUST validate the vendored Cyberphone canonicalization fixtures against `json-canon` byte-for-byte. |
+| OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | The governed `jcs-conformance-harness` official suite MUST validate the RFC 8785 sorting example and Appendix B finite number mappings against `json-canon`. |
+| OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | The governed `jcs-conformance-harness` official suite MUST validate the deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
 | OFFICIAL-VEC-004 | CONTRIBUTING.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
 
 ## CONF-VEC: Conformance Vector Corpus

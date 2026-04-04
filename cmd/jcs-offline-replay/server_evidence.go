@@ -55,20 +55,20 @@ var (
 )
 
 type serverEvidenceOptions struct {
-	tag               string
-	awsRegion         string
-	amiLockPath       string
-	toolchainLockPath string
-	toolchainRoot     string
-	hostArch          string
-	outputDir         string
-	lockFilePath      string
-	governanceLockPath string
+	tag                      string
+	awsRegion                string
+	amiLockPath              string
+	toolchainLockPath        string
+	toolchainRoot            string
+	hostArch                 string
+	outputDir                string
+	lockFilePath             string
+	governanceLockPath       string
 	governanceUmbrellaCommit string
-	governanceLockSHA256 string
-	infraDir          string
-	root              string
-	state             serverStateConfig
+	governanceLockSHA256     string
+	infraDir                 string
+	root                     string
+	state                    serverStateConfig
 }
 
 type serverStateConfig struct {
@@ -186,20 +186,20 @@ func parseServerEvidenceOptions(flags map[string]string) (serverEvidenceOptions,
 	toolchainRoot := resolveServerEvidencePath(root, flags["--toolchain-root"], filepath.Join(outputDir, "toolchain"))
 	toolchainLockPath := resolveServerEvidencePath(root, flags["--toolchain-lock"], filepath.Join("offline", "toolchain.lock.tsv"))
 	return serverEvidenceOptions{
-		tag:               required.tag,
-		awsRegion:         defaultString(flags, "--aws-region", defaultAWSRegion),
-		amiLockPath:       resolveServerEvidencePath(root, flags["--ami-lock"], filepath.Join("infra", "aws_release_hosts.lock.json")),
-		toolchainLockPath: toolchainLockPath,
-		toolchainRoot:     toolchainRoot,
-		hostArch:          hostArch,
-		outputDir:         outputDir,
-		lockFilePath:      filepath.Join(root, "infra", ".terraform.lock.hcl"),
-		governanceLockPath: strings.TrimSpace(flags["--governance-lock"]),
+		tag:                      required.tag,
+		awsRegion:                defaultString(flags, "--aws-region", defaultAWSRegion),
+		amiLockPath:              resolveServerEvidencePath(root, flags["--ami-lock"], filepath.Join("infra", "aws_release_hosts.lock.json")),
+		toolchainLockPath:        toolchainLockPath,
+		toolchainRoot:            toolchainRoot,
+		hostArch:                 hostArch,
+		outputDir:                outputDir,
+		lockFilePath:             filepath.Join(root, "infra", ".terraform.lock.hcl"),
+		governanceLockPath:       strings.TrimSpace(flags["--governance-lock"]),
 		governanceUmbrellaCommit: strings.TrimSpace(flags["--governance-umbrella-commit"]),
-		governanceLockSHA256: strings.TrimSpace(flags["--governance-lock-sha256"]),
-		infraDir:          filepath.Join(root, "infra"),
-		root:              root,
-		state:             state,
+		governanceLockSHA256:     strings.TrimSpace(flags["--governance-lock-sha256"]),
+		infraDir:                 filepath.Join(root, "infra"),
+		root:                     root,
+		state:                    state,
 	}, nil
 }
 
@@ -413,33 +413,33 @@ type serverBuildArtifacts struct {
 }
 
 type serverMatrixRun struct {
-	matrixPath        string
-	profilePath       string
-	bundlePath        string
-	controlBinaryPath string
-	evidencePath      string
-	infraManifestPath string
+	matrixPath               string
+	profilePath              string
+	bundlePath               string
+	controlBinaryPath        string
+	evidencePath             string
+	infraManifestPath        string
 	governanceUmbrellaCommit string
-	governanceLockSHA256 string
-	sourceGitCommit   string
-	sourceGitTag      string
-	awsClients        serverAWSClients
-	stagingBucket     string
-	stagedArtifacts   stagedServerArtifacts
-	hosts             map[string]provisionedHost
+	governanceLockSHA256     string
+	sourceGitCommit          string
+	sourceGitTag             string
+	awsClients               serverAWSClients
+	stagingBucket            string
+	stagedArtifacts          stagedServerArtifacts
+	hosts                    map[string]provisionedHost
 }
 
 type releaseGateRun struct {
-	evidencePath      string
-	bundlePath        string
-	matrixPath        string
-	profilePath       string
-	controlBinaryPath string
-	expectedCommit    string
-	expectedTag       string
-	infraManifestPath string
+	evidencePath             string
+	bundlePath               string
+	matrixPath               string
+	profilePath              string
+	controlBinaryPath        string
+	expectedCommit           string
+	expectedTag              string
+	infraManifestPath        string
 	governanceUmbrellaCommit string
-	governanceLockSHA256 string
+	governanceLockSHA256     string
 }
 
 func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
@@ -491,6 +491,9 @@ func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
 		return err
 	}
 	if err := r.runReplays(stdout); err != nil {
+		return err
+	}
+	if err := r.bindOfficialES6Proof(stdout); err != nil {
 		return err
 	}
 	if err := r.runReleaseGates(stdout); err != nil {
@@ -723,6 +726,18 @@ func (r *serverEvidenceRuntime) runReleaseGates(stdout io.Writer) error {
 	return nil
 }
 
+func (r *serverEvidenceRuntime) bindOfficialES6Proof(stdout io.Writer) error {
+	if _, err := bindOfficialES6ProofFunc(
+		r.opts.outputDir,
+		stdout,
+		filepath.Join(r.opts.outputDir, "x86_64", "offline-evidence.json"),
+		filepath.Join(r.opts.outputDir, "arm64", "offline-evidence.json"),
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *serverEvidenceRuntime) destroy() error {
 	if r.destroyFunc != nil {
 		return r.destroyFunc()
@@ -780,36 +795,36 @@ func (r *serverEvidenceRuntime) writeSuccess(stdout io.Writer) error {
 func (r *serverEvidenceRuntime) serverMatrixRunForArch(arch string) serverMatrixRun {
 	artifacts := r.artifactsForArch(arch)
 	return serverMatrixRun{
-		matrixPath:        filepath.Join(r.sourceRoot, "offline", "matrix.server-"+arch+".yaml"),
-		profilePath:       filepath.Join(r.sourceRoot, "offline", "profiles", "server-linux-"+arch+".yaml"),
-		bundlePath:        artifacts.bundlePath,
-		controlBinaryPath: artifacts.controlBinaryPath,
-		evidencePath:      filepath.Join(r.opts.outputDir, arch, "offline-evidence.json"),
-		infraManifestPath: r.infraManifestPath,
+		matrixPath:               filepath.Join(r.sourceRoot, "offline", "matrix.server-"+arch+".yaml"),
+		profilePath:              filepath.Join(r.sourceRoot, "offline", "profiles", "server-linux-"+arch+".yaml"),
+		bundlePath:               artifacts.bundlePath,
+		controlBinaryPath:        artifacts.controlBinaryPath,
+		evidencePath:             filepath.Join(r.opts.outputDir, arch, "offline-evidence.json"),
+		infraManifestPath:        r.infraManifestPath,
 		governanceUmbrellaCommit: r.opts.governanceUmbrellaCommit,
-		governanceLockSHA256: r.opts.governanceLockSHA256,
-		sourceGitCommit:   r.gitCommit,
-		sourceGitTag:      r.opts.tag,
-		awsClients:        r.awsClients,
-		stagingBucket:     r.staging.bucket,
-		stagedArtifacts:   r.stagingArtifactsForArch(arch),
-		hosts:             hostsForArchitecture(r.infra.Hosts, arch),
+		governanceLockSHA256:     r.opts.governanceLockSHA256,
+		sourceGitCommit:          r.gitCommit,
+		sourceGitTag:             r.opts.tag,
+		awsClients:               r.awsClients,
+		stagingBucket:            r.staging.bucket,
+		stagedArtifacts:          r.stagingArtifactsForArch(arch),
+		hosts:                    hostsForArchitecture(r.infra.Hosts, arch),
 	}
 }
 
 func (r *serverEvidenceRuntime) releaseGateRunForArch(arch string) releaseGateRun {
 	artifacts := r.artifactsForArch(arch)
 	return releaseGateRun{
-		evidencePath:      filepath.Join(r.opts.outputDir, arch, "offline-evidence.json"),
-		bundlePath:        artifacts.bundlePath,
-		matrixPath:        filepath.Join(r.sourceRoot, "offline", "matrix.server-"+arch+".yaml"),
-		profilePath:       filepath.Join(r.sourceRoot, "offline", "profiles", "server-linux-"+arch+".yaml"),
-		controlBinaryPath: artifacts.controlBinaryPath,
-		expectedCommit:    r.gitCommit,
-		expectedTag:       r.opts.tag,
-		infraManifestPath: r.infraManifestPath,
+		evidencePath:             filepath.Join(r.opts.outputDir, arch, "offline-evidence.json"),
+		bundlePath:               artifacts.bundlePath,
+		matrixPath:               filepath.Join(r.sourceRoot, "offline", "matrix.server-"+arch+".yaml"),
+		profilePath:              filepath.Join(r.sourceRoot, "offline", "profiles", "server-linux-"+arch+".yaml"),
+		controlBinaryPath:        artifacts.controlBinaryPath,
+		expectedCommit:           r.gitCommit,
+		expectedTag:              r.opts.tag,
+		infraManifestPath:        r.infraManifestPath,
 		governanceUmbrellaCommit: r.opts.governanceUmbrellaCommit,
-		governanceLockSHA256: r.opts.governanceLockSHA256,
+		governanceLockSHA256:     r.opts.governanceLockSHA256,
 	}
 }
 
@@ -884,22 +899,22 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 	runCtx, cancel := context.WithTimeout(ctx, serverRuntimeTimeout)
 	defer cancel()
 	evidence, err := runReplayMatrixFunc(runCtx, matrix, profile, newServerSSMAdapterFactory(cfg.awsClients, cfg.stagingBucket, cfg.stagedArtifacts, cfg.hosts), replay.RunOptions{
-		BundlePath:            cfg.bundlePath,
-		BundleSHA256:          bundleSHA,
-		ControlBinarySHA256:   manifest.BinarySHA256,
-		MatrixSHA256:          matrixSHA,
-		ProfileSHA256:         profileSHA,
-		VectorSetSHA256:       manifest.VectorSetSHA256,
+		BundlePath:               cfg.bundlePath,
+		BundleSHA256:             bundleSHA,
+		ControlBinarySHA256:      manifest.BinarySHA256,
+		MatrixSHA256:             matrixSHA,
+		ProfileSHA256:            profileSHA,
+		VectorSetSHA256:          manifest.VectorSetSHA256,
 		GovernanceUmbrellaCommit: cfg.governanceUmbrellaCommit,
-		GovernanceLockSHA256:  cfg.governanceLockSHA256,
-		SourceGitCommit:       cfg.sourceGitCommit,
-		SourceGitTag:          cfg.sourceGitTag,
-		Orchestrator:          "jcs-offline-replay server-evidence",
-		EvidenceSchemaVersion: replay.EvidenceSchemaVersion,
-		InfraManifestSHA256:   infraManifestSHA,
-		InfraRepoURL:          serverRepoURL,
-		InfraRepoCommit:       cfg.sourceGitCommit,
-		InfraManifest:         infraManifest,
+		GovernanceLockSHA256:     cfg.governanceLockSHA256,
+		SourceGitCommit:          cfg.sourceGitCommit,
+		SourceGitTag:             cfg.sourceGitTag,
+		Orchestrator:             "jcs-offline-replay server-evidence",
+		EvidenceSchemaVersion:    replay.EvidenceSchemaVersion,
+		InfraManifestSHA256:      infraManifestSHA,
+		InfraRepoURL:             serverRepoURL,
+		InfraRepoCommit:          cfg.sourceGitCommit,
+		InfraManifest:            infraManifest,
 	})
 	if err != nil {
 		return fmt.Errorf("run replay matrix: %w", err)
@@ -917,16 +932,16 @@ func runServerReleaseGate(parent context.Context, goBinary, repoRoot string, cfg
 	ctx, cancel := context.WithTimeout(parent, serverReleaseGateTimeout)
 	defer cancel()
 	env := map[string]string{
-		"JCS_OFFLINE_EVIDENCE":            cfg.evidencePath,
-		"JCS_OFFLINE_BUNDLE":              cfg.bundlePath,
-		"JCS_OFFLINE_MATRIX":              cfg.matrixPath,
-		"JCS_OFFLINE_PROFILE":             cfg.profilePath,
-		"JCS_OFFLINE_CONTROL_BINARY":      cfg.controlBinaryPath,
-		"JCS_OFFLINE_EXPECTED_GIT_COMMIT": cfg.expectedCommit,
-		"JCS_OFFLINE_EXPECTED_GIT_TAG":    cfg.expectedTag,
-		"JCS_OFFLINE_INFRA_MANIFEST":      cfg.infraManifestPath,
+		"JCS_OFFLINE_EVIDENCE":                   cfg.evidencePath,
+		"JCS_OFFLINE_BUNDLE":                     cfg.bundlePath,
+		"JCS_OFFLINE_MATRIX":                     cfg.matrixPath,
+		"JCS_OFFLINE_PROFILE":                    cfg.profilePath,
+		"JCS_OFFLINE_CONTROL_BINARY":             cfg.controlBinaryPath,
+		"JCS_OFFLINE_EXPECTED_GIT_COMMIT":        cfg.expectedCommit,
+		"JCS_OFFLINE_EXPECTED_GIT_TAG":           cfg.expectedTag,
+		"JCS_OFFLINE_INFRA_MANIFEST":             cfg.infraManifestPath,
 		"JCS_OFFLINE_GOVERNANCE_UMBRELLA_COMMIT": cfg.governanceUmbrellaCommit,
-		"JCS_OFFLINE_GOVERNANCE_LOCK_SHA256": cfg.governanceLockSHA256,
+		"JCS_OFFLINE_GOVERNANCE_LOCK_SHA256":     cfg.governanceLockSHA256,
 	}
 	_, err := runCommandInDirFunc(ctx, repoRoot, env, goBinary, "test", "-mod=readonly", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
 	return err

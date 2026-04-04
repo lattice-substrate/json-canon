@@ -19,6 +19,11 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 2
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: lattice-substrate/jcs-conformance-harness
+          path: ../jcs-conformance-harness
+          fetch-depth: 1
       - name: install pinned host toolchain
         shell: bash
         run: |
@@ -100,7 +105,8 @@ jobs:
       - name: official ES6 100M checksum gate
         env:
           JCS_OFFICIAL_ES6_ENABLE_100M: "1"
-        run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
+          JCS_CONFORMANCE_JSON_CANON_REPO: ${{ github.workspace }}
+        run: go -C ../jcs-conformance-harness test ./official -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:

@@ -414,32 +414,32 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 	aggregateDigest := governedReplayAggregateDigest("aws-node", 1, strings.Repeat("f", 64))
 
 	if err := replay.WriteEvidence(evidencePath, &replay.EvidenceBundle{
-		SchemaVersion:       replay.EvidenceSchemaVersion,
-		BundleSHA256:        bundleSHA,
-		ControlBinarySHA:    controlSHA,
-		MatrixSHA256:        matrixSHA,
-		ProfileSHA256:       profileSHA,
-		VectorSetSHA256:     strings.Repeat("e", 64),
+		SchemaVersion:            replay.EvidenceSchemaVersion,
+		BundleSHA256:             bundleSHA,
+		ControlBinarySHA:         controlSHA,
+		MatrixSHA256:             matrixSHA,
+		ProfileSHA256:            profileSHA,
+		VectorSetSHA256:          strings.Repeat("e", 64),
 		GovernanceUmbrellaCommit: strings.Repeat("b", 40),
-		GovernanceLockSHA256: strings.Repeat("c", 64),
-		SourceGitCommit:     strings.Repeat("a", 40),
-		SourceGitTag:        "v1.2.3-test",
-		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
-		Orchestrator:        "jcs-offline-replay server-evidence",
-		ProfileID:           "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
-		ProfileName:         "official-cloud-measured-release",
-		Architecture:        matrixArch,
-		AggregateMethod:     replay.ReplayAggregateMethod,
-		RequiredSuites:      []string{"infra-substrate-binding"},
-		HardReleaseGate:     true,
-		InfraManifestSHA256: manifestSHA,
-		InfraRepoURL:        serverRepoURL,
-		InfraRepoCommit:     strings.Repeat("a", 40),
-		IIDTrustRootSetID:   "aws-iid-trust-roots.v1",
-		AggregateCanonical:  aggregateDigest,
-		AggregateVerify:     aggregateDigest,
-		AggregateClass:      aggregateDigest,
-		AggregateExitCode:   aggregateDigest,
+		GovernanceLockSHA256:     strings.Repeat("c", 64),
+		SourceGitCommit:          strings.Repeat("a", 40),
+		SourceGitTag:             "v1.2.3-test",
+		GeneratedAtUTC:           "2026-01-01T00:00:00Z",
+		Orchestrator:             "jcs-offline-replay server-evidence",
+		ProfileID:                "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
+		ProfileName:              "official-cloud-measured-release",
+		Architecture:             matrixArch,
+		AggregateMethod:          replay.ReplayAggregateMethod,
+		RequiredSuites:           []string{"infra-substrate-binding"},
+		HardReleaseGate:          true,
+		InfraManifestSHA256:      manifestSHA,
+		InfraRepoURL:             serverRepoURL,
+		InfraRepoCommit:          strings.Repeat("a", 40),
+		IIDTrustRootSetID:        "aws-iid-trust-roots.v1",
+		AggregateCanonical:       aggregateDigest,
+		AggregateVerify:          aggregateDigest,
+		AggregateClass:           aggregateDigest,
+		AggregateExitCode:        aggregateDigest,
 		NodeReplays: []replay.NodeRunEvidence{{
 			NodeID:                     "aws-node",
 			Mode:                       "vm",
@@ -932,11 +932,23 @@ func TestOfficialGateWrappers(t *testing.T) {
 	if calls[0].logPath != filepath.Join("/tmp/out", "logs", "official-vectors.log") {
 		t.Fatalf("unexpected vector log path: %q", calls[0].logPath)
 	}
+	if calls[0].env["JCS_CONFORMANCE_JSON_CANON_REPO"] == "" {
+		t.Fatalf("missing json-canon repo env: %#v", calls[0].env)
+	}
 	if calls[1].env["JCS_OFFICIAL_ES6_ENABLE_100M"] != "1" {
 		t.Fatalf("missing ES6 env toggle: %#v", calls[1].env)
 	}
+	if calls[1].env["JCS_CONFORMANCE_JSON_CANON_REPO"] == "" {
+		t.Fatalf("missing json-canon repo env for 100M: %#v", calls[1].env)
+	}
+	if !strings.Contains(strings.Join(calls[0].args, " "), "-C") || !strings.Contains(strings.Join(calls[0].args, " "), "./official") {
+		t.Fatalf("unexpected official vector repo args: %v", calls[0].args)
+	}
 	if !strings.Contains(strings.Join(calls[0].args, " "), "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K") {
 		t.Fatalf("unexpected official vector args: %v", calls[0].args)
+	}
+	if !strings.Contains(strings.Join(calls[1].args, " "), "-C") || !strings.Contains(strings.Join(calls[1].args, " "), "./official") {
+		t.Fatalf("unexpected official ES6 repo args: %v", calls[1].args)
 	}
 	if !strings.Contains(strings.Join(calls[1].args, " "), "TestOfficialES6CorpusChecksums100M") {
 		t.Fatalf("unexpected official ES6 args: %v", calls[1].args)

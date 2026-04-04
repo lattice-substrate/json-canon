@@ -172,6 +172,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 	oldRunMatrix := runServerMatrixFunc
 	oldRunReleaseGate := runServerReleaseGateFunc
 	oldCompareCrossArch := compareCrossArchEvidenceFunc
+	oldBindOfficialES6Proof := bindOfficialES6ProofFunc
 	oldDeleteBucket := deleteStagingBucketFunc
 	oldDestroyInfra := destroyServerInfrastructureFunc
 	oldVerifyIID := verifyAWSInstanceIdentityFunc
@@ -186,6 +187,7 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		runServerMatrixFunc = oldRunMatrix
 		runServerReleaseGateFunc = oldRunReleaseGate
 		compareCrossArchEvidenceFunc = oldCompareCrossArch
+		bindOfficialES6ProofFunc = oldBindOfficialES6Proof
 		deleteStagingBucketFunc = oldDeleteBucket
 		destroyServerInfrastructureFunc = oldDestroyInfra
 		verifyAWSInstanceIdentityFunc = oldVerifyIID
@@ -380,6 +382,9 @@ func TestServerEvidenceExecuteEndToEnd(t *testing.T) {
 		}
 		return &crossArchReport{Result: resultPass}, nil
 	}
+	bindOfficialES6ProofFunc = func(_ string, _ io.Writer, _ ...string) (officialES6Proof, error) {
+		return officialES6Proof{Lines: replay.OfficialES6CorpusFullLines, SHA256: replay.OfficialES6CorpusFullSHA256}, nil
+	}
 	deleteStagingBucketFunc = func(context.Context, serverAWSClients, string) error { return nil }
 	destroyServerInfrastructureFunc = func(context.Context, serverEvidenceOptions, serverToolchain, string, string) error {
 		return nil
@@ -523,28 +528,28 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			t.Fatalf("missing infra binding in run opts: %#v", opts)
 		}
 		return &replay.EvidenceBundle{
-			SchemaVersion:       replay.EvidenceSchemaVersion,
-			BundleSHA256:        opts.BundleSHA256,
-			ControlBinarySHA:    opts.ControlBinarySHA256,
-			MatrixSHA256:        opts.MatrixSHA256,
-			ProfileSHA256:       opts.ProfileSHA256,
-			VectorSetSHA256:     strings.Repeat("1", 64),
+			SchemaVersion:            replay.EvidenceSchemaVersion,
+			BundleSHA256:             opts.BundleSHA256,
+			ControlBinarySHA:         opts.ControlBinarySHA256,
+			MatrixSHA256:             opts.MatrixSHA256,
+			ProfileSHA256:            opts.ProfileSHA256,
+			VectorSetSHA256:          strings.Repeat("1", 64),
 			GovernanceUmbrellaCommit: opts.GovernanceUmbrellaCommit,
-			GovernanceLockSHA256: opts.GovernanceLockSHA256,
-			SourceGitCommit:     opts.SourceGitCommit,
-			SourceGitTag:        opts.SourceGitTag,
-			GeneratedAtUTC:      "2026-01-01T00:00:00Z",
-			Orchestrator:        "jcs-offline-replay server-evidence",
-			ProfileID:           "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
-			ProfileName:         "official-cloud-measured-release",
-			Architecture:        matrix.Architecture,
-			AggregateMethod:     replay.ReplayAggregateMethod,
-			RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
-			HardReleaseGate:     profile.HardReleaseGate,
-			InfraManifestSHA256: opts.InfraManifestSHA256,
-			InfraRepoURL:        opts.InfraRepoURL,
-			InfraRepoCommit:     opts.InfraRepoCommit,
-			IIDTrustRootSetID:   "aws-iid-trust-roots.v1",
+			GovernanceLockSHA256:     opts.GovernanceLockSHA256,
+			SourceGitCommit:          opts.SourceGitCommit,
+			SourceGitTag:             opts.SourceGitTag,
+			GeneratedAtUTC:           "2026-01-01T00:00:00Z",
+			Orchestrator:             "jcs-offline-replay server-evidence",
+			ProfileID:                "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1",
+			ProfileName:              "official-cloud-measured-release",
+			Architecture:             matrix.Architecture,
+			AggregateMethod:          replay.ReplayAggregateMethod,
+			RequiredSuites:           append([]string(nil), profile.RequiredSuites...),
+			HardReleaseGate:          profile.HardReleaseGate,
+			InfraManifestSHA256:      opts.InfraManifestSHA256,
+			InfraRepoURL:             opts.InfraRepoURL,
+			InfraRepoCommit:          opts.InfraRepoCommit,
+			IIDTrustRootSetID:        "aws-iid-trust-roots.v1",
 			NodeReplays: []replay.NodeRunEvidence{{
 				NodeID:                     "aws-native-x86",
 				Mode:                       "vm",
@@ -581,16 +586,16 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 	writeEvidenceBundleFunc = replay.WriteEvidence
 
 	cfg := serverMatrixRun{
-		matrixPath:        matrixPath,
-		profilePath:       profilePath,
-		bundlePath:        bundlePath,
-		controlBinaryPath: controlPath,
-		evidencePath:      evidencePath,
-		infraManifestPath: infraManifestPath,
+		matrixPath:               matrixPath,
+		profilePath:              profilePath,
+		bundlePath:               bundlePath,
+		controlBinaryPath:        controlPath,
+		evidencePath:             evidencePath,
+		infraManifestPath:        infraManifestPath,
 		governanceUmbrellaCommit: strings.Repeat("b", 40),
-		governanceLockSHA256: strings.Repeat("c", 64),
-		sourceGitCommit:   strings.Repeat("a", 40),
-		sourceGitTag:      "v1.2.3",
+		governanceLockSHA256:     strings.Repeat("c", 64),
+		sourceGitCommit:          strings.Repeat("a", 40),
+		sourceGitTag:             "v1.2.3",
 		hosts: map[string]provisionedHost{
 			"aws-native-x86": {NodeID: "aws-native-x86", Architecture: "x86_64", InstanceID: "i-x86", ImageID: "ami-x86"},
 		},
@@ -615,16 +620,16 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 		return "", nil
 	}
 	if err := runServerReleaseGate(context.Background(), "go", root, releaseGateRun{
-		evidencePath:      evidencePath,
-		bundlePath:        bundlePath,
-		matrixPath:        matrixPath,
-		profilePath:       profilePath,
-		controlBinaryPath: controlPath,
-		expectedCommit:    strings.Repeat("a", 40),
-		expectedTag:       "v1.2.3",
-		infraManifestPath: infraManifestPath,
+		evidencePath:             evidencePath,
+		bundlePath:               bundlePath,
+		matrixPath:               matrixPath,
+		profilePath:              profilePath,
+		controlBinaryPath:        controlPath,
+		expectedCommit:           strings.Repeat("a", 40),
+		expectedTag:              "v1.2.3",
+		infraManifestPath:        infraManifestPath,
 		governanceUmbrellaCommit: strings.Repeat("b", 40),
-		governanceLockSHA256: strings.Repeat("c", 64),
+		governanceLockSHA256:     strings.Repeat("c", 64),
 	}); err != nil {
 		t.Fatalf("runServerReleaseGate: %v", err)
 	}

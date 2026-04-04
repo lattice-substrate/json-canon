@@ -12,6 +12,7 @@
     "evidence-completeness",
     "failure-class-parity",
     "infra-substrate-binding",
+    "official-es6-number-corpus",
     "verify-parity"
   ],
   "version": "v1"
