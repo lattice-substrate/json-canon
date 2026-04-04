@@ -4,6 +4,7 @@
 //
 //	jcs-canon canonicalize [--quiet] [file|-]
 //	jcs-canon verify [--quiet] [file|-]
+//	jcs-canon check-es6-corpus [--lines N]
 //	jcs-canon --help
 //	jcs-canon --version
 //
@@ -17,6 +18,7 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
+	"strconv"
 	"strings"
 
 	"github.com/lattice-substrate/json-canon/jcs"
@@ -54,6 +56,8 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 		return cmdCanonicalize(args[1:], stdin, stdout, stderr)
 	case "verify":
 		return cmdVerify(args[1:], stdin, stdout, stderr)
+	case "check-es6-corpus":
+		return cmdCheckES6Corpus(args[1:], stdout, stderr)
 	default:
 		// CLI-EXIT-002
 		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, fmt.Sprintf("unknown command: %s", args[0])))
@@ -67,17 +71,29 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 type flags struct {
 	quiet bool
 	help  bool
+	lines int // -1 means not set; only meaningful for check-es6-corpus
 }
 
 func parseFlags(args []string) (flags, []string, error) {
-	var f flags
+	f := flags{lines: -1}
 	var positional []string
-	for _, arg := range args {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--quiet", "-q":
 			f.quiet = true
 		case "--help", "-h":
 			f.help = true
+		case "--lines":
+			if i+1 >= len(args) {
+				return flags{}, nil, jcserr.New(jcserr.CLIUsage, -1, "--lines requires a value")
+			}
+			i++
+			n, err := strconv.Atoi(args[i])
+			if err != nil {
+				return flags{}, nil, jcserr.New(jcserr.CLIUsage, -1, fmt.Sprintf("--lines: invalid value %q", args[i]))
+			}
+			f.lines = n
 		case "-":
 			positional = append(positional, arg)
 		default:

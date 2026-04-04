@@ -70,6 +70,7 @@ The CLI command set includes:
 
 - `jcs-canon canonicalize [--quiet] [file|-]`
 - `jcs-canon verify [--quiet] [file|-]`
+- `jcs-canon check-es6-corpus [--lines N]`
 - `jcs-canon --help`
 - `jcs-canon --version`
 
@@ -81,6 +82,10 @@ Required CLI behavior:
 4. `canonicalize` success output MUST go to `stdout` only.
 5. `verify` success text (`ok\n`) MUST go to `stderr` unless `--quiet`.
 6. File and stdin inputs with identical content MUST produce identical behavior.
+7. `check-es6-corpus` MUST produce a deterministic 64-hex SHA-256 on `stdout` for any
+   given `--lines` value; `--lines` accepts 1 to 100000000 (default 10000).
+   The output MUST match the `ci_sha256` field in `governance.lock.json` for the
+   default `--lines` value.
 
 ## Failure and Exit Code Contract
 

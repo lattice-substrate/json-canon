@@ -7,6 +7,15 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `jcs-canon check-es6-corpus [--lines N]` subcommand: computes the official ES6
+  number corpus SHA-256 for the first N lines of the deterministic float corpus.
+  Enables governance-layer black-box verification — the governance harness invokes
+  this binary and compares output against `governance.lock.json`'s `ci_sha256`,
+  without importing any `jcsfloat` internals. Exit codes: 0 (success), 2 (usage),
+  10 (I/O error). Declared stable in `abi_manifest.json`.
+- `jcsfloat.NewOfficialES6Generator()`: exported non-test function for the
+  deterministic float64 corpus generator previously internal to `es6_corpus_test.go`.
+  The CLI subcommand and tests now both use this shared implementation.
 - `evidence.v1` finalized as the only evidence schema. It now carries the full
   conformance DAG binding surface in one contract: source binding, infra binding,
   discovered substrate identity, and native-host measurement when the selected

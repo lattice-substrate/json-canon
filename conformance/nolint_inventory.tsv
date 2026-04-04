@@ -1,6 +1,6 @@
 # schema_version=nolint-inventory.v1
 path	line	linters	requirement_ids	rationale	directive
-cmd/jcs-canon/main.go	31	cyclop	CLI-CMD-001	REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.	//nolint:cyclop // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
+cmd/jcs-canon/main.go	33	cyclop	CLI-CMD-001	REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.	//nolint:cyclop // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
 cmd/jcs-gate/main.go	42	gocyclo,cyclop,gocognit	LINT-GATE-001	REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.	//nolint:gocyclo,cyclop,gocognit // REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.
 cmd/jcs-offline-replay/conformance_additional_test.go	313	gosec	OFFLINE-EVIDENCE-001	REQ:OFFLINE-EVIDENCE-001 test reads the current executable path returned by the Go runtime.	//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 test reads the current executable path returned by the Go runtime.
 cmd/jcs-offline-replay/conformance_additional_test.go	729	gocognit	OFFLINE-AUTO-001	REQ:OFFLINE-AUTO-001 test intentionally exercises multiple CLI dispatch branches in one place.	//nolint:gocognit // REQ:OFFLINE-AUTO-001 test intentionally exercises multiple CLI dispatch branches in one place.

@@ -32,6 +32,7 @@ The stable ABI includes:
 
 - `canonicalize`
 - `verify`
+- `check-es6-corpus`
 
 ### Top-Level Flags
 
@@ -42,6 +43,7 @@ The stable ABI includes:
 
 - `--help`, `-h` (exit 0)
 - `--quiet` (for `verify`; suppresses `ok\n` success text; accepted by `canonicalize` for command symmetry and has no success-output effect)
+- `--lines` (for `check-es6-corpus`; number of corpus lines to generate, 1..100000000, default 10000)
 
 ## Input Contract
 
