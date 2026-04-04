@@ -2,6 +2,8 @@ package replay
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +30,8 @@ type RunOptions struct {
 	MatrixSHA256          string
 	ProfileSHA256         string
 	VectorSetSHA256       string
+	GovernanceUmbrellaCommit string
+	GovernanceLockSHA256 string
 	SourceGitCommit       string
 	SourceGitTag          string
 	Orchestrator          string
@@ -74,6 +78,15 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	if sourceTag == "" {
 		sourceTag = "untagged"
 	}
+	governanceCommit := strings.TrimSpace(opts.GovernanceUmbrellaCommit)
+	if governanceCommit == "" {
+		governanceCommit = "0000000000000000000000000000000000000000"
+	}
+	governanceLockSHA := strings.TrimSpace(opts.GovernanceLockSHA256)
+	if governanceLockSHA == "" {
+		sum := sha256.Sum256(nil)
+		governanceLockSHA = hex.EncodeToString(sum[:])
+	}
 
 	requiredNodes, err := requiredNodeIDs(matrix, profile)
 	if err != nil {
@@ -99,6 +112,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		MatrixSHA256:        opts.MatrixSHA256,
 		ProfileSHA256:       opts.ProfileSHA256,
 		VectorSetSHA256:     opts.VectorSetSHA256,
+		GovernanceUmbrellaCommit: governanceCommit,
+		GovernanceLockSHA256: governanceLockSHA,
 		SourceGitCommit:     sourceCommit,
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      now().UTC().Format(time.RFC3339Nano),
@@ -198,6 +213,8 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 		ExpectedMatrixSHA256:        opts.MatrixSHA256,
 		ExpectedProfileSHA256:       opts.ProfileSHA256,
 		ExpectedVectorSetSHA256:     opts.VectorSetSHA256,
+		ExpectedGovernanceUmbrellaCommit: governanceCommit,
+		ExpectedGovernanceLockSHA256: governanceLockSHA,
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,

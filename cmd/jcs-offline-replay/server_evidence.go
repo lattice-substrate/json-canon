@@ -33,6 +33,7 @@ const (
 )
 
 var fullSHAPattern = regexp.MustCompile("^[0-9a-f]{40}$")
+var sha256Pattern = regexp.MustCompile("^[0-9a-f]{64}$")
 
 var (
 	runCommandInDirFunc               = runCommandInDir
@@ -62,6 +63,9 @@ type serverEvidenceOptions struct {
 	hostArch          string
 	outputDir         string
 	lockFilePath      string
+	governanceLockPath string
+	governanceUmbrellaCommit string
+	governanceLockSHA256 string
 	infraDir          string
 	root              string
 	state             serverStateConfig
@@ -190,6 +194,9 @@ func parseServerEvidenceOptions(flags map[string]string) (serverEvidenceOptions,
 		hostArch:          hostArch,
 		outputDir:         outputDir,
 		lockFilePath:      filepath.Join(root, "infra", ".terraform.lock.hcl"),
+		governanceLockPath: strings.TrimSpace(flags["--governance-lock"]),
+		governanceUmbrellaCommit: strings.TrimSpace(flags["--governance-umbrella-commit"]),
+		governanceLockSHA256: strings.TrimSpace(flags["--governance-lock-sha256"]),
 		infraDir:          filepath.Join(root, "infra"),
 		root:              root,
 		state:             state,
@@ -243,6 +250,20 @@ func requireServerEvidenceFlags(flags map[string]string) (requiredServerEvidence
 	}
 	if required.tag == "" {
 		return requiredServerEvidenceFlags{}, fmt.Errorf("server-evidence requires --tag")
+	}
+	lockPath := strings.TrimSpace(flags["--governance-lock"])
+	umbrellaCommit := strings.TrimSpace(flags["--governance-umbrella-commit"])
+	lockSHA := strings.TrimSpace(flags["--governance-lock-sha256"])
+	if lockPath != "" || umbrellaCommit != "" || lockSHA != "" {
+		if lockPath == "" || umbrellaCommit == "" || lockSHA == "" {
+			return requiredServerEvidenceFlags{}, fmt.Errorf("server-evidence governance binding requires --governance-lock, --governance-umbrella-commit, and --governance-lock-sha256")
+		}
+		if !fullSHAPattern.MatchString(umbrellaCommit) {
+			return requiredServerEvidenceFlags{}, fmt.Errorf("server-evidence governance umbrella commit must be a full SHA-1")
+		}
+		if !sha256Pattern.MatchString(lockSHA) {
+			return requiredServerEvidenceFlags{}, fmt.Errorf("server-evidence governance lock SHA must be a full SHA-256")
+		}
 	}
 	return required, nil
 }
@@ -398,6 +419,8 @@ type serverMatrixRun struct {
 	controlBinaryPath string
 	evidencePath      string
 	infraManifestPath string
+	governanceUmbrellaCommit string
+	governanceLockSHA256 string
 	sourceGitCommit   string
 	sourceGitTag      string
 	awsClients        serverAWSClients
@@ -415,6 +438,8 @@ type releaseGateRun struct {
 	expectedCommit    string
 	expectedTag       string
 	infraManifestPath string
+	governanceUmbrellaCommit string
+	governanceLockSHA256 string
 }
 
 func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
@@ -761,6 +786,8 @@ func (r *serverEvidenceRuntime) serverMatrixRunForArch(arch string) serverMatrix
 		controlBinaryPath: artifacts.controlBinaryPath,
 		evidencePath:      filepath.Join(r.opts.outputDir, arch, "offline-evidence.json"),
 		infraManifestPath: r.infraManifestPath,
+		governanceUmbrellaCommit: r.opts.governanceUmbrellaCommit,
+		governanceLockSHA256: r.opts.governanceLockSHA256,
 		sourceGitCommit:   r.gitCommit,
 		sourceGitTag:      r.opts.tag,
 		awsClients:        r.awsClients,
@@ -781,6 +808,8 @@ func (r *serverEvidenceRuntime) releaseGateRunForArch(arch string) releaseGateRu
 		expectedCommit:    r.gitCommit,
 		expectedTag:       r.opts.tag,
 		infraManifestPath: r.infraManifestPath,
+		governanceUmbrellaCommit: r.opts.governanceUmbrellaCommit,
+		governanceLockSHA256: r.opts.governanceLockSHA256,
 	}
 }
 
@@ -861,6 +890,8 @@ func runServerMatrix(ctx context.Context, cfg serverMatrixRun, stdout io.Writer)
 		MatrixSHA256:          matrixSHA,
 		ProfileSHA256:         profileSHA,
 		VectorSetSHA256:       manifest.VectorSetSHA256,
+		GovernanceUmbrellaCommit: cfg.governanceUmbrellaCommit,
+		GovernanceLockSHA256:  cfg.governanceLockSHA256,
 		SourceGitCommit:       cfg.sourceGitCommit,
 		SourceGitTag:          cfg.sourceGitTag,
 		Orchestrator:          "jcs-offline-replay server-evidence",
@@ -894,6 +925,8 @@ func runServerReleaseGate(parent context.Context, goBinary, repoRoot string, cfg
 		"JCS_OFFLINE_EXPECTED_GIT_COMMIT": cfg.expectedCommit,
 		"JCS_OFFLINE_EXPECTED_GIT_TAG":    cfg.expectedTag,
 		"JCS_OFFLINE_INFRA_MANIFEST":      cfg.infraManifestPath,
+		"JCS_OFFLINE_GOVERNANCE_UMBRELLA_COMMIT": cfg.governanceUmbrellaCommit,
+		"JCS_OFFLINE_GOVERNANCE_LOCK_SHA256": cfg.governanceLockSHA256,
 	}
 	_, err := runCommandInDirFunc(ctx, repoRoot, env, goBinary, "test", "-mod=readonly", "./offline/conformance", "-run", "TestOfflineReplayEvidenceReleaseGate", "-count=1", "-v")
 	return err

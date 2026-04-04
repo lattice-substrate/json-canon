@@ -28,6 +28,8 @@ type EvidenceBundle struct {
 	MatrixSHA256     string   `json:"matrix_sha256"`
 	ProfileSHA256    string   `json:"profile_sha256"`
 	VectorSetSHA256  string   `json:"vector_set_sha256"`
+	GovernanceUmbrellaCommit string `json:"governance_umbrella_commit"`
+	GovernanceLockSHA256 string `json:"governance_lock_sha256"`
 	SourceGitCommit  string   `json:"source_git_commit"`
 	SourceGitTag     string   `json:"source_git_tag"`
 	GeneratedAtUTC   string   `json:"generated_at_utc"`
@@ -88,6 +90,8 @@ type EvidenceValidationOptions struct {
 	ExpectedMatrixSHA256        string
 	ExpectedProfileSHA256       string
 	ExpectedVectorSetSHA256     string
+	ExpectedGovernanceUmbrellaCommit string
+	ExpectedGovernanceLockSHA256 string
 	ExpectedArchitecture        string
 	ExpectedSourceGitCommit     string
 	ExpectedSourceGitTag        string
@@ -164,6 +168,7 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 			{name: "matrix_sha256", value: e.MatrixSHA256},
 			{name: "profile_sha256", value: e.ProfileSHA256},
 			{name: "vector_set_sha256", value: e.VectorSetSHA256},
+			{name: "governance_lock_sha256", value: e.GovernanceLockSHA256},
 			{name: "aggregate_canonical_sha256", value: e.AggregateCanonical},
 			{name: "aggregate_verify_sha256", value: e.AggregateVerify},
 			{name: "aggregate_failure_class_sha256", value: e.AggregateClass},
@@ -174,6 +179,9 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		}
 	}
 	if err := validateGitCommitToken("source_git_commit", e.SourceGitCommit); err != nil {
+		return err
+	}
+	if err := validateGitCommitToken("governance_umbrella_commit", e.GovernanceUmbrellaCommit); err != nil {
 		return err
 	}
 	if err := validateGitTagToken("source_git_tag", e.SourceGitTag); err != nil {
@@ -200,6 +208,14 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 	if opts.ExpectedVectorSetSHA256 != "" && e.VectorSetSHA256 != opts.ExpectedVectorSetSHA256 {
 		return fmt.Errorf("vector_set_sha256 mismatch: evidence=%q expected=%q", e.VectorSetSHA256, opts.ExpectedVectorSetSHA256)
+	}
+	if expected := strings.TrimSpace(opts.ExpectedGovernanceUmbrellaCommit); expected != "" &&
+		e.GovernanceUmbrellaCommit != expected {
+		return fmt.Errorf("governance_umbrella_commit mismatch: evidence=%q expected=%q", e.GovernanceUmbrellaCommit, expected)
+	}
+	if expected := strings.TrimSpace(opts.ExpectedGovernanceLockSHA256); expected != "" &&
+		e.GovernanceLockSHA256 != expected {
+		return fmt.Errorf("governance_lock_sha256 mismatch: evidence=%q expected=%q", e.GovernanceLockSHA256, expected)
 	}
 	if expectedCommit := strings.TrimSpace(opts.ExpectedSourceGitCommit); expectedCommit != "" &&
 		e.SourceGitCommit != expectedCommit {

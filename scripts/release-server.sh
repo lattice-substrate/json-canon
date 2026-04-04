@@ -99,5 +99,16 @@ fi
 if [[ -n "$STATE_KEY" ]]; then
   server_args+=(--state-key "$STATE_KEY")
 fi
+if [[ -n "${GOVERNANCE_LOCK_PATH:-}" || -n "${GOVERNANCE_UMBRELLA_COMMIT:-}" || -n "${GOVERNANCE_LOCK_SHA256:-}" ]]; then
+  if [[ -z "${GOVERNANCE_LOCK_PATH:-}" || -z "${GOVERNANCE_UMBRELLA_COMMIT:-}" || -z "${GOVERNANCE_LOCK_SHA256:-}" ]]; then
+    echo "error: governance binding requires GOVERNANCE_LOCK_PATH, GOVERNANCE_UMBRELLA_COMMIT, and GOVERNANCE_LOCK_SHA256 together" >&2
+    exit 2
+  fi
+  server_args+=(
+    --governance-lock "$GOVERNANCE_LOCK_PATH"
+    --governance-umbrella-commit "$GOVERNANCE_UMBRELLA_COMMIT"
+    --governance-lock-sha256 "$GOVERNANCE_LOCK_SHA256"
+  )
+fi
 
 "$JCS_TOOL_GO" run -mod=readonly "$ROOT/cmd/jcs-offline-replay" "${server_args[@]}"

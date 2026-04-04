@@ -217,6 +217,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		EvidenceRequired: true,
 	}
 	digest := strings.Repeat("a", 64)
+	governanceCommit := strings.Repeat("1", 40)
+	governanceLockSHA := strings.Repeat("2", 64)
 	sourceCommit := strings.Repeat("f", 40)
 	sourceTag := "v0.0.0-dev"
 	e := &replay.EvidenceBundle{
@@ -226,6 +228,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		MatrixSHA256:       digest,
 		ProfileSHA256:      digest,
 		VectorSetSHA256:    digest,
+		GovernanceUmbrellaCommit: governanceCommit,
+		GovernanceLockSHA256: governanceLockSHA,
 		SourceGitCommit:    sourceCommit,
 		SourceGitTag:       sourceTag,
 		GeneratedAtUTC:     "2026-01-01T00:00:00Z",
@@ -253,6 +257,8 @@ func validEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBu
 		ExpectedMatrixSHA256:        digest,
 		ExpectedProfileSHA256:       digest,
 		ExpectedVectorSetSHA256:     digest,
+		ExpectedGovernanceUmbrellaCommit: governanceCommit,
+		ExpectedGovernanceLockSHA256: governanceLockSHA,
 		ExpectedArchitecture:        "x86_64",
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,
@@ -296,6 +302,8 @@ func validInfraBoundEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 
 func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, replay.EvidenceValidationOptions) {
 	digest := strings.Repeat("a", 64)
+	governanceCommit := strings.Repeat("1", 40)
+	governanceLockSHA := strings.Repeat("2", 64)
 	sourceCommit := strings.Repeat("f", 40)
 	sourceTag := "v0.0.0-dev"
 	matrix := &replay.Matrix{
@@ -321,6 +329,8 @@ func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		MatrixSHA256:        digest,
 		ProfileSHA256:       digest,
 		VectorSetSHA256:     digest,
+		GovernanceUmbrellaCommit: governanceCommit,
+		GovernanceLockSHA256: governanceLockSHA,
 		SourceGitCommit:     sourceCommit,
 		SourceGitTag:        sourceTag,
 		GeneratedAtUTC:      "2026-01-01T00:00:00Z",
@@ -350,6 +360,8 @@ func validNativeHostEvidenceFixture() (*replay.Matrix, *replay.Profile, *replay.
 		ExpectedMatrixSHA256:        digest,
 		ExpectedProfileSHA256:       digest,
 		ExpectedVectorSetSHA256:     digest,
+		ExpectedGovernanceUmbrellaCommit: governanceCommit,
+		ExpectedGovernanceLockSHA256: governanceLockSHA,
 		ExpectedArchitecture:        "x86_64",
 		ExpectedSourceGitCommit:     sourceCommit,
 		ExpectedSourceGitTag:        sourceTag,

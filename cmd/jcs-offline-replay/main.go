@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ const (
 	matrixArchitectureX8664 = "x86_64"
 	goArchitectureAMD64     = "amd64"
 )
+
+var gitCommitPattern = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -215,6 +218,10 @@ func buildRunOptions(flags map[string]string, bundlePath string, manifest *repla
 	if err != nil {
 		return replay.RunOptions{}, 0, err
 	}
+	governanceUmbrellaCommit, governanceLockSHA, err := resolveGovernanceBinding(flags)
+	if err != nil {
+		return replay.RunOptions{}, 0, err
+	}
 	infraManifestSHA, infraRepoURL, infraRepoCommit, err := resolveInfraManifest(flags)
 	if err != nil {
 		return replay.RunOptions{}, 0, err
@@ -226,6 +233,8 @@ func buildRunOptions(flags map[string]string, bundlePath string, manifest *repla
 		MatrixSHA256:        matrixSHA,
 		ProfileSHA256:       profileSHA,
 		VectorSetSHA256:     manifest.VectorSetSHA256,
+		GovernanceUmbrellaCommit: governanceUmbrellaCommit,
+		GovernanceLockSHA256: governanceLockSHA,
 		SourceGitCommit:     sourceGitCommit,
 		SourceGitTag:        sourceGitTag,
 		Orchestrator:        "jcs-offline-replay",
@@ -233,6 +242,25 @@ func buildRunOptions(flags map[string]string, bundlePath string, manifest *repla
 		InfraRepoURL:        infraRepoURL,
 		InfraRepoCommit:     infraRepoCommit,
 	}, timeout, nil
+}
+
+func resolveGovernanceBinding(flags map[string]string) (umbrellaCommit, lockSHA string, err error) {
+	lockPath := requireFlag(flags, "--governance-lock")
+	umbrellaCommit = strings.TrimSpace(requireFlag(flags, "--governance-umbrella-commit"))
+	if lockPath == "" && umbrellaCommit == "" {
+		return "", "", nil
+	}
+	if lockPath == "" || umbrellaCommit == "" {
+		return "", "", fmt.Errorf("governance binding requires both --governance-lock and --governance-umbrella-commit")
+	}
+	if !gitCommitPattern.MatchString(umbrellaCommit) {
+		return "", "", fmt.Errorf("invalid --governance-umbrella-commit %q", umbrellaCommit)
+	}
+	lockSHA, err = fileSHA256(lockPath)
+	if err != nil {
+		return "", "", fmt.Errorf("sha256 governance lock: %w", err)
+	}
+	return umbrellaCommit, lockSHA, nil
 }
 
 // resolveInfraManifest loads and validates the infra manifest at --infra-manifest (if set)
@@ -346,6 +374,10 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		return fmt.Errorf("load verification digests: %w", err)
 	}
 	expectedSourceCommit, expectedSourceTag := resolveExpectedSourceIdentity(flags)
+	expectedGovernanceUmbrellaCommit, expectedGovernanceLockSHA, err := resolveGovernanceBinding(flags)
+	if err != nil {
+		return err
+	}
 	expectedInfraManifestSHA, expectedInfraRepoURL, expectedInfraRepoCommit, expectedInfraManifest, err := resolveExpectedInfraBinding(flags, evidence, profile)
 	if err != nil {
 		return err
@@ -356,6 +388,8 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 		ExpectedControlBinarySHA256: controlBinarySHA,
 		ExpectedMatrixSHA256:        matrixSHA,
 		ExpectedProfileSHA256:       profileSHA,
+		ExpectedGovernanceUmbrellaCommit: expectedGovernanceUmbrellaCommit,
+		ExpectedGovernanceLockSHA256: expectedGovernanceLockSHA,
 		ExpectedArchitecture:        matrix.Architecture,
 		ExpectedSourceGitCommit:     expectedSourceCommit,
 		ExpectedSourceGitTag:        expectedSourceTag,

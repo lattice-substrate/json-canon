@@ -545,10 +545,16 @@ func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSource
 	if err := writeLine(stdout, "[run] release gate test"); err != nil {
 		return err
 	}
+	evidence, err := replay.LoadEvidence(evidencePath)
+	if err != nil {
+		return fmt.Errorf("load evidence for release gate: %w", err)
+	}
 	env := map[string]string{
 		"JCS_OFFLINE_EVIDENCE": evidencePath,
 		"JCS_OFFLINE_MATRIX":   matrixPath,
 		"JCS_OFFLINE_PROFILE":  profilePath,
+		"JCS_OFFLINE_GOVERNANCE_UMBRELLA_COMMIT": evidence.GovernanceUmbrellaCommit,
+		"JCS_OFFLINE_GOVERNANCE_LOCK_SHA256":     evidence.GovernanceLockSHA256,
 	}
 	if strings.TrimSpace(expectedSourceGitCommit) != "" {
 		env["JCS_OFFLINE_EXPECTED_GIT_COMMIT"] = expectedSourceGitCommit

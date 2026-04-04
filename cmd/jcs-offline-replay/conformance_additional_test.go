@@ -420,6 +420,8 @@ func TestRunOfflineReleaseGateWithGeneratedArtifacts(t *testing.T) {
 		MatrixSHA256:        matrixSHA,
 		ProfileSHA256:       profileSHA,
 		VectorSetSHA256:     strings.Repeat("e", 64),
+		GovernanceUmbrellaCommit: strings.Repeat("b", 40),
+		GovernanceLockSHA256: strings.Repeat("c", 64),
 		SourceGitCommit:     strings.Repeat("a", 40),
 		SourceGitTag:        "v1.2.3-test",
 		GeneratedAtUTC:      "2026-01-01T00:00:00Z",

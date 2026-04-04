@@ -202,11 +202,34 @@ jobs:
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: resolve immutable governance lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          gov_umbrella="${GITHUB_WORKSPACE}/.tmp/jcs-governance-lock"
+          rm -rf "${gov_umbrella}"
+          git clone --no-tags --depth=1 \
+            https://github.com/lattice-substrate/jcs-governance.git \
+            "${gov_umbrella}"
+          if [[ ! -f "${gov_umbrella}/governance.lock.json" ]]; then
+            echo "::error::governance.lock.json not found in jcs-governance"
+            exit 1
+          fi
+          gov_commit="$(git -C "${gov_umbrella}" rev-parse HEAD)"
+          gov_lock_sha="$(sha256sum "${gov_umbrella}/governance.lock.json" | awk '{print $1}')"
+          {
+            echo "GOV_LOCK_FILE=${gov_umbrella}/governance.lock.json"
+            echo "GOVERNANCE_UMBRELLA_COMMIT=${gov_commit}"
+            echo "GOVERNANCE_LOCK_SHA256=${gov_lock_sha}"
+          } >> "$GITHUB_ENV"
       - name: server-evidence
         shell: bash
         run: ./scripts/release-server.sh
         env:
           TAG: ${{ github.ref_name }}
+          GOVERNANCE_LOCK_PATH: ${{ env.GOV_LOCK_FILE }}
+          GOVERNANCE_UMBRELLA_COMMIT: ${{ env.GOVERNANCE_UMBRELLA_COMMIT }}
+          GOVERNANCE_LOCK_SHA256: ${{ env.GOVERNANCE_LOCK_SHA256 }}
       - name: resolve evidence source metadata
         id: evidence-source
         shell: bash
@@ -312,19 +335,23 @@ jobs:
           JCS_OFFLINE_EXPECTED_GIT_TAG: ${{ steps.evidence-source.outputs.tag }}
           JCS_OFFLINE_INFRA_MANIFEST: ${{ steps.gate-arm64.outputs.infra_manifest }}
         run: go test ./offline/conformance -run TestOfflineReplayEvidenceReleaseGate -count=1 -v
-      - name: fetch governance lock from jcs-governance
+      - name: fetch pinned governance lock from jcs-governance
         shell: bash
         run: |
           set -euo pipefail
-          # The governance lock is owned by jcs-governance, not json-canon.
-          # Clone the governance umbrella at HEAD main to get the authoritative lock file.
           gov_umbrella="${GITHUB_WORKSPACE}/.tmp/jcs-governance-lock"
           rm -rf "${gov_umbrella}"
-          git clone --no-tags --depth=1 \
+          git clone --no-tags \
             https://github.com/lattice-substrate/jcs-governance.git \
             "${gov_umbrella}"
-          if [[ ! -f "${gov_umbrella}/governance.lock.json" ]]; then
-            echo "::error::governance.lock.json not found in jcs-governance"
+          (
+            cd "${gov_umbrella}"
+            git fetch --no-tags origin "${GOVERNANCE_UMBRELLA_COMMIT}"
+            git checkout --detach "${GOVERNANCE_UMBRELLA_COMMIT}"
+          )
+          computed_lock_sha="$(sha256sum "${gov_umbrella}/governance.lock.json" | awk '{print $1}')"
+          if [[ "${computed_lock_sha}" != "${GOVERNANCE_LOCK_SHA256}" ]]; then
+            echo "::error::governance.lock.json digest mismatch after checkout: expected ${GOVERNANCE_LOCK_SHA256} got ${computed_lock_sha}"
             exit 1
           fi
           echo "GOV_LOCK_FILE=${gov_umbrella}/governance.lock.json" >> "$GITHUB_ENV"
@@ -383,7 +410,9 @@ jobs:
             --infra-manifest "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/infra-manifest.v1.json" \
             --attestation-dir-x86 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/x86_64/attestations" \
             --attestation-dir-arm64 "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/arm64/attestations" \
-            --cross-arch-report "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/cross-arch.report.v1.json"
+            --cross-arch-report "${GITHUB_WORKSPACE}/offline/runs/releases/${GITHUB_REF_NAME}/cross-arch.report.v1.json" \
+            --governance-lock "${GOV_LOCK_FILE}" \
+            --governance-umbrella-commit "${GOVERNANCE_UMBRELLA_COMMIT}"
       - name: cleanup server evidence
         if: always()
         shell: bash

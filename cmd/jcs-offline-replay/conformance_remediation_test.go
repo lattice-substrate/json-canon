@@ -529,6 +529,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 			MatrixSHA256:        opts.MatrixSHA256,
 			ProfileSHA256:       opts.ProfileSHA256,
 			VectorSetSHA256:     strings.Repeat("1", 64),
+			GovernanceUmbrellaCommit: opts.GovernanceUmbrellaCommit,
+			GovernanceLockSHA256: opts.GovernanceLockSHA256,
 			SourceGitCommit:     opts.SourceGitCommit,
 			SourceGitTag:        opts.SourceGitTag,
 			GeneratedAtUTC:      "2026-01-01T00:00:00Z",
@@ -585,6 +587,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 		controlBinaryPath: controlPath,
 		evidencePath:      evidencePath,
 		infraManifestPath: infraManifestPath,
+		governanceUmbrellaCommit: strings.Repeat("b", 40),
+		governanceLockSHA256: strings.Repeat("c", 64),
 		sourceGitCommit:   strings.Repeat("a", 40),
 		sourceGitTag:      "v1.2.3",
 		hosts: map[string]provisionedHost{
@@ -619,6 +623,8 @@ func TestRunServerMatrixAndReleaseGate(t *testing.T) {
 		expectedCommit:    strings.Repeat("a", 40),
 		expectedTag:       "v1.2.3",
 		infraManifestPath: infraManifestPath,
+		governanceUmbrellaCommit: strings.Repeat("b", 40),
+		governanceLockSHA256: strings.Repeat("c", 64),
 	}); err != nil {
 		t.Fatalf("runServerReleaseGate: %v", err)
 	}
