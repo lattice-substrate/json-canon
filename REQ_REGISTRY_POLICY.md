@@ -77,6 +77,7 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | CLI-FLAG-002 | ABI | - | MUST | `--quiet` flag MUST suppress success messages on verify. |
 | CLI-FLAG-003 | ABI | - | MUST | `--help`/`-h` MUST display usage and exit 0 at top-level and command-level. |
 | CLI-FLAG-004 | ABI | - | MUST | `--version` MUST print a machine-parseable version string (`jcs-canon vX.Y.Z` form) and exit 0. |
+| CLI-FLAG-005 | ABI | - | MUST | `--lines` flag MUST be accepted on all commands for command symmetry; it is only meaningful for check-es6-corpus and MUST be silently ignored by canonicalize and verify. |
 | CLI-IO-001 | ABI | - | MUST | `-` argument or no file MUST read from stdin. |
 | CLI-IO-002 | ABI | - | MUST | Multiple input files MUST be rejected with exit 2. |
 | CLI-IO-003 | ABI | - | MUST | File and stdin MUST produce identical output for identical content. |

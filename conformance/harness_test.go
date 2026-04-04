@@ -257,6 +257,7 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"CLI-FLAG-002":  checkVerifyQuietSuppressesOk,
 		"CLI-FLAG-003":  checkHelpExitsZero,
 		"CLI-FLAG-004":  checkVersionExitsZero,
+		"CLI-FLAG-005":  checkLinesAcceptedForSymmetry,
 		"CLI-IO-001":    checkStdinReading,
 		"CLI-IO-002":    checkMultipleInputRejected,
 		"CLI-IO-003":    checkFileAndStdinParity,
@@ -1376,6 +1377,23 @@ func checkVersionExitsZero(t *testing.T, h *harness) {
 	}
 	if !strings.HasPrefix(strings.TrimSpace(res.stdout), "jcs-canon v") {
 		t.Fatalf("unexpected version output: %+v", res)
+	}
+}
+
+// checkLinesAcceptedForSymmetry verifies the CLI-FLAG-005 ABI promise: --lines
+// is accepted on canonicalize and verify for command symmetry and is silently
+// ignored (does not affect output or exit code).
+func checkLinesAcceptedForSymmetry(t *testing.T, h *harness) {
+	t.Helper()
+	// --lines on canonicalize must be silently accepted; canonical output unchanged.
+	res := runCLI(t, h, []string{"canonicalize", "--lines", "5", "-"}, []byte(`{"b":2,"a":1}`))
+	if res.exitCode != 0 || res.stdout != `{"a":1,"b":2}` {
+		t.Fatalf("canonicalize --lines 5: expected exit 0 + canonical output, got %+v", res)
+	}
+	// --lines on verify must be silently accepted; success behavior unchanged.
+	res = runCLI(t, h, []string{"verify", "--lines", "5", "-"}, []byte(canonicalObjectA1))
+	if res.exitCode != 0 {
+		t.Fatalf("verify --lines 5: expected exit 0, got %+v", res)
 	}
 }
 

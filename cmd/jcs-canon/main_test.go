@@ -275,6 +275,41 @@ func TestReadInputMissingFileReturnsCLIUsage(t *testing.T) {
 	assertClass(t, err, jcserr.CLIUsage)
 }
 
+// TestCanonicalizeAcceptsLinesFlag verifies that --lines is silently accepted by
+// the canonicalize command (ABI promise: "accepted for command symmetry").
+// This test locks the behavior so any future change that rejects --lines on
+// canonicalize is caught as an ABI breakage.
+func TestCanonicalizeAcceptsLinesFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run(
+		[]string{"canonicalize", "--lines", "5", "-"},
+		strings.NewReader(`{"b":2,"a":1}`),
+		&stdout,
+		&stderr,
+	)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, stderr.String())
+	}
+	if got := stdout.String(); got != `{"a":1,"b":2}` {
+		t.Fatalf("unexpected canonical output: %q", got)
+	}
+}
+
+// TestVerifyAcceptsLinesFlag verifies that --lines is silently accepted by the
+// verify command (ABI promise: "accepted for command symmetry").
+func TestVerifyAcceptsLinesFlag(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run(
+		[]string{"verify", "--lines", "5", "-"},
+		strings.NewReader(`{"a":1,"b":2}`),
+		&stdout,
+		&stderr,
+	)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d stderr=%q", code, stderr.String())
+	}
+}
+
 func assertClass(t *testing.T, err error, class jcserr.FailureClass) {
 	t.Helper()
 	var je *jcserr.Error
