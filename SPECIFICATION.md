@@ -73,6 +73,7 @@ The CLI command set includes:
 - `jcs-canon check-es6-corpus [--lines N]`
 - `jcs-canon --help`
 - `jcs-canon --version`
+- `jcs-canon --emit-tool-identity`
 
 Required CLI behavior:
 
@@ -86,6 +87,8 @@ Required CLI behavior:
    given `--lines` value; `--lines` accepts 1 to 100000000 (default 10000).
    The output MUST match the `ci_sha256` field in `governance.lock.json` for the
    default `--lines` value.
+8. `--emit-tool-identity` MUST emit canonical JSON containing tool identity metadata
+   to `stdout` and exit `0`.
 
 ## Failure and Exit Code Contract
 

@@ -38,6 +38,7 @@ The stable ABI includes:
 
 - `--help`, `-h` (exit 0)
 - `--version` (exit 0; machine-parseable form)
+- `--emit-tool-identity` (exit 0; canonical JSON tool identity to stdout)
 
 ### Command Flags
 

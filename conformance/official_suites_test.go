@@ -98,7 +98,7 @@ func runHarnessOfficialFamily(t *testing.T, repoRoot, implPath string) map[strin
 		"--output", outputPath,
 		"--quiet",
 	}
-	//nolint:gosec // REQ:CONFORMANCE-001 subprocess args are test-controlled harness paths, not user input.
+	//nolint:gosec // CLI-CMD-001 subprocess args are test-controlled harness paths, not user input.
 	cmd := exec.Command("go", args...)
 	var output bytes.Buffer
 	cmd.Stdout = &output
@@ -107,7 +107,7 @@ func runHarnessOfficialFamily(t *testing.T, repoRoot, implPath string) map[strin
 		t.Fatalf("run harness official family: %v\n%s", err, output.String())
 	}
 
-	//nolint:gosec // REQ:CONFORMANCE-001 output path is test-controlled temporary file.
+	//nolint:gosec // CLI-CMD-001 output path is test-controlled temporary file.
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		t.Fatalf("read official result artifact: %v", err)
