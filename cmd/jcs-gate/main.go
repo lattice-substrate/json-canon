@@ -39,7 +39,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realRunner{}))
 }
 
-//nolint:cyclop,gocognit // REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.
+//nolint:gocognit // REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.
 func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	if len(args) > 0 {
 		return runSubcommand(args, stdout, stderr)
