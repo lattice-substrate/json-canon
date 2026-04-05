@@ -1,3 +1,6 @@
+// Package traceability provides tooling to regenerate and validate
+// requirement-enforcement traceability artifacts from the canonical
+// JSONL matrix and the live source tree.
 package traceability
 
 import (
@@ -42,6 +45,8 @@ requirement_id,domain,level,impl_file,impl_symbol,impl_line,test_file,test_funct
 	matrixMarkdownSuffix = "```\n"
 )
 
+// MatrixRow represents a single row in the requirement enforcement matrix,
+// mapping a requirement ID to its implementation and test artifacts.
 type MatrixRow struct {
 	RequirementID string `json:"requirement_id"`
 	Domain        string `json:"domain"`
@@ -54,6 +59,8 @@ type MatrixRow struct {
 	Gate          string `json:"gate"`
 }
 
+// NolintDirectiveRecord captures a single governed nolint directive
+// extracted from the source tree for the nolint inventory artifact.
 type NolintDirectiveRecord struct {
 	Path           string
 	Line           int
@@ -74,19 +81,19 @@ func Sync(root string) error {
 	if err != nil {
 		return err
 	}
-	if err := updateMatrixImplLines(root, rows); err != nil {
+	if err = updateMatrixImplLines(root, rows); err != nil {
 		return err
 	}
-	if err := validateMatrixTestFunctions(root, rows); err != nil {
+	if err = validateMatrixTestFunctions(root, rows); err != nil {
 		return err
 	}
-	if err := writeMatrixJSONL(filepath.Join(root, matrixJSONLPath), rows); err != nil {
+	if err = writeMatrixJSONL(filepath.Join(root, matrixJSONLPath), rows); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, matrixCSVPath), renderMatrixCSV(rows), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(root, matrixCSVPath), renderMatrixCSV(rows), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", matrixCSVPath, err)
 	}
-	if err := os.WriteFile(filepath.Join(root, matrixMarkdownPath), renderMatrixMarkdown(rows), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(root, matrixMarkdownPath), renderMatrixMarkdown(rows), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", matrixMarkdownPath, err)
 	}
 	records, err := CollectNolintInventory(root)
@@ -97,14 +104,14 @@ func Sync(root string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(root, nolintInventoryPath), inventory, 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(root, nolintInventoryPath), inventory, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", nolintInventoryPath, err)
 	}
 	return nil
 }
 
 func loadMatrixJSONLRows(path string) ([]MatrixRow, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // REQ:TRACE-001 operator-controlled file paths in traceability sync tooling.
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", filepath.Base(path), err)
 	}
@@ -380,7 +387,7 @@ func uniqueSortedStrings(values []string) []string {
 }
 
 func loadGoTopLevelSymbols(path string) (map[string]symbolRange, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // REQ:TRACE-001 operator-controlled file paths in traceability sync tooling.
 	if err != nil {
 		return nil, fmt.Errorf("read go file %s: %w", path, err)
 	}
@@ -417,7 +424,7 @@ func loadGoTopLevelSymbols(path string) (map[string]symbolRange, error) {
 }
 
 func loadGoFunctionNames(path string) (map[string]struct{}, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // REQ:TRACE-001 operator-controlled file paths in traceability sync tooling.
 	if err != nil {
 		return nil, fmt.Errorf("read go file %s: %w", path, err)
 	}

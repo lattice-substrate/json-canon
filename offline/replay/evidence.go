@@ -26,6 +26,17 @@ const (
 	OfficialES6CorpusFullSHA256  = "0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272"
 )
 
+// Profile name constants used for evidence profile mapping.
+const (
+	profileNameBaseConformance              = "base-conformance"
+	profileNameOfflineMeasuredEvidence      = "offline-measured-evidence"
+	profileNameOfficialCloudMeasuredRelease = "official-cloud-measured-release"
+)
+
+// IIDTrustRootSetIDDefault is the governed IID trust-root set identifier for
+// AWS instance identity document validation.
+const IIDTrustRootSetIDDefault = "aws-iid-trust-roots.v1"
+
 var errNilManifestIndex = errors.New("infra manifest not provided")
 
 // EvidenceBundle is the machine-consumed replay output artifact.
@@ -248,8 +259,8 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 		return err
 	}
 	if requiresNativeHostBinding || requiresInfraBinding {
-		if e.IIDTrustRootSetID != "aws-iid-trust-roots.v1" {
-			return fmt.Errorf("iid_trust_root_set_id mismatch: evidence=%q expected=%q", e.IIDTrustRootSetID, "aws-iid-trust-roots.v1")
+		if e.IIDTrustRootSetID != IIDTrustRootSetIDDefault {
+			return fmt.Errorf("iid_trust_root_set_id mismatch: evidence=%q expected=%q", e.IIDTrustRootSetID, IIDTrustRootSetIDDefault)
 		}
 	}
 	if err := validateNativeHostManifestExpectation(opts.ExpectedInfraManifest, requiresNativeHostBinding); err != nil {
@@ -389,14 +400,14 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 
 func profileNameForEvidence(name string) string {
 	switch {
-	case name == "base-conformance":
-		return "base-conformance"
-	case name == "offline-measured-evidence", name == "infra-bound":
-		return "offline-measured-evidence"
+	case name == profileNameBaseConformance:
+		return profileNameBaseConformance
+	case name == profileNameOfflineMeasuredEvidence, name == "infra-bound":
+		return profileNameOfflineMeasuredEvidence
 	case name == "max", strings.HasPrefix(name, "maximal-offline"):
-		return "base-conformance"
-	case name == "official-cloud-measured-release", strings.HasPrefix(name, "aws-native-release-"):
-		return "official-cloud-measured-release"
+		return profileNameBaseConformance
+	case name == profileNameOfficialCloudMeasuredRelease, strings.HasPrefix(name, "aws-native-release-"):
+		return profileNameOfficialCloudMeasuredRelease
 	default:
 		return ""
 	}
@@ -404,11 +415,11 @@ func profileNameForEvidence(name string) string {
 
 func profileIDForName(name string) string {
 	switch profileNameForEvidence(name) {
-	case "base-conformance":
+	case profileNameBaseConformance:
 		return "https://lattice-substrate.github.io/jcs/profiles/base-conformance.v1"
-	case "offline-measured-evidence":
+	case profileNameOfflineMeasuredEvidence:
 		return "https://lattice-substrate.github.io/jcs/profiles/offline-measured-evidence.v1"
-	case "official-cloud-measured-release":
+	case profileNameOfficialCloudMeasuredRelease:
 		return "https://lattice-substrate.github.io/jcs/profiles/official-cloud-measured-release.v1"
 	default:
 		return ""

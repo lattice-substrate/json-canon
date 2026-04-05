@@ -24,31 +24,31 @@ type AdapterFactory func(node NodeSpec) (NodeAdapter, error)
 
 // RunOptions configures matrix orchestration.
 type RunOptions struct {
-	BundlePath            string
-	BundleSHA256          string
-	ControlBinarySHA256   string
-	MatrixSHA256          string
-	ProfileSHA256         string
-	VectorSetSHA256       string
+	BundlePath               string
+	BundleSHA256             string
+	ControlBinarySHA256      string
+	MatrixSHA256             string
+	ProfileSHA256            string
+	VectorSetSHA256          string
 	GovernanceUmbrellaCommit string
-	GovernanceLockSHA256 string
-	SourceGitCommit       string
-	SourceGitTag          string
-	Orchestrator          string
-	EvidenceSchemaVersion string
-	GlobalEnv             map[string]string
-	Now                   func() time.Time
+	GovernanceLockSHA256     string
+	SourceGitCommit          string
+	SourceGitTag             string
+	Orchestrator             string
+	EvidenceSchemaVersion    string
+	GlobalEnv                map[string]string
+	Now                      func() time.Time
 	// Optional infra-manifest binding recorded in evidence.v1 when the profile requires it.
-	InfraManifestSHA256 string
-	InfraRepoURL        string
-	InfraRepoCommit     string
-	InfraManifest       *InfraManifest
+	InfraManifestSHA256   string
+	InfraRepoURL          string
+	InfraRepoCommit       string
+	InfraManifest         *InfraManifest
 	AttestationOutputRoot string
 }
 
 // RunMatrix orchestrates replay execution across required nodes and replays.
 //
-//nolint:gocyclo,cyclop,funlen,gocognit // REQ:OFFLINE-EVIDENCE-001 orchestration keeps checks explicit for reproducible replay diagnostics.
+//nolint:gocyclo,cyclop,funlen,gocognit,maintidx // REQ:OFFLINE-RUN-001 matrix orchestration is intentionally linear for audit traceability.
 func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory AdapterFactory, opts RunOptions) (*EvidenceBundle, error) {
 	if matrix == nil || profile == nil {
 		return nil, fmt.Errorf("matrix and profile are required")
@@ -106,30 +106,30 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	}
 	opts.GlobalEnv["JCS_EVIDENCE_SCHEMA_VERSION"] = schemaVersion
 	bundle := &EvidenceBundle{
-		SchemaVersion:       schemaVersion,
-		BundleSHA256:        opts.BundleSHA256,
-		ControlBinarySHA:    opts.ControlBinarySHA256,
-		MatrixSHA256:        opts.MatrixSHA256,
-		ProfileSHA256:       opts.ProfileSHA256,
-		VectorSetSHA256:     opts.VectorSetSHA256,
+		SchemaVersion:            schemaVersion,
+		BundleSHA256:             opts.BundleSHA256,
+		ControlBinarySHA:         opts.ControlBinarySHA256,
+		MatrixSHA256:             opts.MatrixSHA256,
+		ProfileSHA256:            opts.ProfileSHA256,
+		VectorSetSHA256:          opts.VectorSetSHA256,
 		GovernanceUmbrellaCommit: governanceCommit,
-		GovernanceLockSHA256: governanceLockSHA,
-		SourceGitCommit:     sourceCommit,
-		SourceGitTag:        sourceTag,
-		GeneratedAtUTC:      now().UTC().Format(time.RFC3339Nano),
-		Orchestrator:        opts.Orchestrator,
-		ProfileID:           profileIDForName(profile.Name),
-		ProfileName:         profileNameForEvidence(profile.Name),
-		Architecture:        matrix.Architecture,
-		AggregateMethod:     ReplayAggregateMethod,
-		RequiredSuites:      append([]string(nil), profile.RequiredSuites...),
-		HardReleaseGate:     profile.HardReleaseGate,
-		InfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
-		InfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
-		InfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
+		GovernanceLockSHA256:     governanceLockSHA,
+		SourceGitCommit:          sourceCommit,
+		SourceGitTag:             sourceTag,
+		GeneratedAtUTC:           now().UTC().Format(time.RFC3339Nano),
+		Orchestrator:             opts.Orchestrator,
+		ProfileID:                profileIDForName(profile.Name),
+		ProfileName:              profileNameForEvidence(profile.Name),
+		Architecture:             matrix.Architecture,
+		AggregateMethod:          ReplayAggregateMethod,
+		RequiredSuites:           append([]string(nil), profile.RequiredSuites...),
+		HardReleaseGate:          profile.HardReleaseGate,
+		InfraManifestSHA256:      strings.TrimSpace(opts.InfraManifestSHA256),
+		InfraRepoURL:             strings.TrimSpace(opts.InfraRepoURL),
+		InfraRepoCommit:          strings.TrimSpace(opts.InfraRepoCommit),
 	}
 	if bundle.InfraManifestSHA256 != "" || bundle.InfraRepoURL != "" || bundle.InfraRepoCommit != "" {
-		bundle.IIDTrustRootSetID = "aws-iid-trust-roots.v1"
+		bundle.IIDTrustRootSetID = IIDTrustRootSetIDDefault
 	}
 
 	tmpRoot, err := os.MkdirTemp("", "jcs-offline-replay-*")
@@ -208,20 +208,20 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	})
 
 	if err := ValidateEvidenceBundle(bundle, matrix, profile, EvidenceValidationOptions{
-		ExpectedBundleSHA256:        opts.BundleSHA256,
-		ExpectedControlBinarySHA256: opts.ControlBinarySHA256,
-		ExpectedMatrixSHA256:        opts.MatrixSHA256,
-		ExpectedProfileSHA256:       opts.ProfileSHA256,
-		ExpectedVectorSetSHA256:     opts.VectorSetSHA256,
+		ExpectedBundleSHA256:             opts.BundleSHA256,
+		ExpectedControlBinarySHA256:      opts.ControlBinarySHA256,
+		ExpectedMatrixSHA256:             opts.MatrixSHA256,
+		ExpectedProfileSHA256:            opts.ProfileSHA256,
+		ExpectedVectorSetSHA256:          opts.VectorSetSHA256,
 		ExpectedGovernanceUmbrellaCommit: governanceCommit,
-		ExpectedGovernanceLockSHA256: governanceLockSHA,
-		ExpectedArchitecture:        matrix.Architecture,
-		ExpectedSourceGitCommit:     sourceCommit,
-		ExpectedSourceGitTag:        sourceTag,
-		ExpectedInfraManifestSHA256: strings.TrimSpace(opts.InfraManifestSHA256),
-		ExpectedInfraRepoURL:        strings.TrimSpace(opts.InfraRepoURL),
-		ExpectedInfraRepoCommit:     strings.TrimSpace(opts.InfraRepoCommit),
-		ExpectedInfraManifest:       opts.InfraManifest,
+		ExpectedGovernanceLockSHA256:     governanceLockSHA,
+		ExpectedArchitecture:             matrix.Architecture,
+		ExpectedSourceGitCommit:          sourceCommit,
+		ExpectedSourceGitTag:             sourceTag,
+		ExpectedInfraManifestSHA256:      strings.TrimSpace(opts.InfraManifestSHA256),
+		ExpectedInfraRepoURL:             strings.TrimSpace(opts.InfraRepoURL),
+		ExpectedInfraRepoCommit:          strings.TrimSpace(opts.InfraRepoCommit),
+		ExpectedInfraManifest:            opts.InfraManifest,
 	}); err != nil {
 		return nil, err
 	}
@@ -252,18 +252,22 @@ func copyAttestationSidecar(evidencePath, outputRoot, nodeID string, replayIndex
 		return nil
 	}
 	sourcePath := strings.TrimSuffix(evidencePath, filepath.Ext(evidencePath)) + ".transport-attestation.v1.json"
+	//nolint:gosec // REQ:OFFLINE-RUN-002 operator-controlled source path in offline replay.
 	data, err := os.ReadFile(sourcePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("read attestation sidecar: %w", err)
 	}
 	destPath := filepath.Join(outputRoot, nodeID, fmt.Sprintf("%03d", replayIndex), "transport-attestation.v1.json")
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return err
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
+		return fmt.Errorf("create attestation output dir: %w", err)
 	}
-	return os.WriteFile(destPath, data, 0o600)
+	if err := os.WriteFile(destPath, data, 0o600); err != nil {
+		return fmt.Errorf("write attestation sidecar: %w", err)
+	}
+	return nil
 }
 
 //nolint:forbidigo // REQ:OFFLINE-EVIDENCE-001 default runtime clock for evidence generation when no injected clock is provided.

@@ -70,6 +70,8 @@ func LoadTransportAttestation(path string) (*TransportAttestation, error) {
 
 // ValidateTransportAttestation enforces the transport-attestation field
 // contract before signature verification.
+//
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 field-by-field validation requires explicit branches for each attestation field.
 func ValidateTransportAttestation(a *TransportAttestation) error {
 	if a == nil {
 		return fmt.Errorf("transport attestation is nil")
@@ -122,8 +124,8 @@ func ValidateTransportAttestation(a *TransportAttestation) error {
 			return fmt.Errorf("transport attestation %s must be valid base64: %w", field.name, err)
 		}
 	}
-	if a.IIDTrustRootSetID != "aws-iid-trust-roots.v1" {
-		return fmt.Errorf("transport attestation iid_trust_root_set_id must be %q", "aws-iid-trust-roots.v1")
+	if a.IIDTrustRootSetID != IIDTrustRootSetIDDefault {
+		return fmt.Errorf("transport attestation iid_trust_root_set_id must be %q", IIDTrustRootSetIDDefault)
 	}
 	return nil
 }
