@@ -40,6 +40,7 @@
         "--lines": {"stable": true, "description": "Number of corpus lines to generate (1..100000000, default: 10000)."},
         "--help": {"short": "-h", "stable": true, "description": "Display command help to stdout and exit 0."}
       },
+      "input": "none (flags only; corpus generated programmatically via --lines N)",
       "stdout": "64-hex lowercase SHA-256 digest followed by a newline",
       "stderr": "lines=<N> on success, error diagnostics on failure",
       "exit_codes": [0, 2, 10]

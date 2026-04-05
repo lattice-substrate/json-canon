@@ -9,7 +9,7 @@ Conformance is defined by the union of:
 - `abi_manifest.json`
 - conformance tests in `conformance/harness_test.go`
 - vector corpus in `conformance/vectors/*.jsonl`
-- harness-owned official reference suites in `../jcs-conformance-harness/official/`
+- governed official black-box suites in `../jcs-conformance-harness/vectors/official/` and `../jcs-conformance-harness/suites/official/`
 - differential interoperability checks in `conformance/cyberphone_differential_test.go`
 - offline replay contracts in `offline/matrix.yaml`, `offline/matrix.arm64.yaml`, `offline/matrix.server-x86_64.yaml`, `offline/matrix.server-arm64.yaml`, `offline/profiles/maximal.yaml`, `offline/profiles/maximal.arm64.yaml`, `offline/profiles/server-linux-x86_64.yaml`, `offline/profiles/server-linux-arm64.yaml`, `offline/schema/evidence.v1.json`, `offline/schema/infra-manifest.v1.json`, and `offline/schema/transport-attestation.v1.json`
 
@@ -84,8 +84,7 @@ gate at 100,000,000 lines:
 
 ```bash
 JCS_OFFICIAL_ES6_ENABLE_100M=1 \
-go -C ../jcs-conformance-harness test ./official \
-  -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
+go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
 For full local offline proof (outside GitHub workflows), operators SHOULD use:

@@ -105,8 +105,7 @@ jobs:
       - name: official ES6 100M checksum gate
         env:
           JCS_OFFICIAL_ES6_ENABLE_100M: "1"
-          JCS_CONFORMANCE_JSON_CANON_REPO: ${{ github.workspace }}
-        run: go -C ../jcs-conformance-harness test ./official -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
+        run: go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h -v
       - name: golangci-lint
         uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
         with:
