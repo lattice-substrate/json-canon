@@ -1,5 +1,6 @@
 # Compiled binaries
 /jcs-canon
+/jcs-gate
 /jcs-offline-replay
 /lattice-canon
 dist/
