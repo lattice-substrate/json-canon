@@ -341,7 +341,7 @@ func parseRunSuiteOptions(flags map[string]string) (runSuiteOptions, error) {
 	}, nil
 }
 
-//nolint:gocognit,gocyclo,cyclop,funlen // REQ:OFFLINE-EVIDENCE-001 suite orchestration keeps all replay gates explicit for operator audits.
+//nolint:gocognit,gocyclo,cyclop,funlen,maintidx // REQ:OFFLINE-EVIDENCE-001 suite orchestration keeps all replay gates explicit for operator audits.
 func runSuite(opts runSuiteOptions, stdout io.Writer) (*runSuiteArtifacts, error) {
 	if opts.Timeout <= 0 {
 		opts.Timeout = defaultRunTimeout

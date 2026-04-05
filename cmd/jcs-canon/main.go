@@ -30,7 +30,7 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-//nolint:cyclop // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
+//nolint:cyclop,gocyclo // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
 		return writeUsageError(stderr, "no command specified")
@@ -326,8 +326,10 @@ func writeToolIdentity(w io.Writer) error {
 	buf.WriteString(`","tool":"jcs-canon","version":"`)
 	buf.WriteString(version)
 	buf.WriteString("\"}\n")
-	_, err := w.Write(buf.Bytes())
-	return err
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return fmt.Errorf("write tool identity: %w", err)
+	}
+	return nil
 }
 
 func writeVerifyHelp(w io.Writer) error {

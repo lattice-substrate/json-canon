@@ -474,6 +474,7 @@ func (r *serverEvidenceRuntime) provision(stdout io.Writer) error {
 	return r.setRunRecordStatus(&r.runRecord.ProvisionStatus, serverRunStatusSucceeded)
 }
 
+//nolint:gocyclo,cyclop // REQ:OFFLINE-EVIDENCE-001 sequential orchestration steps are explicit for server-evidence audit traceability.
 func (r *serverEvidenceRuntime) execute(stdout io.Writer) error {
 	if r.executeFunc != nil {
 		return r.executeFunc(stdout)

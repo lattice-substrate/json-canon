@@ -38,7 +38,7 @@ func (g *officialES6Generator) next() float64 {
 	case g.idx < n:
 		f = math.Float64frombits(officialES6StaticU64s[g.idx])
 	case g.idx < n+officialES6SerialCount:
-		f = math.Float64frombits(0x0010000000000000 + uint64(g.idx-n))
+		f = math.Float64frombits(0x0010000000000000 + uint64(g.idx-n)) //nolint:gosec // REQ:ES6-GEN-001 g.idx-n is non-negative by case guard (g.idx >= n) and bounded by officialES6SerialCount.
 	default:
 		for f == 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 			if len(g.data) == 0 {

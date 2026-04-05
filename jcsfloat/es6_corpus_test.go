@@ -95,4 +95,3 @@ func es6LookupEnvTrimmed(name string) string {
 	}
 	return strings.TrimSpace(value)
 }
-
