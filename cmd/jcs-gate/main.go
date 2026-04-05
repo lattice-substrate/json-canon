@@ -39,7 +39,6 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, realRunner{}))
 }
 
-
 func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	if len(args) > 0 {
 		return runSubcommand(args, stdout, stderr)
