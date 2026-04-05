@@ -210,3 +210,32 @@ func TestExtractZIPEntryRejectsSymlink(t *testing.T) {
 		t.Fatalf("expected zip symlink rejection, got %v", err)
 	}
 }
+
+func TestParsePurposeFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"empty", "", nil},
+		{"whitespace", "   ", nil},
+		{"single", "go", []string{"go"}},
+		{"multiple", "go,tofu,jq", []string{"go", "jq", "tofu"}},
+		{"duplicates", "go,go,tofu", []string{"go", "tofu"}},
+		{"trailing comma", "go,tofu,", []string{"go", "tofu"}},
+		{"whitespace around", " go , tofu ", []string{"go", "tofu"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parsePurposeFlags(tt.raw)
+			if len(got) != len(tt.want) {
+				t.Fatalf("parsePurposeFlags(%q) = %v, want %v", tt.raw, got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("parsePurposeFlags(%q)[%d] = %q, want %q", tt.raw, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}

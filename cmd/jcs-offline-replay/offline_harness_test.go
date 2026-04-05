@@ -251,3 +251,61 @@ func TestBuildCrossArchReport_RepoRelativePaths(t *testing.T) {
 		t.Fatalf("arm64_evidence=%q want %q", report.Arm64Evidence, armRel)
 	}
 }
+
+func TestContainerImageFromNode(t *testing.T) {
+	tests := []struct {
+		name string
+		node replay.NodeSpec
+		want string
+	}{
+		{
+			name: "from replay args",
+			node: replay.NodeSpec{Runner: replay.RunnerConfig{Replay: []string{"./replay.sh", "debian:12"}}},
+			want: "debian:12",
+		},
+		{
+			name: "from env",
+			node: replay.NodeSpec{Runner: replay.RunnerConfig{
+				Replay: []string{"./replay.sh"},
+				Env:    map[string]string{"JCS_CONTAINER_IMAGE": "alpine:3.20"},
+			}},
+			want: "alpine:3.20",
+		},
+		{
+			name: "empty",
+			node: replay.NodeSpec{Runner: replay.RunnerConfig{Replay: []string{"./replay.sh"}}},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containerImageFromNode(tt.node)
+			if got != tt.want {
+				t.Fatalf("containerImageFromNode() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestContainsLine(t *testing.T) {
+	text := "hello\nworld\nfoo bar"
+	if !containsLine(text, "world") {
+		t.Fatal("expected to find 'world'")
+	}
+	if !containsLine(text, "  world  ") {
+		t.Fatal("expected trimmed match for '  world  '")
+	}
+	if containsLine(text, "missing") {
+		t.Fatal("should not find 'missing'")
+	}
+}
+
+func TestResolveRunnerEnvValue(t *testing.T) {
+	env := map[string]string{"KEY": "direct-value"}
+	if got := resolveRunnerEnvValue(env, "KEY"); got != "direct-value" {
+		t.Fatalf("got %q, want 'direct-value'", got)
+	}
+	if got := resolveRunnerEnvValue(env, "MISSING"); got != "" {
+		t.Fatalf("got %q, want empty", got)
+	}
+}
