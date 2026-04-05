@@ -92,6 +92,38 @@ func TestRunTopLevelVersionExitZero(t *testing.T) {
 	}
 }
 
+func TestRunTopLevelEmitToolIdentityExitZero(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	code := run([]string{"--emit-tool-identity"}, strings.NewReader(""), &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d", code)
+	}
+	out := strings.TrimSpace(stdout.String())
+	if !strings.HasPrefix(out, "{") || !strings.HasSuffix(out, "}") {
+		t.Fatalf("expected JSON object, got %q", out)
+	}
+	if !strings.Contains(out, `"tool":"jcs-canon"`) {
+		t.Fatalf("expected tool field, got %q", out)
+	}
+	if !strings.Contains(out, `"abi_version":"1.0.0"`) {
+		t.Fatalf("expected abi_version field, got %q", out)
+	}
+	if !strings.Contains(out, `"version":"`) {
+		t.Fatalf("expected version field, got %q", out)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected empty stderr, got %q", stderr.String())
+	}
+}
+
+func TestRunTopLevelEmitToolIdentityWriteFailure(t *testing.T) {
+	code := run([]string{"--emit-tool-identity"}, strings.NewReader(""), failingWriter{}, &bytes.Buffer{})
+	if code != jcserr.InternalIO.ExitCode() {
+		t.Fatalf("expected exit %d, got %d", jcserr.InternalIO.ExitCode(), code)
+	}
+}
+
 func TestRunSubcommandHelpExitZeroStdout(t *testing.T) {
 	for _, cmd := range []string{"canonicalize", "verify"} {
 		t.Run(cmd, func(t *testing.T) {

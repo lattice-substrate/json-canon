@@ -12,8 +12,8 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/lattice-substrate/json-canon/jcsfloat"
 	"github.com/lattice-substrate/json-canon/jcserr"
+	"github.com/lattice-substrate/json-canon/jcsfloat"
 )
 
 const (
@@ -36,13 +36,9 @@ func cmdCheckES6Corpus(args []string, stdout, stderr io.Writer) int {
 		return writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, "check-es6-corpus takes no positional arguments"))
 	}
 
-	n := checkES6CorpusDefaultLines
-	if fl.lines != -1 {
-		n = fl.lines
-	}
-	if n < 1 || n > checkES6CorpusMaxLines {
-		return writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1,
-			fmt.Sprintf("--lines must be between 1 and %d, got %d", checkES6CorpusMaxLines, n)))
+	n, linesErr := resolveCorpusLineCount(fl.lines)
+	if linesErr != nil {
+		return writeClassifiedError(stderr, linesErr)
 	}
 
 	digest, computeErr := computeES6CorpusSHA256(n)
@@ -59,9 +55,21 @@ func cmdCheckES6Corpus(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func resolveCorpusLineCount(flagLines int) (int, error) {
+	n := checkES6CorpusDefaultLines
+	if flagLines != -1 {
+		n = flagLines
+	}
+	if n < 1 || n > checkES6CorpusMaxLines {
+		return 0, jcserr.New(jcserr.CLIUsage, -1,
+			fmt.Sprintf("--lines must be between 1 and %d, got %d", checkES6CorpusMaxLines, n))
+	}
+	return n, nil
+}
+
 // computeES6CorpusSHA256 generates n values from the official ES6 corpus and
 // returns the lowercase hex SHA-256 of the sequence.
-// Each line is: <16-hex-bits>,<formatted-double>\n
+// Each line has the form: <16-hex-bits>,<formatted-double> followed by a newline.
 func computeES6CorpusSHA256(n int) (string, error) {
 	next := jcsfloat.NewOfficialES6Generator()
 	h := sha256.New()
@@ -104,5 +112,8 @@ Flags:
 
 Exit codes: 0 (success), 2 (usage error), 10 (I/O error)
 `)
-	return err
+	if err != nil {
+		return fmt.Errorf("write help output: %w", err)
+	}
+	return nil
 }

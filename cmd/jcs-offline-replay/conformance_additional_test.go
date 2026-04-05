@@ -885,18 +885,19 @@ func TestResolveSourceIdentityGitFallbacksAndDispatchSubcommand(t *testing.T) {
 	}
 }
 
+type gateCall struct {
+	logPath string
+	env     map[string]string
+	args    []string
+}
+
 func TestOfficialGateWrappers(t *testing.T) {
 	oldRunGo := runGoCommandLoggedFunc
 	t.Cleanup(func() {
 		runGoCommandLoggedFunc = oldRunGo
 	})
 
-	type call struct {
-		logPath string
-		env     map[string]string
-		args    []string
-	}
-	var calls []call
+	var calls []gateCall
 	runGoCommandLoggedFunc = func(logPath string, _ io.Writer, env map[string]string, args ...string) error {
 		copiedEnv := map[string]string(nil)
 		if env != nil {
@@ -905,7 +906,7 @@ func TestOfficialGateWrappers(t *testing.T) {
 				copiedEnv[k] = v
 			}
 		}
-		calls = append(calls, call{
+		calls = append(calls, gateCall{
 			logPath: logPath,
 			env:     copiedEnv,
 			args:    append([]string(nil), args...),
@@ -929,44 +930,71 @@ func TestOfficialGateWrappers(t *testing.T) {
 	if len(calls) != 5 {
 		t.Fatalf("calls len=%d want 5", len(calls))
 	}
-	if calls[0].logPath != filepath.Join("/tmp/out", "logs", "official-build.log") {
-		t.Fatalf("unexpected official build log path: %q", calls[0].logPath)
+	assertOfficialBuildCall(t, calls[0])
+	assertOfficialVectorCall(t, calls[1])
+	assertOfficialES6Call(t, calls[2])
+	assertCanonicalizerBuildCall(t, calls[3])
+	assertControllerBuildCall(t, calls[4])
+}
+
+func assertOfficialBuildCall(t *testing.T, c gateCall) {
+	t.Helper()
+	if c.logPath != filepath.Join("/tmp/out", "logs", "official-build.log") {
+		t.Fatalf("unexpected official build log path: %q", c.logPath)
 	}
-	if calls[0].env["CGO_ENABLED"] != "0" {
-		t.Fatalf("unexpected official build env: %#v", calls[0].env)
+	if c.env["CGO_ENABLED"] != "0" {
+		t.Fatalf("unexpected official build env: %#v", c.env)
 	}
-	if !strings.Contains(strings.Join(calls[0].args, " "), "./cmd/jcs-canon") {
-		t.Fatalf("unexpected official build args: %v", calls[0].args)
+	if !strings.Contains(strings.Join(c.args, " "), "./cmd/jcs-canon") {
+		t.Fatalf("unexpected official build args: %v", c.args)
 	}
-	if calls[1].logPath != filepath.Join("/tmp/out", "logs", "official-vectors.log") {
-		t.Fatalf("unexpected vector log path: %q", calls[1].logPath)
+}
+
+func assertOfficialVectorCall(t *testing.T, c gateCall) {
+	t.Helper()
+	if c.logPath != filepath.Join("/tmp/out", "logs", "official-vectors.log") {
+		t.Fatalf("unexpected vector log path: %q", c.logPath)
 	}
-	if len(calls[1].env) != 0 {
-		t.Fatalf("unexpected official vector env: %#v", calls[1].env)
+	if len(c.env) != 0 {
+		t.Fatalf("unexpected official vector env: %#v", c.env)
 	}
-	if !strings.Contains(strings.Join(calls[1].args, " "), "./cmd/jcs-conformance") || !strings.Contains(strings.Join(calls[1].args, " "), "--family official") {
-		t.Fatalf("unexpected official vector repo args: %v", calls[1].args)
+	joined := strings.Join(c.args, " ")
+	if !strings.Contains(joined, "./cmd/jcs-conformance") || !strings.Contains(joined, "--family official") {
+		t.Fatalf("unexpected official vector repo args: %v", c.args)
 	}
-	if !strings.Contains(strings.Join(calls[1].args, " "), "requirements-registry.json") {
-		t.Fatalf("unexpected official vector args: %v", calls[1].args)
+	if !strings.Contains(joined, "requirements-registry.json") {
+		t.Fatalf("unexpected official vector args: %v", c.args)
 	}
-	if calls[2].env["JCS_OFFICIAL_ES6_ENABLE_100M"] != "1" {
-		t.Fatalf("missing ES6 env toggle: %#v", calls[2].env)
+}
+
+func assertOfficialES6Call(t *testing.T, c gateCall) {
+	t.Helper()
+	if c.env["JCS_OFFICIAL_ES6_ENABLE_100M"] != "1" {
+		t.Fatalf("missing ES6 env toggle: %#v", c.env)
 	}
-	if !strings.Contains(strings.Join(calls[2].args, " "), "./conformance") || !strings.Contains(strings.Join(calls[2].args, " "), "TestOfficialES6CorpusChecksums100M") {
-		t.Fatalf("unexpected official ES6 repo args: %v", calls[2].args)
+	joined := strings.Join(c.args, " ")
+	if !strings.Contains(joined, "./conformance") || !strings.Contains(joined, "TestOfficialES6CorpusChecksums100M") {
+		t.Fatalf("unexpected official ES6 repo args: %v", c.args)
 	}
-	if calls[3].env["CGO_ENABLED"] != "0" || calls[3].env["GOOS"] != "linux" || calls[3].env["GOARCH"] == "" {
-		t.Fatalf("unexpected canonicalizer env: %#v", calls[3].env)
+}
+
+func assertCanonicalizerBuildCall(t *testing.T, c gateCall) {
+	t.Helper()
+	if c.env["CGO_ENABLED"] != "0" || c.env["GOOS"] != "linux" || c.env["GOARCH"] == "" {
+		t.Fatalf("unexpected canonicalizer env: %#v", c.env)
 	}
-	if !strings.Contains(strings.Join(calls[3].args, " "), "./cmd/jcs-canon") {
-		t.Fatalf("unexpected canonicalizer args: %v", calls[3].args)
+	if !strings.Contains(strings.Join(c.args, " "), "./cmd/jcs-canon") {
+		t.Fatalf("unexpected canonicalizer args: %v", c.args)
 	}
-	if calls[4].env["CGO_ENABLED"] != "0" {
-		t.Fatalf("unexpected controller env: %#v", calls[4].env)
+}
+
+func assertControllerBuildCall(t *testing.T, c gateCall) {
+	t.Helper()
+	if c.env["CGO_ENABLED"] != "0" {
+		t.Fatalf("unexpected controller env: %#v", c.env)
 	}
-	if !strings.Contains(strings.Join(calls[4].args, " "), "./cmd/jcs-offline-replay") {
-		t.Fatalf("unexpected controller args: %v", calls[4].args)
+	if !strings.Contains(strings.Join(c.args, " "), "./cmd/jcs-offline-replay") {
+		t.Fatalf("unexpected controller args: %v", c.args)
 	}
 }
 

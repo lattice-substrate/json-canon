@@ -227,20 +227,20 @@ func buildRunOptions(flags map[string]string, bundlePath string, manifest *repla
 		return replay.RunOptions{}, 0, err
 	}
 	return replay.RunOptions{
-		BundlePath:          bundlePath,
-		BundleSHA256:        bundleSHA,
-		ControlBinarySHA256: manifest.BinarySHA256,
-		MatrixSHA256:        matrixSHA,
-		ProfileSHA256:       profileSHA,
-		VectorSetSHA256:     manifest.VectorSetSHA256,
+		BundlePath:               bundlePath,
+		BundleSHA256:             bundleSHA,
+		ControlBinarySHA256:      manifest.BinarySHA256,
+		MatrixSHA256:             matrixSHA,
+		ProfileSHA256:            profileSHA,
+		VectorSetSHA256:          manifest.VectorSetSHA256,
 		GovernanceUmbrellaCommit: governanceUmbrellaCommit,
-		GovernanceLockSHA256: governanceLockSHA,
-		SourceGitCommit:     sourceGitCommit,
-		SourceGitTag:        sourceGitTag,
-		Orchestrator:        "jcs-offline-replay",
-		InfraManifestSHA256: infraManifestSHA,
-		InfraRepoURL:        infraRepoURL,
-		InfraRepoCommit:     infraRepoCommit,
+		GovernanceLockSHA256:     governanceLockSHA,
+		SourceGitCommit:          sourceGitCommit,
+		SourceGitTag:             sourceGitTag,
+		Orchestrator:             "jcs-offline-replay",
+		InfraManifestSHA256:      infraManifestSHA,
+		InfraRepoURL:             infraRepoURL,
+		InfraRepoCommit:          infraRepoCommit,
 	}, timeout, nil
 }
 
@@ -349,29 +349,9 @@ func parseTimeout(flags map[string]string) (time.Duration, error) {
 }
 
 func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
-	matrixPath := requireFlag(flags, "--matrix")
-	profilePath := requireFlag(flags, "--profile")
-	evidencePath := requireFlag(flags, "--evidence")
-	if matrixPath == "" || profilePath == "" || evidencePath == "" {
-		return fmt.Errorf("verify-evidence requires --matrix, --profile, --evidence")
-	}
-
-	bundlePath, controlBinaryPath := resolveVerifyPaths(flags, evidencePath)
-	matrix, err := replay.LoadMatrix(matrixPath)
+	matrix, profile, evidence, bundleSHA, controlBinarySHA, matrixSHA, profileSHA, err := loadVerifyEvidenceInputs(flags)
 	if err != nil {
-		return fmt.Errorf("load matrix: %w", err)
-	}
-	profile, err := replay.LoadProfile(profilePath)
-	if err != nil {
-		return fmt.Errorf("load profile: %w", err)
-	}
-	evidence, err := replay.LoadEvidence(evidencePath)
-	if err != nil {
-		return fmt.Errorf("load evidence: %w", err)
-	}
-	bundleSHA, controlBinarySHA, matrixSHA, profileSHA, err := loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profilePath)
-	if err != nil {
-		return fmt.Errorf("load verification digests: %w", err)
+		return err
 	}
 	expectedSourceCommit, expectedSourceTag := resolveExpectedSourceIdentity(flags)
 	expectedGovernanceUmbrellaCommit, expectedGovernanceLockSHA, err := resolveGovernanceBinding(flags)
@@ -384,23 +364,50 @@ func cmdVerifyEvidence(flags map[string]string, stdout io.Writer) error {
 	}
 
 	if err := replay.ValidateEvidenceBundle(evidence, matrix, profile, replay.EvidenceValidationOptions{
-		ExpectedBundleSHA256:        bundleSHA,
-		ExpectedControlBinarySHA256: controlBinarySHA,
-		ExpectedMatrixSHA256:        matrixSHA,
-		ExpectedProfileSHA256:       profileSHA,
+		ExpectedBundleSHA256:             bundleSHA,
+		ExpectedControlBinarySHA256:      controlBinarySHA,
+		ExpectedMatrixSHA256:             matrixSHA,
+		ExpectedProfileSHA256:            profileSHA,
 		ExpectedGovernanceUmbrellaCommit: expectedGovernanceUmbrellaCommit,
-		ExpectedGovernanceLockSHA256: expectedGovernanceLockSHA,
-		ExpectedArchitecture:        matrix.Architecture,
-		ExpectedSourceGitCommit:     expectedSourceCommit,
-		ExpectedSourceGitTag:        expectedSourceTag,
-		ExpectedInfraManifestSHA256: expectedInfraManifestSHA,
-		ExpectedInfraRepoURL:        expectedInfraRepoURL,
-		ExpectedInfraRepoCommit:     expectedInfraRepoCommit,
-		ExpectedInfraManifest:       expectedInfraManifest,
+		ExpectedGovernanceLockSHA256:     expectedGovernanceLockSHA,
+		ExpectedArchitecture:             matrix.Architecture,
+		ExpectedSourceGitCommit:          expectedSourceCommit,
+		ExpectedSourceGitTag:             expectedSourceTag,
+		ExpectedInfraManifestSHA256:      expectedInfraManifestSHA,
+		ExpectedInfraRepoURL:             expectedInfraRepoURL,
+		ExpectedInfraRepoCommit:          expectedInfraRepoCommit,
+		ExpectedInfraManifest:            expectedInfraManifest,
 	}); err != nil {
 		return fmt.Errorf("validate evidence bundle: %w", err)
 	}
 	return writeLine(stdout, "ok")
+}
+
+func loadVerifyEvidenceInputs(flags map[string]string) (*replay.Matrix, *replay.Profile, *replay.EvidenceBundle, string, string, string, string, error) {
+	matrixPath := requireFlag(flags, "--matrix")
+	profilePath := requireFlag(flags, "--profile")
+	evidencePath := requireFlag(flags, "--evidence")
+	if matrixPath == "" || profilePath == "" || evidencePath == "" {
+		return nil, nil, nil, "", "", "", "", fmt.Errorf("verify-evidence requires --matrix, --profile, --evidence")
+	}
+	bundlePath, controlBinaryPath := resolveVerifyPaths(flags, evidencePath)
+	matrix, err := replay.LoadMatrix(matrixPath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", "", fmt.Errorf("load matrix: %w", err)
+	}
+	profile, err := replay.LoadProfile(profilePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", "", fmt.Errorf("load profile: %w", err)
+	}
+	evidence, err := replay.LoadEvidence(evidencePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", "", fmt.Errorf("load evidence: %w", err)
+	}
+	bundleSHA, controlBinarySHA, matrixSHA, profileSHA, err := loadVerificationDigests(bundlePath, controlBinaryPath, matrixPath, profilePath)
+	if err != nil {
+		return nil, nil, nil, "", "", "", "", fmt.Errorf("load verification digests: %w", err)
+	}
+	return matrix, profile, evidence, bundleSHA, controlBinarySHA, matrixSHA, profileSHA, nil
 }
 
 func resolveExpectedInfraBinding(flags map[string]string, evidence *replay.EvidenceBundle, profile *replay.Profile) (string, string, string, *replay.InfraManifest, error) {
