@@ -207,13 +207,13 @@ func cmdCrossArch(flags map[string]string, stdout io.Writer) error {
 	compareJSON := filepath.Join(outDirAbs, "cross-arch-compare.json")
 	compareMD := filepath.Join(outDirAbs, "cross-arch-compare.md")
 	if runOfficialVectors {
-		if err := runOfficialVectorGates(outDirAbs, stdout); err != nil {
-			return err
+		if vectorErr := runOfficialVectorGates(outDirAbs, stdout); vectorErr != nil {
+			return vectorErr
 		}
 	}
 	if runOfficialES6100M {
-		if _, err := bindOfficialES6ProofFunc(outDirAbs, stdout, x86Run.EvidencePath, armRun.EvidencePath); err != nil {
-			return err
+		if _, es6Err := bindOfficialES6ProofFunc(outDirAbs, stdout, x86Run.EvidencePath, armRun.EvidencePath); es6Err != nil {
+			return es6Err
 		}
 	}
 	report, err := compareCrossArchEvidence(x86Run.EvidencePath, armRun.EvidencePath, compareJSON, compareMD, repoRoot)

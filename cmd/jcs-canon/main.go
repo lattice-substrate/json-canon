@@ -33,12 +33,7 @@ func main() {
 //nolint:cyclop // REQ:CLI-CMD-001 top-level CLI dispatch is explicit to preserve stable ABI behavior.
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		// CLI-EXIT-001
-		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, "no command specified"))
-		if err := writeGlobalHelp(stderr); err != nil {
-			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write usage output", err))
-		}
-		return code
+		return writeUsageError(stderr, "no command specified")
 	}
 
 	switch args[0] {
@@ -60,11 +55,7 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 		return cmdCheckES6Corpus(args[1:], stdout, stderr)
 	default:
 		// CLI-EXIT-002
-		code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, fmt.Sprintf("unknown command: %s", args[0])))
-		if err := writeGlobalHelp(stderr); err != nil {
-			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write usage output", err))
-		}
-		return code
+		return writeUsageError(stderr, fmt.Sprintf("unknown command: %s", args[0]))
 	}
 }
 
@@ -197,6 +188,14 @@ func parseCanonicalFromInput(positional []string, stdin io.Reader) ([]byte, []by
 		return nil, nil, fmt.Errorf("serialize canonical input: %w", err)
 	}
 	return input, canonical, nil
+}
+
+func writeUsageError(stderr io.Writer, msg string) int {
+	code := writeClassifiedError(stderr, jcserr.New(jcserr.CLIUsage, -1, msg))
+	if err := writeGlobalHelp(stderr); err != nil {
+		return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write usage output", err))
+	}
+	return code
 }
 
 // writeClassifiedError extracts jcserr.Error if possible and uses its exit code.

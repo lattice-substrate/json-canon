@@ -42,42 +42,7 @@ func main() {
 //nolint:gocyclo,cyclop,gocognit // REQ:LINT-GATE-001 gate orchestration dispatch is intentionally explicit and linear.
 func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	if len(args) > 0 {
-		switch args[0] {
-		case "--help", "-h":
-			if err := writeUsage(stdout); err != nil {
-				return 1
-			}
-			return 0
-		case "sync-traceability":
-			root, err := parseSyncTraceabilityArgs(args[1:])
-			if err != nil {
-				if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
-					return 1
-				}
-				if writeErr := writeUsage(stderr); writeErr != nil {
-					return 1
-				}
-				return 2
-			}
-			if err := syncTraceabilityFunc(root); err != nil {
-				if writeErr := writef(stderr, "sync-traceability failed: %v\n", err); writeErr != nil {
-					return 1
-				}
-				return 1
-			}
-			if err := writef(stdout, "traceability artifacts synced under %s\n", root); err != nil {
-				return 1
-			}
-			return 0
-		default:
-			if err := writef(stderr, "error: unknown argument %q\n", args[0]); err != nil {
-				return 1
-			}
-			if err := writeUsage(stderr); err != nil {
-				return 1
-			}
-			return 2
-		}
+		return runSubcommand(args, stdout, stderr)
 	}
 
 	ctx := context.Background()
@@ -94,6 +59,49 @@ func run(args []string, stdout, stderr io.Writer, runner commandRunner) int {
 	}
 
 	if err := writeLine(stdout, "all gates passed"); err != nil {
+		return 1
+	}
+	return 0
+}
+
+func runSubcommand(args []string, stdout, stderr io.Writer) int {
+	switch args[0] {
+	case "--help", "-h":
+		if err := writeUsage(stdout); err != nil {
+			return 1
+		}
+		return 0
+	case "sync-traceability":
+		return runSyncTraceability(args[1:], stdout, stderr)
+	default:
+		if err := writef(stderr, "error: unknown argument %q\n", args[0]); err != nil {
+			return 1
+		}
+		if err := writeUsage(stderr); err != nil {
+			return 1
+		}
+		return 2
+	}
+}
+
+func runSyncTraceability(args []string, stdout, stderr io.Writer) int {
+	root, err := parseSyncTraceabilityArgs(args)
+	if err != nil {
+		if writeErr := writef(stderr, "error: %v\n", err); writeErr != nil {
+			return 1
+		}
+		if writeErr := writeUsage(stderr); writeErr != nil {
+			return 1
+		}
+		return 2
+	}
+	if err := syncTraceabilityFunc(root); err != nil {
+		if writeErr := writef(stderr, "sync-traceability failed: %v\n", err); writeErr != nil {
+			return 1
+		}
+		return 1
+	}
+	if err := writef(stdout, "traceability artifacts synced under %s\n", root); err != nil {
 		return 1
 	}
 	return 0
