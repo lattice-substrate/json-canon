@@ -47,6 +47,7 @@
     }
   },
   "global_flags": {
+    "--emit-tool-identity": {"stable": true, "description": "Emit canonical JSON tool identity to stdout and exit 0. Consumed by governance TOOL_IDENTITY gate."},
     "--help": {"short": "-h", "stable": true, "description": "Display global help to stdout and exit 0."},
     "--version": {"stable": true, "description": "Display version to stdout and exit 0."}
   },

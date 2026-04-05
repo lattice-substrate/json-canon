@@ -13,11 +13,15 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -45,6 +49,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	case "--version":
 		if err := writeVersion(stdout); err != nil {
 			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write version output", err))
+		}
+		return 0
+	case "--emit-tool-identity":
+		if err := writeToolIdentity(stdout); err != nil {
+			return writeClassifiedError(stderr, jcserr.Wrap(jcserr.InternalIO, -1, "write tool identity", err))
 		}
 		return 0
 	case "canonicalize":
@@ -290,11 +299,75 @@ func writeGlobalHelp(w io.Writer) error {
 	if err := writeLine(w, "commands: canonicalize, verify"); err != nil {
 		return err
 	}
-	return writeLine(w, "flags: --help, -h, --version")
+	return writeLine(w, "flags: --help, -h, --version, --emit-tool-identity")
 }
 
 func writeVersion(w io.Writer) error {
 	return writeLine(w, "jcs-canon "+version)
+}
+
+// writeToolIdentity emits a canonical JSON object containing the tool's
+// identity: name, version, ABI version, and ABI manifest SHA-256. This
+// output is consumed by the governance layer's TOOL_IDENTITY gate to
+// verify binary integrity via digest comparison.
+//
+// Output format (canonical RFC 8785 JSON, no trailing newline):
+//
+//	{"abi_manifest_sha256":"sha256:...","abi_version":"1.0.0","tool":"jcs-canon","version":"vX.Y.Z"}
+func writeToolIdentity(w io.Writer) error {
+	// Compute ABI manifest SHA-256. The manifest is co-located with the binary
+	// source but may not be available at runtime (installed via `go install`).
+	// Use the executable's directory as the search root.
+	abiDigest := ""
+	if exePath, err := os.Executable(); err == nil {
+		candidates := []string{
+			filepath.Join(filepath.Dir(exePath), "..", "..", "abi_manifest.json"),
+			filepath.Join(filepath.Dir(exePath), "abi_manifest.json"),
+		}
+		// Also check the working directory (common for `go run`).
+		if wd, err := os.Getwd(); err == nil {
+			candidates = append(candidates, filepath.Join(wd, "abi_manifest.json"))
+		}
+		for _, path := range candidates {
+			if data, err := os.ReadFile(path); err == nil {
+				sum := sha256.Sum256(data)
+				abiDigest = "sha256:" + hex.EncodeToString(sum[:])
+				break
+			}
+		}
+	}
+
+	// Build the identity object with sorted keys for RFC 8785 compliance.
+	fields := map[string]string{
+		"abi_manifest_sha256": abiDigest,
+		"abi_version":         "1.0.0",
+		"tool":                "jcs-canon",
+		"version":             version,
+	}
+
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	buf.WriteByte('{')
+	for i, k := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		buf.WriteByte('"')
+		buf.WriteString(k)
+		buf.WriteString("\":\"")
+		buf.WriteString(fields[k])
+		buf.WriteByte('"')
+	}
+	buf.WriteByte('}')
+	buf.WriteByte('\n')
+
+	_, err := w.Write(buf.Bytes())
+	return err
 }
 
 func writeVerifyHelp(w io.Writer) error {
