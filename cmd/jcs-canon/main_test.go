@@ -100,17 +100,21 @@ func TestRunTopLevelEmitToolIdentityExitZero(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d", code)
 	}
 	out := strings.TrimSpace(stdout.String())
-	if !strings.HasPrefix(out, "{") || !strings.HasSuffix(out, "}") {
-		t.Fatalf("expected JSON object, got %q", out)
+	// Output must be canonical JSON with deterministic key order.
+	if !strings.HasPrefix(out, `{"abi_version":`) {
+		t.Fatalf("expected canonical JSON starting with abi_version, got %q", out)
 	}
 	if !strings.Contains(out, `"tool":"jcs-canon"`) {
 		t.Fatalf("expected tool field, got %q", out)
 	}
-	if !strings.Contains(out, `"abi_version":"1.0.0"`) {
-		t.Fatalf("expected abi_version field, got %q", out)
-	}
 	if !strings.Contains(out, `"version":"`) {
 		t.Fatalf("expected version field, got %q", out)
+	}
+	// Must be deterministic: calling twice produces identical output.
+	var stdout2 bytes.Buffer
+	run([]string{"--emit-tool-identity"}, strings.NewReader(""), &stdout2, &bytes.Buffer{})
+	if stdout.String() != stdout2.String() {
+		t.Fatalf("non-deterministic: %q != %q", stdout.String(), stdout2.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("expected empty stderr, got %q", stderr.String())
