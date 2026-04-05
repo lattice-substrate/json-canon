@@ -6,6 +6,13 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- `abi_manifest.json`: added required `input` field to the `check-es6-corpus`
+  command entry (`"none (flags only; corpus generated programmatically via --lines N)"`).
+  The field was missing, causing schema validation failure against
+  `abi.manifest.v1.schema.json`. No behavioral change — the command never reads
+  stdin or a file path; the fix documents that fact in the governed contract.
+
 ### Added
 - `jcs-canon check-es6-corpus [--lines N]` subcommand: computes the official ES6
   number corpus SHA-256 for the first N lines of the deterministic float corpus.

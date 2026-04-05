@@ -239,8 +239,7 @@ Validate the official ES6 100M checksum gate:
 
 ```bash
 JCS_OFFICIAL_ES6_ENABLE_100M=1 \
-go -C ../jcs-conformance-harness test ./official \
-  -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
+go test ./conformance -run TestOfficialES6CorpusChecksums100M -count=1 -timeout=6h
 ```
 
 Expected checksum: `0f7dda6b0837dde083c5d6b896f7d62340c8a2415b0c7121d83145e08a755272`.

@@ -926,44 +926,47 @@ func TestOfficialGateWrappers(t *testing.T) {
 	if err := buildController("/tmp/out/bin/jcs-offline-replay", "/tmp/out/logs/build-jcs-offline-replay.log", &stdout); err != nil {
 		t.Fatalf("buildController: %v", err)
 	}
-	if len(calls) != 4 {
-		t.Fatalf("calls len=%d want 4", len(calls))
+	if len(calls) != 5 {
+		t.Fatalf("calls len=%d want 5", len(calls))
 	}
-	if calls[0].logPath != filepath.Join("/tmp/out", "logs", "official-vectors.log") {
-		t.Fatalf("unexpected vector log path: %q", calls[0].logPath)
+	if calls[0].logPath != filepath.Join("/tmp/out", "logs", "official-build.log") {
+		t.Fatalf("unexpected official build log path: %q", calls[0].logPath)
 	}
-	if calls[0].env["JCS_CONFORMANCE_JSON_CANON_REPO"] == "" {
-		t.Fatalf("missing json-canon repo env: %#v", calls[0].env)
+	if calls[0].env["CGO_ENABLED"] != "0" {
+		t.Fatalf("unexpected official build env: %#v", calls[0].env)
 	}
-	if calls[1].env["JCS_OFFICIAL_ES6_ENABLE_100M"] != "1" {
-		t.Fatalf("missing ES6 env toggle: %#v", calls[1].env)
+	if !strings.Contains(strings.Join(calls[0].args, " "), "./cmd/jcs-canon") {
+		t.Fatalf("unexpected official build args: %v", calls[0].args)
 	}
-	if calls[1].env["JCS_CONFORMANCE_JSON_CANON_REPO"] == "" {
-		t.Fatalf("missing json-canon repo env for 100M: %#v", calls[1].env)
+	if calls[1].logPath != filepath.Join("/tmp/out", "logs", "official-vectors.log") {
+		t.Fatalf("unexpected vector log path: %q", calls[1].logPath)
 	}
-	if !strings.Contains(strings.Join(calls[0].args, " "), "-C") || !strings.Contains(strings.Join(calls[0].args, " "), "./official") {
-		t.Fatalf("unexpected official vector repo args: %v", calls[0].args)
+	if len(calls[1].env) != 0 {
+		t.Fatalf("unexpected official vector env: %#v", calls[1].env)
 	}
-	if !strings.Contains(strings.Join(calls[0].args, " "), "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K") {
-		t.Fatalf("unexpected official vector args: %v", calls[0].args)
+	if !strings.Contains(strings.Join(calls[1].args, " "), "./cmd/jcs-conformance") || !strings.Contains(strings.Join(calls[1].args, " "), "--family official") {
+		t.Fatalf("unexpected official vector repo args: %v", calls[1].args)
 	}
-	if !strings.Contains(strings.Join(calls[1].args, " "), "-C") || !strings.Contains(strings.Join(calls[1].args, " "), "./official") {
-		t.Fatalf("unexpected official ES6 repo args: %v", calls[1].args)
+	if !strings.Contains(strings.Join(calls[1].args, " "), "requirements-registry.json") {
+		t.Fatalf("unexpected official vector args: %v", calls[1].args)
 	}
-	if !strings.Contains(strings.Join(calls[1].args, " "), "TestOfficialES6CorpusChecksums100M") {
-		t.Fatalf("unexpected official ES6 args: %v", calls[1].args)
+	if calls[2].env["JCS_OFFICIAL_ES6_ENABLE_100M"] != "1" {
+		t.Fatalf("missing ES6 env toggle: %#v", calls[2].env)
 	}
-	if calls[2].env["CGO_ENABLED"] != "0" || calls[2].env["GOOS"] != "linux" || calls[2].env["GOARCH"] == "" {
-		t.Fatalf("unexpected canonicalizer env: %#v", calls[2].env)
+	if !strings.Contains(strings.Join(calls[2].args, " "), "./conformance") || !strings.Contains(strings.Join(calls[2].args, " "), "TestOfficialES6CorpusChecksums100M") {
+		t.Fatalf("unexpected official ES6 repo args: %v", calls[2].args)
 	}
-	if !strings.Contains(strings.Join(calls[2].args, " "), "./cmd/jcs-canon") {
-		t.Fatalf("unexpected canonicalizer args: %v", calls[2].args)
+	if calls[3].env["CGO_ENABLED"] != "0" || calls[3].env["GOOS"] != "linux" || calls[3].env["GOARCH"] == "" {
+		t.Fatalf("unexpected canonicalizer env: %#v", calls[3].env)
 	}
-	if calls[3].env["CGO_ENABLED"] != "0" {
-		t.Fatalf("unexpected controller env: %#v", calls[3].env)
+	if !strings.Contains(strings.Join(calls[3].args, " "), "./cmd/jcs-canon") {
+		t.Fatalf("unexpected canonicalizer args: %v", calls[3].args)
 	}
-	if !strings.Contains(strings.Join(calls[3].args, " "), "./cmd/jcs-offline-replay") {
-		t.Fatalf("unexpected controller args: %v", calls[3].args)
+	if calls[4].env["CGO_ENABLED"] != "0" {
+		t.Fatalf("unexpected controller env: %#v", calls[4].env)
+	}
+	if !strings.Contains(strings.Join(calls[4].args, " "), "./cmd/jcs-offline-replay") {
+		t.Fatalf("unexpected controller args: %v", calls[4].args)
 	}
 }
 

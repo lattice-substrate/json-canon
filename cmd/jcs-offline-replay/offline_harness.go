@@ -549,6 +549,23 @@ func buildController(outputPath, logPath string, stdout io.Writer) error {
 		"build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", outputPath, "./cmd/jcs-offline-replay")
 }
 
+func buildOfficialGateBinary(repoRoot, outputDir string, stdout io.Writer) (string, error) {
+	if err := writeLine(stdout, "[cross-arch] build local jcs-canon for official suites"); err != nil {
+		return "", err
+	}
+	binDir := filepath.Join(outputDir, "bin")
+	if err := os.MkdirAll(binDir, dirPerm); err != nil {
+		return "", fmt.Errorf("create official bin dir: %w", err)
+	}
+	binPath := filepath.Join(binDir, "official-jcs-canon")
+	logPath := filepath.Join(outputDir, "logs", "official-build.log")
+	if err := runGoCommandLoggedFunc(logPath, stdout, map[string]string{"CGO_ENABLED": "0"},
+		"-C", repoRoot, "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", binPath, "./cmd/jcs-canon"); err != nil {
+		return "", err
+	}
+	return binPath, nil
+}
+
 func runOfflineReleaseGate(matrixPath, profilePath, evidencePath, expectedSourceGitCommit, expectedSourceGitTag, infraManifestPath, logPath string, stdout io.Writer) error {
 	if err := writeLine(stdout, "[run] release gate test"); err != nil {
 		return err
@@ -608,9 +625,21 @@ func runOfficialVectorGates(outputDir string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{
-		"JCS_CONFORMANCE_JSON_CANON_REPO": repoRoot,
-	}, "-C", harnessRoot, "test", "./official", "-run", "TestOfficialCyberphoneCanonicalPairs|TestOfficialRFC8785Vectors|TestOfficialES6CorpusChecksums10K", "-count=1", "-timeout=30m")
+	specRoot, err := resolveGovernedRepoRoot(repoRoot, "jcs-spec", "JCS_SPEC_REPO")
+	if err != nil {
+		return err
+	}
+	implPath, err := buildOfficialGateBinary(repoRoot, outputDir, stdout)
+	if err != nil {
+		return err
+	}
+	return runGoCommandLoggedFunc(logPath, stdout, nil,
+		"-C", harnessRoot, "run", "./cmd/jcs-conformance", "run",
+		"--impl", implPath,
+		"--known-reqs", filepath.Join(specRoot, "registries", "requirements-registry.json"),
+		"--family", "official",
+		"--output", filepath.Join(outputDir, "official-vectors.result.json"),
+		"--quiet")
 }
 
 func runOfficialES6100MGate(outputDir string, stdout io.Writer) error {
@@ -618,15 +647,9 @@ func runOfficialES6100MGate(outputDir string, stdout io.Writer) error {
 		return err
 	}
 	logPath := filepath.Join(outputDir, "logs", "official-es6-100m.log")
-	repoRoot := resolveRepoRoot()
-	harnessRoot, err := resolveGovernedRepoRoot(repoRoot, "jcs-conformance-harness", "JCS_CONFORMANCE_REPO")
-	if err != nil {
-		return err
-	}
 	return runGoCommandLoggedFunc(logPath, stdout, map[string]string{
-		"JCS_OFFICIAL_ES6_ENABLE_100M":    "1",
-		"JCS_CONFORMANCE_JSON_CANON_REPO": repoRoot,
-	}, "-C", harnessRoot, "test", "./official", "-run", "TestOfficialES6CorpusChecksums100M", "-count=1", "-timeout=6h")
+		"JCS_OFFICIAL_ES6_ENABLE_100M": "1",
+	}, "test", "./conformance", "-run", "TestOfficialES6CorpusChecksums100M", "-count=1", "-timeout=6h", "-v")
 }
 
 //nolint:gocyclo,cyclop // REQ:OFFLINE-LOCAL-001 preflight keeps per-dependency diagnostics explicit for offline operators.

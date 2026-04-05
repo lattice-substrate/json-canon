@@ -25,10 +25,10 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 
 | ID | Spec | Section | Level | Requirement |
 |----|------|---------|-------|-------------|
-| OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | The governed `jcs-conformance-harness` official suite MUST validate the vendored Cyberphone canonicalization fixtures against `json-canon` byte-for-byte. |
-| OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | The governed `jcs-conformance-harness` official suite MUST validate the RFC 8785 sorting example and Appendix B finite number mappings against `json-canon`. |
-| OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | The governed `jcs-conformance-harness` official suite MUST validate the deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`). |
-| OFFICIAL-VEC-004 | CONTRIBUTING.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
+| OFFICIAL-VEC-001 | cyberphone/json-canonicalization | `testdata/input` + `testdata/output` + `testdata/outhex` | MUST | The governed `jcs-conformance-harness` official family MUST validate the vendored Cyberphone canonicalization fixtures against `json-canon` byte-for-byte through the black-box runner. |
+| OFFICIAL-VEC-002 | RFC 8785 | §3.2.3 + Appendix B | MUST | The governed `jcs-conformance-harness` official family MUST validate the RFC 8785 sorting example and Appendix B finite number mappings against `json-canon` through the black-box runner. |
+| OFFICIAL-VEC-003 | cyberphone/json-canonicalization | `testdata/numgen.go` checksum table | MUST | The governed `jcs-conformance-harness` official family MUST validate the deterministic ES6 number corpus checksum at 10,000 lines (`b9f7a8e...`) through the black-box runner. |
+| OFFICIAL-VEC-004 | CONTRIBUTING.md + .github/workflows/release.yml | release validation | MUST | Release validation MUST run the implementation-local official deterministic ES6 number corpus checksum gate at 100,000,000 lines (`0f7dda6...`). |
 
 ## CONF-VEC: Conformance Vector Corpus
 
