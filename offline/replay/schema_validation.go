@@ -6,24 +6,19 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
+	"github.com/lattice-substrate/json-canon/offline/schema"
 	"github.com/xeipuuv/gojsonschema"
 )
 
-func schemaPath(name string) string {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		return filepath.Join("offline", "schema", name)
-	}
-	return filepath.Join(filepath.Dir(file), "..", "schema", name)
-}
-
 func validateSchemaBytes(kind string, schemaFile string, data []byte) error {
+	schemaData, err := schema.FS.ReadFile(schemaFile)
+	if err != nil {
+		return fmt.Errorf("validate %s schema: %w", kind, err)
+	}
 	result, err := gojsonschema.Validate(
-		gojsonschema.NewReferenceLoader("file://"+filepath.ToSlash(schemaPath(schemaFile))),
+		gojsonschema.NewBytesLoader(schemaData),
 		gojsonschema.NewBytesLoader(data),
 	)
 	if err != nil {
@@ -39,7 +34,7 @@ func validateSchemaBytes(kind string, schemaFile string, data []byte) error {
 	return fmt.Errorf("validate %s schema: %s", kind, strings.Join(issues, "; "))
 }
 
-//nolint:gosec // REQ:OFFLINE-EVIDENCE-001 strict JSON decoding reads explicit operator/runtime artifact paths.
+//nolint:gosec // CLI-CMD-001 strict JSON decoding reads explicit operator/runtime artifact paths.
 func decodeStrictJSONFile(path string, kind string, target any) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
