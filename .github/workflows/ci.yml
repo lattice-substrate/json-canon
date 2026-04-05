@@ -56,6 +56,12 @@ jobs:
         with:
           version: v1.64.8
           args: --config=golangci.yml
+      - name: checkout sibling repos (needed by conformance tests in coverage gate)
+        run: |
+          set -euo pipefail
+          cd ..
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-conformance-harness.git jcs-conformance-harness
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-spec.git jcs-spec
       - name: coverage gate (>=70%)
         shell: bash
         run: bash ./scripts/coverage_gate.sh
@@ -90,6 +96,12 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.24.x'
+      - name: checkout sibling repos (needed by conformance tests)
+        run: |
+          set -euo pipefail
+          cd ..
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-conformance-harness.git jcs-conformance-harness
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-spec.git jcs-spec
       - name: conformance (includes official ES6 10k checksum gate)
         run: go test ./conformance -count=1 -v -timeout=10m
 

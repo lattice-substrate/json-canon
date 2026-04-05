@@ -20,6 +20,12 @@ jobs:
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.24.x'
+      - name: checkout sibling repos (needed by conformance tests)
+        run: |
+          set -euo pipefail
+          cd ..
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-conformance-harness.git jcs-conformance-harness
+          git clone --depth=1 https://github.com/lattice-substrate/jcs-spec.git jcs-spec
       - name: generate coverage profile
         shell: bash
         run: |
