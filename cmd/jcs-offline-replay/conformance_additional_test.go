@@ -892,6 +892,15 @@ type gateCall struct {
 }
 
 func TestOfficialGateWrappers(t *testing.T) {
+	// Skip when sibling repos are not available (standalone CI without governance umbrella).
+	repoRoot := resolveRepoRoot()
+	for _, sibling := range []string{"jcs-conformance-harness", "jcs-spec"} {
+		sibPath := filepath.Join(repoRoot, "..", sibling, "go.mod")
+		if _, err := os.Stat(sibPath); err != nil {
+			t.Skipf("sibling repo %s not available at %s (standalone CI)", sibling, sibPath)
+		}
+	}
+
 	oldRunGo := runGoCommandLoggedFunc
 	t.Cleanup(func() {
 		runGoCommandLoggedFunc = oldRunGo
