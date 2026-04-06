@@ -6,6 +6,20 @@ This project follows strict [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Governed media type registry (`offline/replay/media_types.go`): compile-time
+  mapping from `schema_version` to jcs-spec Chapter 13 media types and schema
+  IDs. Enforces JCS-REQ-0223 (unknown schema identifiers MUST be rejected) and
+  JCS-REQ-0224 (unknown media types MUST be rejected) at every Load and Write
+  boundary for evidence statements, infrastructure manifests, and transport
+  attestations. OCI-spec style: spec owns the namespace, implementation
+  recognizes known types and rejects unknown — fail-closed, no exceptions.
+- ADR-0008: documents the governed media type registry decision, OCI black-box
+  pattern rationale, and regulatory compliance context.
+- CLAUDE.md: Fail-Closed Evidence-Grade Security section codifying that there
+  is no partial acceptance, no graceful degradation, no fallback at any
+  artifact boundary.
+
 ### Fixed
 - `abi_manifest.json`: added required `input` field to the `check-es6-corpus`
   command entry (`"none (flags only; corpus generated programmatically via --lines N)"`).

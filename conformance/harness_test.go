@@ -292,6 +292,8 @@ func requirementChecks() map[string]func(*testing.T, *harness) {
 		"OFFLINE-SOURCE-001":    checkOfflineSourceRequiresCleanWorktree,
 		"OFFLINE-SOURCE-002":    checkOfflineSourceUsesDetachedWorktree,
 		"OFFLINE-SOURCE-003":    checkOfflineSourceCommitParityGuard,
+		"OFFLINE-MEDIATYPE-001": checkOfflineMediaTypeFailClosed,
+		"OFFLINE-MEDIATYPE-002": checkOfflineMediaTypeRegistryParity,
 		"OFFLINE-SERVER-001":    checkOfflineServerProfileContract,
 		"OFFLINE-AUTO-001":      checkOfflineGoNativeServerAutomation,
 		"OFFLINE-RECOVERY-001":  checkOfflineServerRunRecordRecoveryAnchor,
@@ -3062,6 +3064,38 @@ func checkOfflineToolchainLockPresent(t *testing.T, h *harness) {
 	} {
 		assertContains(t, lockRaw, needle, "toolchain lock artifact")
 	}
+}
+
+func checkOfflineMediaTypeFailClosed(t *testing.T, h *harness) {
+	t.Helper()
+	src := mustReadText(t, filepath.Join(h.root, "offline", "replay", "media_types.go"))
+	assertContains(t, src, "requireGovernedSchemaVersion", "media type fail-closed gate function")
+	assertContains(t, src, "JCS-REQ-0223", "media type error cites governing requirement")
+
+	for _, file := range []string{
+		filepath.Join(h.root, "offline", "replay", "evidence.go"),
+		filepath.Join(h.root, "offline", "replay", "infra_manifest.go"),
+		filepath.Join(h.root, "offline", "replay", "transport_attestation.go"),
+	} {
+		content := mustReadText(t, file)
+		assertContains(t, content, "requireGovernedSchemaVersion", file+" calls fail-closed media type gate")
+	}
+}
+
+func checkOfflineMediaTypeRegistryParity(t *testing.T, h *harness) {
+	t.Helper()
+	types := replay.GovernedMediaTypes()
+	if len(types) < 3 {
+		t.Fatalf("governed media type registry has %d entries, expected at least 3", len(types))
+	}
+	for _, at := range types {
+		if at.SchemaVersion == "" || at.MediaType == "" || at.SchemaID == "" {
+			t.Errorf("governed artifact type %+v has empty field", at)
+		}
+	}
+	src := mustReadText(t, filepath.Join(h.root, "offline", "replay", "media_types.go"))
+	assertContains(t, src, "application/vnd.jcs.", "media type registry contains governed media type prefix")
+	assertContains(t, src, "lattice-substrate.github.io/jcs/schemas/", "media type registry contains governed schema ID prefix")
 }
 
 func checkOfflineSourceRequiresCleanWorktree(t *testing.T, h *harness) {

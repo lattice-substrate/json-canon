@@ -146,6 +146,13 @@ Formal catalog of project policy requirements for `json-canon` (profile, ABI, pr
 | OFFLINE-RECOVERY-001 | CONTRIBUTING.md + offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Server-backed evidence runs MUST emit `server-run.v1.json` as the recovery/audit anchor. |
 | OFFLINE-RECOVERY-002 | CONTRIBUTING.md + offline/README.md + docs/OFFLINE_REPLAY_HARNESS.md | Operator Workflow | MUST | Server-backed evidence runs MUST provide a Go-native `jcs-offline-replay server-cleanup --run-record <path>` recovery path. |
 
+## OFFLINE-MEDIATYPE: Governed Media Type Registry
+
+| ID | Spec | Section | Level | Requirement |
+|----|------|---------|-------|-------------|
+| OFFLINE-MEDIATYPE-001 | jcs-spec Chapter 13 (JCS-REQ-0223) | Media Type Registry | MUST | All Load and Write boundaries for governed JSON artifacts (evidence statements, infrastructure manifests, transport attestations) MUST reject unknown `schema_version` values that are not in the governed media type registry. |
+| OFFLINE-MEDIATYPE-002 | jcs-spec Chapter 13 (JCS-REQ-0224) | Media Type Registry | MUST | The compile-time governed media type registry MUST map each known `schema_version` to its jcs-spec-governed media type and canonical schema ID, and these constants MUST match the values in `jcs-spec/registries/media-types.json` and `jcs-spec/registries/schema-registry.json`. |
+
 ## AWS: Official Release Evidence
 
 | ID | Spec | Section | Level | Requirement |

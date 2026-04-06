@@ -135,7 +135,7 @@ func TestValidateInfraManifestRejectsInvalid(t *testing.T) {
 		want   string
 	}{
 		{name: "nil", mutate: nil, want: "is nil"},
-		{name: "wrong schema version", mutate: func(im *replay.InfraManifest) { im.SchemaVersion = "infra-manifest.v99" }, want: "unsupported infra manifest schema_version"},
+		{name: "wrong schema version", mutate: func(im *replay.InfraManifest) { im.SchemaVersion = "infra-manifest.v99" }, want: "unknown schema_version"},
 		{name: "missing generated_at_utc", mutate: func(im *replay.InfraManifest) { im.GeneratedAtUTC = "" }, want: "generated_at_utc is required"},
 		{name: "missing infra_repo_url", mutate: func(im *replay.InfraManifest) { im.InfraRepoURL = "" }, want: "infra_repo_url is required"},
 		{name: "non-https infra_repo_url", mutate: func(im *replay.InfraManifest) { im.InfraRepoURL = "http://example.com/repo" }, want: "infra_repo_url must use https"},

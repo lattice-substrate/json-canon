@@ -87,6 +87,36 @@ classes, stdout/stderr contract, output grammar, canonical bytes.
 4. No dependence on map iteration order, time, locale, or environment.
 5. No panic-based control flow in production paths.
 6. Conformance claims require executable evidence.
+7. Governed artifact types fail closed on unknown identifiers (JCS-REQ-0223, JCS-REQ-0224).
+
+## Fail-Closed Evidence-Grade Security
+
+This implementation produces evidence artifacts that regulatory regimes (DORA,
+et al.) depend on. There is no partial acceptance. There is no graceful
+degradation. There is no fallback. If an artifact, identifier, or link in the
+evidence chain is ambiguous, incomplete, or unrecognized, the operation MUST
+fail with a precise, classifiable error. The error taxonomy exists specifically
+to produce traceable audit evidence for every rejection.
+
+1. Unknown `schema_version` values are rejected at every Load and Write
+   boundary — JCS-REQ-0223.
+2. Unknown media types are rejected — JCS-REQ-0224.
+3. Every governed artifact is identified by three layers: `schema_version`
+   (document-internal), media type (artifact identity from jcs-spec
+   `registries/media-types.json`), and schema ID (canonical URI from jcs-spec
+   `registries/schema-registry.json`).
+4. `offline/replay/media_types.go` is the compile-time governed media type
+   registry. Cross-repo parity with jcs-spec is enforced by
+   jcs-integration-tests.
+5. Every validation failure names the unknown identifier and cites the
+   governing requirement ID.
+6. Non-governed internal types (`toolchain-lock.v1`, `server-run.v1`,
+   `aws-release-hosts.v1`) validate their own `schema_version` directly and
+   are not part of the governed registry.
+7. Evidence values are compared byte-for-byte as decoded. No trimming, no
+   lossy transformation, no normalization after the fact. If a value has
+   whitespace that needs removing, it must be cleaned before it becomes
+   evidence — not adjusted during comparison.
 
 ## Prohibited
 
@@ -98,6 +128,7 @@ classes, stdout/stderr contract, output grammar, canonical bytes.
 6. Weakening error-class contracts without a versioning decision.
 7. Nondeterministic behavior in canonical paths.
 8. Required non-Go conformance gates without approved exception.
+9. Accepting unknown schema_version or media type at any artifact boundary.
 
 ## Definition of Done
 

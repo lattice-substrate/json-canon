@@ -130,6 +130,9 @@ func WriteEvidence(path string, e *EvidenceBundle) error {
 	if e == nil {
 		return fmt.Errorf("evidence bundle is nil")
 	}
+	if err := requireGovernedSchemaVersion("evidence", e.SchemaVersion); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(e, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal evidence: %w", err)
@@ -148,11 +151,11 @@ func LoadEvidence(path string) (*EvidenceBundle, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read evidence: %w", err)
 	}
-	if err := validateSchemaBytes("evidence", "evidence.v1.json", data); err != nil {
-		return nil, err
-	}
 	var e EvidenceBundle
 	if err := decodeStrictJSONBytes("evidence", data, &e); err != nil {
+		return nil, err
+	}
+	if err := requireGovernedSchemaVersion("evidence", e.SchemaVersion); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -170,8 +173,11 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 	requiresInfraBinding := profileRequiresInfraBinding(p)
 	requiresNativeHostBinding := profileRequiresNativeHostBinding(m, p)
+	if err := requireGovernedSchemaVersion("evidence", e.SchemaVersion); err != nil {
+		return err
+	}
 	if e.SchemaVersion != EvidenceSchemaVersion {
-		return fmt.Errorf("unsupported schema_version %q", e.SchemaVersion)
+		return fmt.Errorf("evidence schema_version %q is not the expected version %q", e.SchemaVersion, EvidenceSchemaVersion)
 	}
 	expectedProfileName := profileNameForEvidence(p.Name)
 	if expectedProfileName == "" {
@@ -182,6 +188,17 @@ func ValidateEvidenceBundle(e *EvidenceBundle, m *Matrix, p *Profile, opts Evide
 	}
 	if profileIDForName(p.Name) != e.ProfileID {
 		return fmt.Errorf("profile_id mismatch: evidence=%q expected=%q", e.ProfileID, profileIDForName(p.Name))
+	}
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"generated_at_utc", e.GeneratedAtUTC},
+		{"orchestrator", e.Orchestrator},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("evidence %s is required", field.name)
+		}
 	}
 	for _, field := range []struct {
 		name  string
@@ -786,6 +803,9 @@ func validateOfficialES6Evidence(e *EvidenceBundle, opts EvidenceValidationOptio
 	}
 	if e.OfficialES6CorpusLines < 0 {
 		return fmt.Errorf("official_es6_corpus_lines must be >= 0")
+	}
+	if strings.TrimSpace(e.OfficialES6CorpusSHA256) != "" && e.OfficialES6CorpusLines < 1 {
+		return fmt.Errorf("official_es6_corpus_lines must be >= 1 when official_es6_corpus_sha256 is set")
 	}
 	if strings.TrimSpace(e.OfficialES6CorpusSHA256) != "" {
 		if err := validateSHA256Token("official_es6_corpus_sha256", e.OfficialES6CorpusSHA256); err != nil {

@@ -6,33 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
-
-	"github.com/lattice-substrate/json-canon/offline/schema"
-	"github.com/xeipuuv/gojsonschema"
 )
-
-func validateSchemaBytes(kind string, schemaFile string, data []byte) error {
-	schemaData, err := schema.FS.ReadFile(schemaFile)
-	if err != nil {
-		return fmt.Errorf("validate %s schema: %w", kind, err)
-	}
-	result, err := gojsonschema.Validate(
-		gojsonschema.NewBytesLoader(schemaData),
-		gojsonschema.NewBytesLoader(data),
-	)
-	if err != nil {
-		return fmt.Errorf("validate %s schema: %w", kind, err)
-	}
-	if result.Valid() {
-		return nil
-	}
-	issues := make([]string, 0, len(result.Errors()))
-	for _, item := range result.Errors() {
-		issues = append(issues, strings.TrimSpace(item.String()))
-	}
-	return fmt.Errorf("validate %s schema: %s", kind, strings.Join(issues, "; "))
-}
 
 //nolint:gosec // CLI-CMD-001 strict JSON decoding reads explicit operator/runtime artifact paths.
 func decodeStrictJSONFile(path string, kind string, target any) error {

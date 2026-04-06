@@ -79,9 +79,6 @@ func LoadInfraManifest(path string) (*InfraManifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read infra manifest: %w", err)
 	}
-	if err := validateSchemaBytes("infra manifest", "infra-manifest.v1.json", data); err != nil {
-		return nil, err
-	}
 	var im InfraManifest
 	if err := decodeStrictJSONBytes("infra manifest json", data, &im); err != nil {
 		return nil, err
@@ -125,8 +122,11 @@ func ValidateInfraManifest(im *InfraManifest) error {
 // validateInfraManifestScalars checks all required scalar fields in an InfraManifest.
 // Extracted from ValidateInfraManifest to keep cyclomatic complexity within lint bounds.
 func validateInfraManifestScalars(im *InfraManifest) error {
+	if err := requireGovernedSchemaVersion("infra manifest", im.SchemaVersion); err != nil {
+		return err
+	}
 	if im.SchemaVersion != InfraManifestSchemaVersion {
-		return fmt.Errorf("unsupported infra manifest schema_version %q", im.SchemaVersion)
+		return fmt.Errorf("infra manifest schema_version %q is not the expected version %q", im.SchemaVersion, InfraManifestSchemaVersion)
 	}
 	if strings.TrimSpace(im.GeneratedAtUTC) == "" {
 		return fmt.Errorf("infra manifest generated_at_utc is required")

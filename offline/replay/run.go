@@ -98,8 +98,13 @@ func RunMatrix(ctx context.Context, matrix *Matrix, profile *Profile, factory Ad
 	}
 
 	schemaVersion := EvidenceSchemaVersion
-	if requested := strings.TrimSpace(opts.EvidenceSchemaVersion); requested != "" && requested != EvidenceSchemaVersion {
-		return nil, fmt.Errorf("unsupported evidence schema_version %q", requested)
+	if requested := strings.TrimSpace(opts.EvidenceSchemaVersion); requested != "" {
+		if reqErr := requireGovernedSchemaVersion("evidence", requested); reqErr != nil {
+			return nil, reqErr
+		}
+		if requested != EvidenceSchemaVersion {
+			return nil, fmt.Errorf("evidence schema_version %q is not the expected version %q", requested, EvidenceSchemaVersion)
+		}
 	}
 	if opts.GlobalEnv == nil {
 		opts.GlobalEnv = make(map[string]string, 1)

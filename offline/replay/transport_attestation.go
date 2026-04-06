@@ -36,6 +36,9 @@ func WriteTransportAttestation(path string, a *TransportAttestation) error {
 	if a == nil {
 		return fmt.Errorf("transport attestation is nil")
 	}
+	if err := requireGovernedSchemaVersion("transport attestation", a.SchemaVersion); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(a, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal transport attestation: %w", err)
@@ -55,9 +58,6 @@ func LoadTransportAttestation(path string) (*TransportAttestation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read transport attestation: %w", err)
 	}
-	if err := validateSchemaBytes("transport attestation", "transport-attestation.v1.json", data); err != nil {
-		return nil, err
-	}
 	var a TransportAttestation
 	if err := decodeStrictJSONBytes("transport attestation", data, &a); err != nil {
 		return nil, err
@@ -76,8 +76,11 @@ func ValidateTransportAttestation(a *TransportAttestation) error {
 	if a == nil {
 		return fmt.Errorf("transport attestation is nil")
 	}
+	if err := requireGovernedSchemaVersion("transport attestation", a.SchemaVersion); err != nil {
+		return err
+	}
 	if a.SchemaVersion != TransportAttestationSchemaVersion {
-		return fmt.Errorf("unsupported transport attestation schema_version %q", a.SchemaVersion)
+		return fmt.Errorf("transport attestation schema_version %q is not the expected version %q", a.SchemaVersion, TransportAttestationSchemaVersion)
 	}
 	for _, field := range []struct {
 		name  string
