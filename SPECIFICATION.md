@@ -26,6 +26,26 @@ In addition to RFC 8259 grammar, project policy requires:
 2. Numeric overflow to infinity MUST be rejected.
 3. Non-zero numeric underflow to zero MUST be rejected.
 
+#### Departures from RFC 8785 Appendix B
+
+RFC 8785 Appendix B row 2 is IEEE 754 `8000000000000000` (negative zero), whose
+canonical serialization is `0`. Rules 1 and 3 reject every token that parses to
+that value, so this profile departs from RFC 8785 on those inputs and on no other
+finite Appendix B row. The departure is deliberate. The table lists the inputs
+where it applies, with the result `jcs-canon canonicalize` gives at v0.3.4:
+
+| Input | RFC 8785 output | json-canon result | Requirement |
+|---|---|---|---|
+| `[-0]` | `[0]` | `NUMBER_NEGZERO` at byte 1 | PROF-NEGZ-001 |
+| `[-0.0]` | `[0]` | `NUMBER_NEGZERO` at byte 1 | PROF-NEGZ-001 |
+| `[-0e0]` | `[0]` | `NUMBER_NEGZERO` at byte 1 | PROF-NEGZ-001 |
+| `[-1e-324]` | `[0]` | `NUMBER_UNDERFLOW` at byte 1 | PROF-UFLOW-001 |
+
+Two requirements reach the same IEEE value, so a caller that needs RFC 8785
+output for negative zero must handle both error classes. The other finite
+Appendix B rows, including both subnormal extremes (`5e-324`, `-5e-324`),
+produce RFC 8785 output.
+
 ## Canonicalization Requirements
 
 ### Structural Form
